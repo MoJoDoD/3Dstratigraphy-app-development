@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stratigrafia3d"
+version = "0.1.0"
+description = "Ricostruzione 3D delle unità stratigrafiche da documentazione di scavo 2D (GIS + Excel)"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+requires-python = ">=3.10"
+authors = [{name = "Sebastiano Trabucchi"}]
+dependencies = [
+  "numpy>=1.26", "scipy>=1.11", "pandas>=2.0", "geopandas>=0.14", "pyogrio>=0.7",
+  "shapely>=2.0", "networkx>=3.0", "triangle>=20230923", "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+demo = ["scikit-image>=0.22", "matplotlib>=3.8"]
+test = ["pytest>=8", "scikit-image>=0.22", "matplotlib>=3.8"]
+
+[project.scripts]
+strat3d = "stratigrafia3d.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"stratigrafia3d.visualizzatore" = ["*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:.*non conformant file extension", "ignore:.*Axes3D", "ignore:.*crs. was not provided"]
