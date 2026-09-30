@@ -33,3 +33,19 @@ def test_harris_riduzione_transitiva():
     r = _rap([(1, "copre", 2), (2, "copre", 3), (1, "copre", 3)])
     h = st.harris(r)
     assert sorted(map(tuple, h["edges"])) == [(1, 2), (2, 3)]
+
+
+def test_harris_per_gruppi_e_dedotti():
+    # due buche con i loro riempimenti, più un'unità senza rapporti
+    r = _rap([(11, "riempie", 10), (12, "riempie", 10), (21, "riempie", 20)])
+    r.grafo.add_node(99)
+    h = st.harris(r, dedotti=[(12, 11)])
+    g = {n["id"]: n["g"] for n in h["nodes"]}
+    assert g[10] == g[11] == g[12] != g[20] == g[21] != g[99]
+    assert h["dedotti"] == [[12, 11]] and [12, 11] in h["edges"] and [12, 10] not in h["edges"]
+    # ogni gruppo sta nel suo rettangolo e i rettangoli non si sovrappongono
+    for n in h["nodes"]:
+        G = h["gruppi"][n["g"]]
+        assert G["r"] <= n["r"] < G["r"] + G["rows"] and G["c"] <= n["c"] < G["c"] + G["cols"]
+    # un dedotto che creerebbe un ciclo viene ignorato
+    assert st.harris(r, dedotti=[(10, 11)])["dedotti"] == []

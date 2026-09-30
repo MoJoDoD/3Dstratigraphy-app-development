@@ -50,6 +50,9 @@ class Parametri:
     lenti_rastremate: bool = True
     aggancio_stratigrafico: bool = True
     profondita_predefinita: float = 0.20  # m, tagli senza quote né profondità in scheda
+    # profondità e spessori mancanti presi dalla mediana delle unità dello stesso tipo (Definizione)
+    tipici_dal_sito: bool = False
+    escluse: list = field(default_factory=list)   # unità lasciate fuori dalla ricostruzione
     # superficie da cui partono le unità senza quote proprie (vedi superficie.py)
     superficie: dict = field(default_factory=lambda: {"tipo": "nessuna"})
 
@@ -73,6 +76,7 @@ class UnitaModello:
 class Modello:
     unita: dict = field(default_factory=dict)      # numero -> UnitaModello
     rapporto: list = field(default_factory=list)   # righe di resoconto della ricostruzione
+    dedotti: list = field(default_factory=list)    # rapporti «copre» dedotti tra riempimenti (a sopra b)
 
 
 def _sha256(path):
@@ -216,12 +220,17 @@ class Scavo:
         return {} if df is None else {int(r[sc.C_USM]): r for _, r in df.iterrows() if pd.notna(r[sc.C_USM])}
 
     def poligoni_us(self):
+        """Poligoni delle US in coordinate locali, senza le unità escluse dalla ricostruzione."""
         g = self.layers.get(sc.L_US)
-        return {} if g is None else {int(r[sc.F_US]): self.locale(r.geometry) for _, r in g.iterrows()}
+        fuori = set(self.parametri.escluse)
+        return {} if g is None else {int(r[sc.F_US]): self.locale(r.geometry) for _, r in g.iterrows()
+                                     if int(r[sc.F_US]) not in fuori}
 
     def poligoni_usm(self):
         g = self.layers.get(sc.L_USM)
-        return {} if g is None else {int(r[sc.F_USM]): self.locale(r.geometry) for _, r in g.iterrows()}
+        fuori = set(self.parametri.escluse)
+        return {} if g is None else {int(r[sc.F_USM]): self.locale(r.geometry) for _, r in g.iterrows()
+                                     if int(r[sc.F_USM]) not in fuori}
 
     def imposta_superficie(self, spec, raster=None):
         """Imposta la superficie di riferimento. ``raster``: percorso di un GeoTIFF o un Raster."""
@@ -314,7 +323,11 @@ class Scavo:
         if senza_scheda:
             out.append(Problema("errore", "poligono-senza-scheda",
                                 "poligoni con un numero di US che non compare nell'Excel", tuple(senza_scheda)))
-        senza_poligono = sorted(schede - poli)
+        escluse = sorted(set(self.parametri.escluse))
+        if escluse:
+            out.append(Problema("info", "escluse", f"{len(escluse)} unità escluse dalla ricostruzione 3D "
+                                "(restano nelle schede e nel diagramma di Harris)", tuple(escluse)))
+        senza_poligono = sorted(schede - poli - set(escluse))
         if senza_poligono:
             out.append(Problema("avviso", "scheda-senza-poligono",
                                 "schede senza poligono in pianta: non avranno un volume", tuple(senza_poligono)))
@@ -338,11 +351,26 @@ class Scavo:
             out.append(Problema("errore", "senza-quote",
                                 "unità senza quote e senza superficie di riferimento: impossibile ricostruirle "
                                 "(indica una superficie di riferimento o aggiungi le quote)", tuple(sorted(gruppi["nessuna"]))))
-        for st_ in ("profondita", "impilata", "schematica"):
+        for st_ in ("profondita", "impilata"):
             if gruppi.get(st_):
-                out.append(Problema("info" if st_ != "schematica" else "avviso", "stima-" + st_,
-                                    f"{len(gruppi[st_])} unità ricostruite da {DESCRIZIONE[st_]}",
+                out.append(Problema("info", "stima-" + st_, f"{len(gruppi[st_])} unità ricostruite da {DESCRIZIONE[st_]}",
                                     tuple(sorted(gruppi[st_]))))
+        if gruppi.get("schematica"):
+            sch = self.schede_us()
+            neg = lambda u: str(sch.get(u, {}).get(sc.C_TIPO, "")).strip().lower() == "negativa"
+            tagli = sorted(u for u in gruppi["schematica"] if neg(u))
+            altre = sorted(u for u in gruppi["schematica"] if not neg(u))
+            P = self.parametri
+            fonte = "la mediana delle unità dello stesso tipo o " if P.tipici_dal_sito else ""
+            if tagli:
+                out.append(Problema("avviso", "schematica-tagli",
+                                    f"{len(tagli)} tagli senza profondità registrata: si usa {fonte}"
+                                    f"{P.profondita_predefinita:.2f} m".replace(".", ","), tuple(tagli)))
+            if altre:
+                out.append(Problema("avviso", "schematica-spessori",
+                                    f"{len(altre)} unità senza spessore registrato: si usa {fonte}"
+                                    f"{P.spessore_predefinito:.2f} m (nei tagli, lo spazio rimasto)".replace(".", ","),
+                                    tuple(altre)))
         for n in note:
             out.append(Problema("info", "stima-nota", n["messaggio"], tuple(n.get("unita", ()))))
         schede_us = self.schede_us()
@@ -405,6 +433,7 @@ class Scavo:
         kv = dict(formato="stratigrafia3d", versione_formato=VERSIONE_FORMATO, crs=self.crs,
                   origine=self.origine, parametri=asdict(self.parametri), meta=self.meta,
                   modello_rapporto=self.modello.rapporto if self.modello else [],
+                  modello_dedotti=self.modello.dedotti if self.modello else [],
                   abbinamento=asdict(self.abbinamento) if self.abbinamento is not None else None,
                   note_importazione=self.note_importazione)
         cur.executemany("INSERT INTO s3d_progetto VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in kv.items()])
@@ -460,7 +489,8 @@ class Scavo:
             s.raster_superficie = Raster.da_bytes(r[0])
         con.close()
         if righe:
-            s.modello = Modello(rapporto=kv.get("modello_rapporto", []))
+            s.modello = Modello(rapporto=kv.get("modello_rapporto", []),
+                                dedotti=[tuple(x) for x in kv.get("modello_dedotti", [])])
             for u, t, qual, dati in righe:
                 z = np.load(io.BytesIO(dati))
                 s.modello.unita[int(u)] = UnitaModello(int(u), t, z["V2"], z["F"].astype(np.int64),

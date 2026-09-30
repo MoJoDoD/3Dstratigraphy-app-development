@@ -75,6 +75,12 @@ class Stato:
         return d
 
 
+def _parametri(s):
+    P = s.parametri
+    return dict(profondita_predefinita=P.profondita_predefinita, spessore_predefinito=P.spessore_predefinito,
+                tipici_dal_sito=P.tipici_dal_sito, escluse=len(P.escluse))
+
+
 def _problemi(s):
     return [dict(livello=p.livello, codice=p.codice, messaggio=p.messaggio, unita=list(p.unita)) for p in s.verifica()]
 
@@ -136,10 +142,34 @@ class App:
             with st.lock:
                 s = importa.applica(abb)
                 st.scavo, st.percorso, st.modificato = s, None, True
-            return dict(problemi=_problemi(s), note=s.note_importazione, stato=st.descrizione())
+            return dict(problemi=_problemi(s), note=s.note_importazione, stato=st.descrizione(), parametri=_parametri(s))
         if nome == "verifica":
             self._serve_scavo()
-            return dict(problemi=_problemi(st.scavo))
+            return dict(problemi=_problemi(st.scavo), parametri=_parametri(st.scavo), stato=st.descrizione())
+        if nome == "correggi":
+            # correzioni in blocco dal resoconto della verifica
+            self._serve_scavo()
+            with st.lock:
+                P = st.scavo.parametri
+                for k, v in (a.get("parametri") or {}).items():
+                    if k in ("profondita_predefinita", "spessore_predefinito"):
+                        v = float(str(v).replace(",", "."))
+                        if not 0 < v < 20:
+                            raise Errore("Indica un valore in metri maggiore di zero")
+                        setattr(P, k, v)
+                    elif k == "tipici_dal_sito":
+                        P.tipici_dal_sito = bool(v)
+                escl = set(P.escluse)
+                escl |= {int(u) for u in a.get("escludi") or []}
+                if a.get("includi") == "tutte":
+                    escl = set()
+                else:
+                    escl -= {int(u) for u in a.get("includi") or []}
+                P.escluse = sorted(escl)
+                if a.get("superficie"):
+                    st.scavo.imposta_superficie(a["superficie"])
+                st.modificato = True
+            return dict(problemi=_problemi(st.scavo), stato=st.descrizione(), parametri=_parametri(st.scavo))
         if nome == "ricostruisci":
             self._serve_scavo()
             with st.lock:

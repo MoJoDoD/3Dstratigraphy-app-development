@@ -189,7 +189,8 @@ def dati_visualizzatore(scavo):
                  [[int(a), "si lega a", int(b)] for a, b in rap.contemporanei],
         materiali=tabella(sc.S_MATERIALI), rs=rs, campioni=camp, documentazione=tabella(sc.S_DOC),
         quote=dict(xyz=_b64(quote_arr, "<f4"), meta=[[int(a), b] for a, b in zip(q.us, q.tipo)]),
-        profili=profili, sezioni=sezioni, sez_draw=sez_draw, limiti=limiti, harris=st.harris(rap),
+        profili=profili, sezioni=sezioni, sez_draw=sez_draw, limiti=limiti, harris=st.harris(rap, dedotti=scavo.modello.dedotti),
+        dedotti=[[int(a), int(b)] for a, b in scavo.modello.dedotti],
     )
 
 

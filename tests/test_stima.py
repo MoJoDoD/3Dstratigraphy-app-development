@@ -146,3 +146,41 @@ def test_demo_tutto_misurato(progetto):
     s = progetto[0]
     assert s.modello is not None
     assert {m.qualita.get("strategia") for m in s.modello.unita.values()} == {"misurata"}
+
+
+def _buche(d):
+    """Quattro buche di palo: tre con la profondità registrata (0,3, 0,4, 0,5), una senza."""
+    polys = [box(1000 + 3 * i, 2000, 1001 + 3 * i, 2001) for i in range(4)] + [box(1020, 2000, 1024, 2004)]
+    gpkg = str(d / "sito.gpkg")
+    gpd.GeoDataFrame({"context": [1, 2, 3, 4, 9]}, geometry=polys, crs=CRS).to_file(gpkg, layer="contexts", driver="GPKG")
+    xlsx = str(d / "sito.xlsx")
+    pd.DataFrame({"Context": [1, 2, 3, 4, 9], "Type": ["negative"] * 4 + ["positive"],
+                  "Definition": ["Posthole"] * 4 + ["Layer"], "Depth (m)": [0.3, 0.4, 0.5, None, None]}) \
+        .to_excel(xlsx, sheet_name="Contexts", index=False)
+    abb = importa.proponi([gpkg, xlsx])
+    abb.superficie = {"tipo": "costante", "quota": 50.0}
+    return importa.applica(abb)
+
+
+def test_valori_tipici_dal_sito_ed_esclusione(tmp_path):
+    s = _buche(tmp_path)
+    codici = {p.codice: p for p in s.verifica()}
+    assert codici["schematica-tagli"].unita == (4,) and "0,20 m" in codici["schematica-tagli"].messaggio
+    assert codici["schematica-spessori"].unita == (9,)
+    m = ricostruisci(s)
+    assert m.unita[4].top.min() == pytest.approx(50 - 0.2, abs=0.02)
+    s.parametri.tipici_dal_sito = True
+    m = ricostruisci(s)
+    assert m.unita[4].top.min() == pytest.approx(50 - 0.4, abs=0.02)    # mediana delle altre buche
+    assert m.unita[4].qualita["strategia"] == "schematica"
+    # esclusione: l'unità resta nelle schede ma non nel modello né negli avvisi
+    s.parametri.escluse = [4, 9]
+    codici = {p.codice: p for p in s.verifica()}
+    assert "schematica-tagli" not in codici and codici["escluse"].unita == (4, 9)
+    assert "scheda-senza-poligono" not in codici
+    m = ricostruisci(s)
+    assert set(m.unita) == {1, 2, 3}
+    p = str(tmp_path / "e.scavo")
+    s.salva(p)
+    r = Scavo.apri(p)
+    assert r.parametri.escluse == [4, 9] and r.parametri.tipici_dal_sito

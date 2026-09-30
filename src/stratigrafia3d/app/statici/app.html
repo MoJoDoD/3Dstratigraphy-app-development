@@ -130,6 +130,10 @@ table.t td.mot{min-width:230px}
 .pill.info{background:color-mix(in srgb,var(--muted) 16%,transparent);color:var(--muted)}
 .pr p{margin:0}
 .pr code{font-family:var(--f-num);font-size:12px;color:var(--muted)}
+.corr{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:8px}
+.corr label{display:inline-flex;gap:6px;align-items:center}
+.corr label.mot{flex:1 1 280px}
+.corr input:not([type=checkbox]){font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
 .somm{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 14px;align-items:center}
 
 /* modello */
@@ -259,7 +263,8 @@ dialog .row{justify-content:flex-end;margin-top:12px}
           <ul class="note" id="noteImp"></ul>
           <div class="prob" id="prob"></div>
           <div class="nav">
-            <button class="btn" data-vai="3">← Schede e rapporti</button>
+            <button class="btn" data-vai="3" id="b4Indietro">← Schede e rapporti</button>
+            <button class="btn" data-annulla id="b4Modello" hidden>← Torna al progetto</button>
             <div class="row"><button class="btn" id="bSalvaProf">Salva come ricetta…</button><button class="btn acc" id="n4">Ricostruisci il 3D →</button></div>
           </div>
         </div>
@@ -363,9 +368,12 @@ async function ricostruisciOra(forza){
   }catch(e){}
 }
 async function verifica(){
+  // il resoconto del progetto aperto, con le stesse correzioni in blocco dell'importazione
   const r=await lavoro("Verifica…",()=>api("verifica"));
-  const e=r.problemi.filter(p=>p.livello==="errore").length;
-  avviso(e?`${e} errori e ${r.problemi.length-e} avvisi: apri la procedura per i dettagli`:(r.problemi.length?`Nessun errore, ${r.problemi.length} avvisi`:"Nessun problema trovato"),!!e);
+  W={files:[],abb:null,soloVerifica:true,passo:4};
+  $("noteImp").innerHTML=""; mostraProblemi(r);
+  $("b4Indietro").hidden=true; $("bSalvaProf").hidden=true; $("steps").hidden=true; $("b4Modello").hidden=false;
+  mostra("vWizard"); passo(4);
 }
 async function esporta(tipo){
   $("mEsporta").hidden=true; $("bEsporta").setAttribute("aria-expanded","false");
@@ -382,6 +390,7 @@ const GEO={poligono:"poligoni",linea:"linee",punto:"punti",testo:"testi",misto:"
 
 function nuovo(files){
   W={files:files||[],esame:null,abb:null,passo:1,ricetta:null}; $("profInfo").textContent=""; $("selRicetta").value="";
+  $("b4Indietro").hidden=$("bSalvaProf").hidden=$("steps").hidden=false; $("b4Modello").hidden=true;
   mostra("vWizard"); passo(1); disegnaFile();
 }
 function passo(n){
@@ -626,16 +635,42 @@ async function importaOra(){
   if(a.tabella&&(!a.foglio_us||!a.colonne_us.US)){ avviso("Scegli il foglio e la colonna con il numero di US",true); return }
   const r=await lavoro("Importazione e verifica…",()=>api("importa",{abbinamento:a}));
   aggiornaStato(r.stato);
+  $("noteImp").innerHTML=(r.note||[]).map(n=>`<li>${esc(n)}</li>`).join("");
+  mostraProblemi(r);
+  passo(4);
+}
+
+// resoconto della verifica, con le correzioni in blocco
+const ESCLUDIBILI=new Set(["poligono-senza-scheda","senza-quote","schematica-tagli","schematica-spessori","quote-fuori-poligono","scheda-senza-poligono"]);
+function mostraProblemi(r){
   const err=r.problemi.filter(p=>p.livello==="errore"), avv=r.problemi.filter(p=>p.livello==="avviso");
   const ord={errore:0,avviso:1,info:2}; r.problemi.sort((a,b)=>ord[a.livello]-ord[b.livello]);
-  $("somm").innerHTML=`<span class="pill ${err.length?"errore":"ok"}">${err.length} errori</span><span class="pill ${avv.length?"avviso":"ok"}">${avv.length} avvisi</span><span class="mot">${r.stato.n_us} US e ${r.stato.n_usm} USM importate</span>`;
-  $("noteImp").innerHTML=(r.note||[]).map(n=>`<li>${esc(n)}</li>`).join("");
+  const P=r.parametri||{};
+  $("somm").innerHTML=`<span class="pill ${err.length?"errore":"ok"}">${err.length} errori</span><span class="pill ${avv.length?"avviso":"ok"}">${avv.length} avvisi</span><span class="mot">${r.stato?`${r.stato.n_us} US e ${r.stato.n_usm} USM importate`:""}</span>`;
   const elenco=u=>u.length>40?`<details><summary class="mot">${u.length} unità</summary><code>${esc(u.join(", "))}</code></details>`:`<code>${esc(u.join(", "))}</code>`;
-  $("prob").innerHTML=r.problemi.length?r.problemi.map(p=>`<div class="pr"><span class="pill ${p.livello}">${p.livello}</span><div><p>${esc(p.messaggio)}</p>${p.unita.length?elenco(p.unita):""}</div></div>`).join(""):
+  const num=v=>v==null?"":Number(v).toFixed(2).replace(".",",");
+  const tipici=`<label class="mot"><input type="checkbox" data-tip ${P.tipici_dal_sito?"checked":""}> usa prima la mediana delle unità dello stesso tipo (Definizione), dove ce ne sono almeno tre</label>`;
+  const azioni=p=>{
+    let h="";
+    if(p.codice==="schematica-tagli") h+=`<div class="corr"><label>Profondità tipica <input data-par="profondita_predefinita" value="${num(P.profondita_predefinita)}" size="5"> m</label>${tipici}<button class="btn" data-applica>Applica</button></div>`;
+    if(p.codice==="schematica-spessori") h+=`<div class="corr"><label>Spessore tipico <input data-par="spessore_predefinito" value="${num(P.spessore_predefinito)}" size="5"> m</label>${tipici}<button class="btn" data-applica>Applica</button></div>`;
+    if(p.codice==="senza-quote") h+=`<div class="corr"><label>Superficie a quota costante <input data-quota size="7" placeholder="es. 52,40"> m</label><button class="btn" data-costante>Applica</button></div>`;
+    if(p.codice==="escluse") h+=`<div class="corr"><button class="btn" data-includi>Reincludi tutte</button></div>`;
+    else if(p.unita.length && ESCLUDIBILI.has(p.codice)) h+=`<div class="corr"><button class="btn" data-escludi="${p.unita.join(",")}">Escludi ${p.unita.length===1?"questa unità":"queste "+p.unita.length+" unità"} dal 3D</button></div>`;
+    return h };
+  $("prob").innerHTML=r.problemi.length?r.problemi.map(p=>`<div class="pr"><span class="pill ${p.livello}">${p.livello}</span><div><p>${esc(p.messaggio)}</p>${p.unita.length?elenco(p.unita):""}${azioni(p)}</div></div>`).join(""):
     `<div class="pr"><span class="pill ok">ok</span><p>Nessun problema: i dati sono pronti per la ricostruzione.</p></div>`;
   $("n4").textContent=err.length?"Ricostruisci comunque →":"Ricostruisci il 3D →";
   $("n4").dataset.forza=err.length?"1":"";
-  passo(4);
+  const corr=async(dati,msg)=>{ const x=await lavoro("Nuova verifica…",()=>api("correggi",dati)); if(x.stato) aggiornaStato(x.stato); mostraProblemi(x); if(msg) avviso(msg) };
+  $("prob").querySelectorAll("[data-applica]").forEach(b=>b.onclick=()=>{ const box=b.closest(".corr"), par={};
+    box.querySelectorAll("[data-par]").forEach(i=>par[i.dataset.par]=i.value); const t=box.querySelector("[data-tip]"); if(t) par.tipici_dal_sito=t.checked;
+    corr({parametri:par},"Valori tipici aggiornati").catch(()=>{}) });
+  $("prob").querySelectorAll("[data-escludi]").forEach(b=>b.onclick=()=>corr({escludi:b.dataset.escludi.split(",").map(Number)},"Unità escluse: puoi reincluderle da qui").catch(()=>{}));
+  $("prob").querySelectorAll("[data-includi]").forEach(b=>b.onclick=()=>corr({includi:"tutte"}).catch(()=>{}));
+  $("prob").querySelectorAll("[data-costante]").forEach(b=>b.onclick=()=>{ const v=parseFloat(b.closest(".corr").querySelector("[data-quota]").value.replace(",","."));
+    if(!Number.isFinite(v)){ avviso("Scrivi la quota in metri",true); return }
+    corr({superficie:{tipo:"costante",quota:v}},"Superficie di riferimento impostata").catch(()=>{}) });
 }
 
 // ------------------------------------------------------------------ eventi

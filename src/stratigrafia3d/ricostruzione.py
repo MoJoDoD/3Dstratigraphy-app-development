@@ -222,7 +222,10 @@ def ricostruisci(scavo, unita=None, log=None):
             m.qualita["strategia"] = strategia.get(u, "misurata")
             if n_stimate.get(u):
                 m.qualita["quote_stimate"] = int(n_stimate[u])
+    for u in set(P.escluse):
+        modello.unita.pop(int(u), None)
     modello.rapporto = [dict(unita=int(u), tipo=m.tipo, **m.qualita) for u, m in sorted(modello.unita.items())]
+    modello.dedotti = sorted((int(a), int(b)) for a, b, d in G.edges(data=True) if d.get("dedotto"))
     scavo.modello = modello
     scavo.registra("ricostruzione", dict(unita=len(modello.unita),
                                          parziale=sorted(da_fare) if da_fare is not None else None))

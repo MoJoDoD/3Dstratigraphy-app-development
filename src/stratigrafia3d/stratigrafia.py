@@ -123,14 +123,13 @@ def profondita_dall_alto(rap):
     return out
 
 
-def harris(rap, iterazioni=12):
-    """Impaginazione del diagramma di Harris: riduzione transitiva, righe, ordine per baricentri."""
-    H = nx.transitive_reduction(rap.grafo)
+def _impagina(H, contemporanei, iterazioni):
+    """Righe dall'alto (le più recenti) e ordine per baricentri, per un solo gruppo di unità collegate."""
     hl = {}
     for n in nx.topological_sort(H):
         pred = list(H.predecessors(n))
         hl[n] = 0 if not pred else 1 + max(hl[p] for p in pred)
-    for a, b in rap.contemporanei:
+    for a, b in contemporanei:
         m = max(hl.get(a, 0), hl.get(b, 0))
         hl[a] = hl[b] = m
     rows = {}
@@ -139,7 +138,7 @@ def harris(rap, iterazioni=12):
     for l in rows:
         rows[l].sort()
     pos = {}
-    for it in range(iterazioni):
+    for it in range(iterazioni if len(hl) > 2 else 1):
         for l in sorted(rows):
             for i, n in enumerate(rows[l]):
                 pos[n] = i
@@ -148,11 +147,71 @@ def harris(rap, iterazioni=12):
                 nb = [m for m in list(H.predecessors(n)) + list(H.successors(n)) if m in pos]
                 return np.mean([pos[m] for m in nb]) if nb else pos[n]
             rows[l].sort(key=bc)
+    # le righe partono da 0 anche se i contemporanei hanno lasciato righe vuote
+    livelli = {l: i for i, l in enumerate(sorted(rows))}
     maxw = max(len(v) for v in rows.values()) if rows else 0
-    nodes = []
+    nodi = []
     for l, ns in rows.items():
         off = (maxw - len(ns)) / 2
         for i, n in enumerate(ns):
-            nodes.append(dict(id=int(n), r=int(l), c=round(off + i, 2)))
+            nodi.append([n, livelli[l], off + i])
+    return nodi, len(rows), maxw
+
+
+def harris(rap, iterazioni=12, larghezza=None, dedotti=()):
+    """Impaginazione del diagramma di Harris: riduzione transitiva, righe, ordine per baricentri.
+
+    Ogni gruppo di unità collegate tra loro (una buca con i suoi riempimenti, un settore) è impaginato
+    a parte; i gruppi sono poi disposti su più file, i più grandi per primi, e le unità senza rapporti
+    in una griglia finale. Ogni nodo porta il numero del gruppo (``g``) e ``gruppi`` dice dove sta
+    ciascuno, così il visualizzatore può mostrare la sola sequenza dell'unità scelta.
+
+    ``dedotti`` sono rapporti «copre» ricavati dal programma (l'ordine dei riempimenti): entrano nel
+    diagramma, ma sono elencati a parte perché il visualizzatore li disegni tratteggiati."""
+    G = rap.grafo
+    extra = [(a, b) for a, b in dedotti if a in G and b in G and not G.has_edge(a, b)]
+    if extra:
+        G = G.copy()
+        G.add_edges_from(extra)
+        if not nx.is_directed_acyclic_graph(G):
+            G, extra = rap.grafo, []
+    H = nx.transitive_reduction(G)
+    U = nx.Graph()
+    U.add_nodes_from(H.nodes)
+    U.add_edges_from(H.edges())
+    U.add_edges_from((a, b) for a, b in rap.contemporanei if a in U and b in U)
+    comps = [sorted(c) for c in nx.connected_components(U)]
+    comps.sort(key=lambda c: (-len(c), c[0]))
+    blocchi = []
+    sole = []
+    for c in comps:
+        if len(c) == 1 and not G.degree(c[0]):
+            sole.append(c[0])
+            continue
+        dentro = set(c)
+        cont = [(a, b) for a, b in rap.contemporanei if a in dentro]
+        nodi, righe, col = _impagina(H.subgraph(c), cont, iterazioni)
+        blocchi.append((nodi, righe, col))
+    if sole:
+        lato = max(1, int(np.ceil(np.sqrt(len(sole) * 3))))
+        nodi = [[n, i // lato, float(i % lato)] for i, n in enumerate(sorted(sole))]
+        blocchi.append((nodi, int(np.ceil(len(sole) / lato)), min(lato, len(sole))))
+    # disposizione a scaffali: file di gruppi larghe al massimo «larghezza» colonne
+    tot = sum(r * c for _, r, c in blocchi)
+    if larghezza is None:
+        larghezza = max([c for _, _, c in blocchi] + [int(np.ceil(np.sqrt(tot * 2.5)))], default=0)
+    nodes, gruppi = [], []
+    x = y = alt = 0
+    for g, (nodi, righe, col) in enumerate(blocchi):
+        if x and x + col > larghezza:
+            x, y, alt = 0, y + alt + 1, 0
+        gruppi.append(dict(r=y, c=x, rows=righe, cols=col, n=len(nodi)))
+        for n, r, c in nodi:
+            nodes.append(dict(id=int(n), r=int(y + r), c=round(x + c, 2), g=g))
+        x += col + 1
+        alt = max(alt, righe)
+    rows = (y + alt) if blocchi else 0
+    cols = max((gr["c"] + gr["cols"] for gr in gruppi), default=0)
     return dict(nodes=nodes, edges=[[int(a), int(b)] for a, b in H.edges()],
-                same=[[int(a), int(b)] for a, b in rap.contemporanei], rows=len(rows), cols=maxw)
+                same=[[int(a), int(b)] for a, b in rap.contemporanei], rows=rows, cols=cols, gruppi=gruppi,
+                dedotti=[[int(a), int(b)] for a, b in extra if H.has_edge(a, b)])

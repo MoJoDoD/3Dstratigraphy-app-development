@@ -145,7 +145,7 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
 .note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.5}
 
 /* harris / sezioni */
-.hwrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--paper)}
+.hwrap{overflow:auto;max-height:calc(100vh - 250px);border:1px solid var(--line);border-radius:var(--r);background:var(--paper)}
 .hwrap svg text{font-family:var(--f-num)}
 .hnode{cursor:pointer}
 .hnode rect{stroke:var(--ink);stroke-width:1}
@@ -153,6 +153,9 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
 .hnode text{fill:var(--ink);font-size:10.5px}
 .hedge{stroke:var(--muted);stroke-width:1;fill:none}
 .hsame{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 2}
+.hded{stroke:var(--muted);stroke-width:1;fill:none;stroke-dasharray:2 3}
+.hbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+.hbar select{font:inherit}
 .spoly{cursor:pointer;stroke:#00000055;stroke-width:.6}
 .spoly.sel{stroke:var(--accent);stroke-width:2}
 .slbl{font-family:var(--f-num);font-size:9px;fill:#111;pointer-events:none}
@@ -269,6 +272,23 @@ const CAT_COL={"strato":"#a88b62","crollo":"#c0694d","riempimento":"#4f4237","ta
 const AFF_COL={misurata:"#2f7d5b",profondita:"#5f8f3f",impilata:"#c09a2c",schematica:"#c0573a",nessuna:"#8a8a8a"};
 const AFF_TXT={misurata:"misurata: quote o profili rilevati",profondita:"da superficie e profondità",impilata:"impilata nella sequenza, spessore in scheda",schematica:"schematica: valori tipici",nessuna:"non ricostruita"};
 const affOf=u=>(S[u]?._qualita?.strategia)||"misurata";
+// campi della scheda adatti a colorare: testo con pochi valori diversi, presenti in almeno un'unità su cinque
+const CAMPI_NO=new Set(["US","Fase","Categoria","Colore HEX","Colore Munsell","Descrizione","Interpretazione","Note"]);
+const CAMPI_COL={};
+{const hsl=(h,sa,l)=>{const f=n=>{const k=(n+h/30)%12,a=sa*Math.min(l,1-l);return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,"0")};return "#"+f(0)+f(8)+f(4)};
+ const rs=Object.values(S), conta={};
+ rs.forEach(r=>Object.entries(r).forEach(([k,v])=>{ if(k.startsWith("_")||CAMPI_NO.has(k)||v==null||v==="") return;
+   if(typeof v==="object") return; (conta[k]??=new Map()).set(String(v),((conta[k].get(String(v)))||0)+1) }));
+ Object.entries(conta).forEach(([k,m])=>{const tot=[...m.values()].reduce((a,b)=>a+b,0);
+   if(m.size<2||m.size>24||tot<rs.length*.2) return;
+   if([...m.keys()].every(v=>v.length>40)) return;
+   const vals=[...m.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0]), pal={};
+   vals.forEach((v,i)=>pal[v]=hsl((i*137.5+35)%360,.45,i%2?.42:.55));
+   CAMPI_COL[k]={pal,vals,conta:m}});
+ const sel=$("colMode"), ks=Object.keys(CAMPI_COL).sort((a,b)=>a.localeCompare(b,"it"));
+ if(ks.length){const g=document.createElement("optgroup"); g.label="Campi della scheda";
+   ks.forEach(k=>{const o=document.createElement("option");o.value="f:"+k;o.textContent=k;g.appendChild(o)}); sel.appendChild(g)}}
+const campoOf=(u,k)=>{const v=S[u]?.[k]; return v==null||v===""?null:String(v)};
 const REL_ORDER=["copre","coperto da","taglia","tagliato da","riempie","riempito da","si appoggia a","gli si appoggia","si lega a"];
 const INV={"copre":"coperto da","taglia":"tagliato da","riempie":"riempito da","si appoggia a":"gli si appoggia","si lega a":"si lega a"};
 const fmtY=v=>v==null?"—":(v<0?(-v)+" a.C.":v+" d.C.");
@@ -279,6 +299,7 @@ const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim
 // ------------------------------------------------------------ relazioni
 const REL={};
 D.rapporti.forEach(([a,t,b])=>{(REL[a]??={})[t]??=[];REL[a][t].push(b);(REL[b]??={})[INV[t]]??=[];REL[b][INV[t]].push(a)});
+const DEDOTTI={}; (D.dedotti||[]).forEach(([a,b])=>{(DEDOTTI[a]??={sopra:[],sotto:[]}).sotto.push(b);(DEDOTTI[b]??={sopra:[],sotto:[]}).sopra.push(a)});
 const MAT={}; D.materiali.forEach(m=>(MAT[m.US]??=[]).push(m));
 const RSU={}; D.rs.forEach(r=>(RSU[r.US]??=[]).push(r));
 const CAU={}; D.campioni.forEach(r=>(CAU[r.US]??=[]).push(r));
@@ -315,6 +336,7 @@ function colorFor(u){
   if(mode==="fase") return PH_COL[faseOf(u)]||"#888";
   if(mode==="cat") return CAT_COL[catOf(u)]||"#999";
   if(mode==="aff") return AFF_COL[affOf(u)]||"#999";
+  if(mode.startsWith("f:")){const k=mode.slice(2), v=campoOf(u,k); return v==null?"#b9b5ad":(CAMPI_COL[k]?.pal[v]||"#999")}
   const s=S[u]; if(s&&/^#[0-9a-f]{6}$/i.test(String(s["Colore HEX"]||""))) return s["Colore HEX"];
   if(s&&s._tipo==="USM") return "#c9c2b4";
   return CAT_COL[catOf(u)]||PH_COL[faseOf(u)]||"#9a8f80";   // nessun colore in scheda: per categoria o fase
@@ -494,6 +516,10 @@ function buildLegend(){
   if(mode==="fase") L.innerHTML="<h4>Fasi</h4>"+D.fasi.slice().reverse().map(f=>`<div><i style="background:${PH_COL[f.Fase]}"></i>${f.Fase} · ${esc(f.Titolo)}</div>`).join("");
   else if(mode==="aff"){const cs=Object.keys(AFF_COL).filter(k=>Object.keys(units).some(u=>affOf(+u)===k));
     L.innerHTML="<h4>Affidabilità della forma</h4>"+cs.map(c=>`<div><i style="background:${AFF_COL[c]}"></i>${esc(AFF_TXT[c])}</div>`).join("")}
+  else if(mode.startsWith("f:")){const k=mode.slice(2), C=CAMPI_COL[k]; if(!C){L.innerHTML="";return}
+    const vuote=Object.keys(units).filter(u=>campoOf(+u,k)==null).length;
+    L.innerHTML=`<h4>${esc(k)}</h4>`+C.vals.map(v=>`<div><i style="background:${C.pal[v]}"></i>${esc(v)} <small class="muted">${C.conta.get(v)}</small></div>`).join("")+
+      (vuote?`<div><i style="background:#b9b5ad"></i><span class="muted">non indicato</span> <small class="muted">${vuote}</small></div>`:"")}
   else if(mode==="cat"){const cs=[...new Set(Object.keys(units).map(u=>catOf(+u)))].sort();L.innerHTML="<h4>Categorie</h4>"+cs.map(c=>`<div><i style="background:${CAT_COL[c]||"#999"}"></i>${esc(c)}</div>`).join("")}
   else L.innerHTML=`<h4>Colore del sedimento</h4><div class="muted" style="max-width:170px;display:block">Colore Munsell registrato nella scheda di ogni US. Le USM in grigio pietra; i tagli sono superfici semitrasparenti.</div>`+
      `<div style="margin-top:4px"><i style="background:#e0a800"></i>reperto speciale</div><div><i style="background:#13a37a"></i>campione</div>`;
@@ -502,7 +528,11 @@ function buildLegend(){
 // ------------------------------------------------------------ scheda
 function relHTML(u){
   const R=REL[u]||{};
-  const rows=REL_ORDER.filter(k=>R[k]&&R[k].length).map(k=>`<dt>${k}</dt><dd>${[...new Set(R[k])].sort((a,b)=>a-b).map(x=>`<button class="ulink" data-go="${x}">${S[x]?._tipo==="USM"?"USM ":""}${x}</button>`).join("")}</dd>`);
+  const btn=x=>`<button class="ulink" data-go="${x}">${S[x]?._tipo==="USM"?"USM ":""}${x}</button>`;
+  const rows=REL_ORDER.filter(k=>R[k]&&R[k].length).map(k=>`<dt>${k}</dt><dd>${[...new Set(R[k])].sort((a,b)=>a-b).map(btn).join("")}</dd>`);
+  const DD=DEDOTTI[u];
+  if(DD){ if(DD.sopra.length) rows.push(`<dt title="Ordine dei riempimenti dedotto dal programma, non registrato">coperto da <i>(dedotto)</i></dt><dd>${DD.sopra.map(btn).join("")}</dd>`);
+          if(DD.sotto.length) rows.push(`<dt title="Ordine dei riempimenti dedotto dal programma, non registrato">copre <i>(dedotto)</i></dt><dd>${DD.sotto.map(btn).join("")}</dd>`) }
   return rows.length?`<dl class="rel">${rows.join("")}</dl>`:`<p class="muted">Nessun rapporto registrato.</p>`;
 }
 function matHTML(u){
@@ -692,22 +722,45 @@ function sectionPreset(name){
 }
 
 // ------------------------------------------------------------ Harris
+const HG={};                                 // unità -> gruppo del diagramma
+(D.harris.nodes||[]).forEach(n=>HG[n.id]=n.g??0);
+const HGRANDE=(D.harris.nodes||[]).length>150 && (D.harris.gruppi||[]).length>1;
+let hVista=HGRANDE?"seq":"tutto", hGruppo=null;
 function renderHarris(){
-  const H=D.harris, W=56, Hh=24, gx=14, gy=22, pad=16;
-  const w=pad*2+H.cols*(W+gx), h=pad*2+H.rows*(Hh+gy);
-  const P={}; H.nodes.forEach(n=>P[n.id]=[pad+n.c*(W+gx),pad+n.r*(Hh+gy)]);
+  const H=D.harris, W=56, Hh=24, gx=14, gy=22, pad=16, GR=H.gruppi||[];
+  const g=hVista==="seq"?(selected!=null&&HG[selected]!=null?HG[selected]:null):null;
+  hGruppo=g;
+  const barra=HGRANDE?`<div class="hbar"><label for="hVista">Mostra</label><select id="hVista"><option value="seq"${hVista==="seq"?" selected":""}>la sequenza dell'unità selezionata</option><option value="tutto"${hVista==="tutto"?" selected":""}>tutto il diagramma (${H.nodes.length} unità, ${GR.length} gruppi)</option></select></div>`:"";
+  const nota=`<p class="note" style="margin-top:0">Rapporti diretti dopo la riduzione transitiva: dall'alto le unità più recenti. Bordo tratteggiato = US negativa, angoli vivi = USM, tratteggio orizzontale = unità legate${(H.dedotti||[]).length?", linea a puntini = ordine dei riempimenti dedotto dal programma":""}. Colore = come nella scena.</p>`;
+  if(hVista==="seq" && g==null){
+    const msg=selected!=null?`L'unità ${selected} non ha rapporti registrati.`:"Seleziona un'unità nella scena o nell'elenco: qui compare la sua sequenza, con le unità collegate.";
+    $("pHarris").innerHTML=barra+nota+`<p class="note">${msg}</p>`; bindHarris(); return;
+  }
+  const nodi=g==null?H.nodes:H.nodes.filter(n=>n.g===g);
+  const G0=g==null?{r:0,c:0,rows:H.rows,cols:H.cols}:GR[g];
+  const w=pad*2+Math.max(1,G0.cols)*(W+gx), h=pad*2+Math.max(1,G0.rows)*(Hh+gy);
+  const P={}; nodi.forEach(n=>P[n.id]=[pad+(n.c-G0.c)*(W+gx),pad+(n.r-G0.r)*(Hh+gy)]);
+  const DED=new Set((H.dedotti||[]).map(([a,b])=>a+">"+b));
   let s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Diagramma di Harris">`;
-  H.edges.forEach(([a,b])=>{const [x1,y1]=P[a],[x2,y2]=P[b]; const my=(y1+Hh+y2)/2;
-    s+=`<path class="hedge" d="M${x1+W/2},${y1+Hh} V${my} H${x2+W/2} V${y2}"/>`});
-  H.same.forEach(([a,b])=>{const [x1,y1]=P[a],[x2,y2]=P[b]; s+=`<line class="hsame" x1="${x1+W/2}" y1="${y1+Hh/2}" x2="${x2+W/2}" y2="${y2+Hh/2}"/>`});
-  H.nodes.forEach(n=>{const [x,y]=P[n.id]; const s_=S[n.id]; const neg=s_?.Tipo==="negativa", m=s_?._tipo==="USM";
-    s+=`<g class="hnode" data-h="${n.id}" tabindex="0"><rect x="${x}" y="${y}" width="${W}" height="${Hh}" rx="${m?0:(neg?12:3)}" fill="${PH_COL[s_?.Fase??0]}" fill-opacity=".28" ${neg?'stroke-dasharray="3 2"':""}/><text x="${x+W/2}" y="${y+Hh/2+4}" text-anchor="middle">${m?"M ":""}${n.id}</text></g>`});
+  H.edges.forEach(([a,b])=>{if(!P[a]||!P[b]) return; const [x1,y1]=P[a],[x2,y2]=P[b]; const my=(y1+Hh+y2)/2;
+    s+=`<path class="${DED.has(a+">"+b)?"hded":"hedge"}" d="M${x1+W/2},${y1+Hh} V${my} H${x2+W/2} V${y2}"/>`});
+  H.same.forEach(([a,b])=>{if(!P[a]||!P[b]) return; const [x1,y1]=P[a],[x2,y2]=P[b]; s+=`<line class="hsame" x1="${x1+W/2}" y1="${y1+Hh/2}" x2="${x2+W/2}" y2="${y2+Hh/2}"/>`});
+  nodi.forEach(n=>{const [x,y]=P[n.id]; const s_=S[n.id]; const neg=s_?.Tipo==="negativa", m=s_?._tipo==="USM";
+    s+=`<g class="hnode" data-h="${n.id}" tabindex="0"><title>${esc(n.id+" "+(defOf(n.id)||""))}</title><rect x="${x}" y="${y}" width="${W}" height="${Hh}" rx="${m?0:(neg?12:3)}" fill="${colorFor(n.id)}" fill-opacity=".35" ${neg?'stroke-dasharray="3 2"':""}/><text x="${x+W/2}" y="${y+Hh/2+4}" text-anchor="middle">${m?"M ":""}${n.id}</text></g>`});
   s+="</svg>";
-  $("pHarris").innerHTML=`<p class="note" style="margin-top:0">Rapporti diretti dopo la riduzione transitiva: dall'alto le unità più recenti. Bordo tratteggiato = US negativa, angoli vivi = USM, tratteggio orizzontale = unità legate. Colore = fase.</p><div class="hwrap">${s}</div>`;
-  $("pHarris").querySelectorAll("[data-h]").forEach(g=>{g.onclick=()=>select(+g.dataset.h,true);g.onkeydown=e=>{if(e.key==="Enter")select(+g.dataset.h,true)}});
-  renderHarrisSel();
+  const titolo=g!=null?`<p class="note" style="margin-top:0"><b>${nodi.length} unità collegate</b>${GR[g]&&GR[g].rows?` su ${GR[g].rows} livelli`:""}.</p>`:"";
+  $("pHarris").innerHTML=barra+nota+titolo+`<div class="hwrap">${s}</div>`;
+  bindHarris(); renderHarrisSel();
 }
-function renderHarrisSel(){ document.querySelectorAll(".hnode").forEach(g=>g.classList.toggle("sel",+g.dataset.h===selected)) }
+function bindHarris(){
+  const v=$("hVista"); if(v) v.onchange=()=>{hVista=v.value; renderHarris()};
+  $("pHarris").querySelectorAll("[data-h]").forEach(g=>{g.onclick=()=>select(+g.dataset.h,true);g.onkeydown=e=>{if(e.key==="Enter")select(+g.dataset.h,true)}});
+}
+function renderHarrisSel(){
+  if(hVista==="seq" && (selected!=null?HG[selected]??null:null)!==hGruppo){ renderHarris(); return }
+  document.querySelectorAll(".hnode").forEach(g=>{const on=+g.dataset.h===selected; g.classList.toggle("sel",on);
+    if(on && hVista==="tutto" && !$("pHarris").hidden) g.scrollIntoView({block:"nearest",inline:"nearest"})});
+}
 
 // ------------------------------------------------------------ Sezioni 2D (disegni del GIS)
 function renderSez(){
@@ -753,7 +806,7 @@ $("ve").oninput=e=>{VE=+e.target.value;$("veO").textContent="×"+VE;applyLayout(
 $("clipAx").onchange=()=>{$("clipPos").value=$("clipAx").value==="y"?CY:CX;setClip()};
 $("clipPos").oninput=setClip;
 $("clipFlip").onclick=()=>{clipSign*=-1;setClip()};
-$("colMode").onchange=()=>{applyColors(); if(!$("pSez").hidden) renderSez()};
+$("colMode").onchange=()=>{applyColors(); renderHarris(); if(!$("pSez").hidden) renderSez()};
 function overlayToggle(){
   const q=$("oQ").getAttribute("aria-pressed")==="true", p=$("oP").getAttribute("aria-pressed")==="true", rs=$("oRS").getAttribute("aria-pressed")==="true", ed=$("oEdge").getAttribute("aria-pressed")==="true";
   Object.values(units).forEach(U=>{U.edges.visible=ed; U.extra.forEach(o=>{const k=o.userData.kind; o.visible=k==="quote"?q:k==="profilo"?p:rs})});

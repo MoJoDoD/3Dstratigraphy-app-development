@@ -161,6 +161,36 @@ def stima_quote(scavo):
             return None
         return Krig(pts, trend=len(pts) >= 8)
 
+    # valori tipici del sito: mediana delle profondità e degli spessori registrati per ogni tipo di unità
+    # (la Definizione della scheda: «Posthole», «Pit», «Secondary Fill»...), se ce ne sono almeno tre
+    def _chiave(r):
+        for c in ("Definizione", sc.C_CATEGORIA):
+            v = r.get(c)
+            if v is not None and str(v).strip() and str(v).lower() != "nan":
+                return str(v).strip().lower()
+        return None
+
+    tip_prof, tip_spess = {}, {}
+    if getattr(P, "tipici_dal_sito", False):
+        vp, vs = {}, {}
+        for u, r in schede_us.items():
+            k = _chiave(r)
+            if k is None:
+                continue
+            if u in negativa:
+                d_ = _numero(r.get(sc.C_PROFONDITA))
+                if d_ and d_ > 0:
+                    vp.setdefault(k, []).append(d_)
+            else:
+                s_ = _numero(r.get(sc.C_SPESSORE))
+                if s_ and s_ > 0:
+                    vs.setdefault(k, []).append(s_)
+        tip_prof = {k: float(np.median(v)) for k, v in vp.items() if len(v) >= 3}
+        tip_spess = {k: float(np.median(v)) for k, v in vs.items() if len(v) >= 3}
+
+    def tipico(u, tabella):
+        return tabella.get(_chiave(schede_us.get(u, {})))
+
     # ---------------------------------------------------------------- tagli
     rif_taglio, prof_taglio = {}, {}
     for u in sorted(negativa & set(poly_us)):
@@ -187,7 +217,7 @@ def stima_quote(scavo):
         if d is not None and d > 0:
             strategia[u] = "profondita"
         else:
-            d = P.profondita_predefinita
+            d = tipico(u, tip_prof) or P.profondita_predefinita
             strategia[u] = "schematica"
         rin = _raggio_inscritto(g)
         base = np.zeros((0, 2))
@@ -222,6 +252,10 @@ def stima_quote(scavo):
     def spessore(u):
         return _numero(schede_us[u].get(sc.C_SPESSORE))
 
+    def spessore_o_tipico(u):
+        s_ = spessore(u)
+        return s_ if s_ and s_ > 0 else tipico(u, tip_spess)
+
     def taglio_di(u):
         for v in G.successors(u) if u in G else []:
             if G.edges[u, v]["t"] == sc.R_RIEMPIE and v in negativa and v in rif_taglio:
@@ -243,6 +277,7 @@ def stima_quote(scavo):
         # dall'alto: prima i rapporti "copre", poi il tipo di riempimento, poi il numero
         chiave = lambda u: (_rango_scheda(schede_us[u]), u)
         ordine = list(nx.lexicographical_topological_sort(H, key=chiave))
+        # nel taglio lo spessore mancante è lo spazio rimasto: la profondità del taglio conta più dei tipici
         t = np.array([spessore(u) if spessore(u) and spessore(u) > 0 else np.nan for u in ordine], float)
         D = prof_taglio.get(c, P.profondita_predefinita)
         mancano = np.isnan(t)
@@ -277,7 +312,7 @@ def stima_quote(scavo):
         m = 0.0
         for p in (G.predecessors(u) if u in G else []):
             if p in liberi and p not in visti and G.edges[p, u]["t"] in (sc.R_COPRE, sc.R_RIEMPIE):
-                tp = spessore(p) or P.spessore_predefinito
+                tp = spessore_o_tipico(p) or P.spessore_predefinito
                 m = max(m, profondita_tetto(p, visti + (u,)) + tp)
         memo[u] = m
         return m
@@ -287,6 +322,8 @@ def stima_quote(scavo):
         pts = np.vstack([_bordo(g, n_max=80), _griglia(g, n=60)])
         aggiungi(u, sc.Q_SUP, pts, S(pts) - profondita_tetto(u))
         strategia[u] = "impilata" if spessore(u) else "schematica"
+        if not spessore(u) and tipico(u, tip_spess):
+            spessori[u] = tipico(u, tip_spess)
 
     # ---------------------------------------------------------------- murature
     for u in sorted(poly_usm):

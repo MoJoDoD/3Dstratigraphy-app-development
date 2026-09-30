@@ -70,6 +70,20 @@ modello del terreno viene copiato nel `.scavo`. Quando i rapporti non dicono l'o
 di un taglio, lo si deduce dal tipo (primario in basso) e dal numero; se gli spessori registrati
 superano la profondità, si riducono in proporzione. Tutto viene segnalato nella verifica.
 
+La **verifica** (pulsante Verifica, o l'ultimo passo dell'importazione) permette correzioni in blocco:
+cambiare la profondità e lo spessore tipici, usare la mediana delle unità dello stesso tipo
+(«Posthole», «Pit»…) registrate nello scavo, dare una quota costante alla superficie, oppure escludere
+dal 3D un gruppo di unità. Le unità escluse restano nelle schede e si reincludono con un clic.
+
+## Visualizzatore
+
+- **Colore**: sedimento, fase, categoria, affidabilità, oppure qualsiasi campo a categorie della scheda
+  (per Stansted: Feature type, Side shape, Excavation stage…), con legenda e conteggi.
+- **Harris**: ogni gruppo di unità collegate (una buca con i suoi riempimenti, un settore) è
+  impaginato a parte. Oltre 150 unità il pannello mostra la sequenza dell'unità selezionata, e a
+  richiesta tutto il diagramma. L'ordine dei riempimenti dedotto dal programma è tratteggiato a
+  puntini, e nella scheda compare come «copre (dedotto)».
+
 Aree grandi (oltre 65 m) e centinaia di unità sono gestite; `strumenti/caso_studio_stansted.py`
 ricava un caso studio in inglese dall'archivio aperto di Framework Archaeology (Stansted): senza
 quote, con profondità, spessori e un modello del terreno.
