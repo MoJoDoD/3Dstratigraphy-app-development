@@ -9,10 +9,15 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+rem preferisce Python 3.12 o 3.13 (librerie piu' collaudate); altrimenti la versione predefinita
+set PYV=-3
+py -3.13 -c "import sys" >nul 2>nul && set PYV=-3.13
+py -3.12 -c "import sys" >nul 2>nul && set PYV=-3.12
 if not exist ".venv\Scripts\python.exe" (
-  echo Creo l'ambiente Python...
-  py -3 -m venv .venv || goto errore
+  echo Creo l'ambiente Python ^(py %PYV%^)...
+  py %PYV% -m venv .venv || goto errore
 )
+".venv\Scripts\python.exe" --version
 echo Installo le librerie ^(qualche minuto la prima volta^)...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip >nul
 ".venv\Scripts\python.exe" -m pip install -e ".[demo]" || goto errore

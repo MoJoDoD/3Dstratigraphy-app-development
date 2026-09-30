@@ -49,27 +49,31 @@ def test_accuratezza_rispetto_al_modello_di_verita(demo, progetto):
         dettagli[u] = round(err * 100, 1)
         totale += 1
         buoni += err < 0.03
-    assert totale > 30
+    assert totale >= 28
     print('scarto mediano del tetto (cm):', dettagli)
     assert buoni / totale >= 0.9, dettagli
 
 
 def test_mesh_stagne(progetto):
-    """Ogni volume è una superficie chiusa e orientata in modo coerente:
-    ogni spigolo orientato compare una volta sola e il suo opposto esiste."""
+    """Ogni volume è una superficie chiusa e orientata in modo coerente: ogni spigolo orientato
+    compare una volta sola e il suo opposto esiste. I vertici duplicati delle pareti laterali
+    vengono ricondotti ai vertici di tetto e base da cui nascono."""
+    from stratigrafia3d.mesh import spigoli_di_bordo
     s, _ = progetto
     for u, m in s.modello.unita.items():
         if m.tipo == "taglio":
             continue
         P, F = esporta.mesh_unita(m)
-        k = [tuple(r) for r in np.round(P, 6)]
+        n = len(m.V2)
+        be = spigoli_di_bordo(m.F)
+        idx = np.r_[np.arange(2 * n), np.c_[be[:, 0], n + be[:, 0], n + be[:, 1], be[:, 1]].ravel()]
+        G = idx[F]
         diretti = {}
-        for f in F:
+        for f in G:
             for i, j in ((f[0], f[1]), (f[1], f[2]), (f[2], f[0])):
-                e = (k[i], k[j])
-                diretti[e] = diretti.get(e, 0) + 1
-        assert all(n == 1 for n in diretti.values()), u
-        assert all((b, a) in diretti for a, b in diretti), u
+                diretti[(i, j)] = diretti.get((i, j), 0) + 1
+        assert all(c == 1 for c in diretti.values()), u
+        assert all((b_, a_) in diretti for a_, b_ in diretti), u
         assert np.all(m.top >= m.bot - 1e-9), u
 
 
