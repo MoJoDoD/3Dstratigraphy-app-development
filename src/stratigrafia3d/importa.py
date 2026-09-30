@@ -44,7 +44,7 @@ SINONIMI_TIPO = {
 }
 _SIN = {s: k for k, v in SINONIMI_TIPO.items() for s in v}
 PAROLE_RUOLO = [
-    ("ignora", ["griglia", "grid", "quadrett", "layer_styles"]),
+    ("ignora", ["griglia", "grid", "quadrett", "layer_styles", "hachure", "tratteggi"]),
     ("usm", ["usm", "mur", "wall", "muratur", "struttur"]),
     ("area", ["area_scavo", "limite", "limit", "saggio", "trincea", "trench", "perimetr", "area"]),
     ("profili", ["profil", "interfacc"]),
@@ -52,7 +52,7 @@ PAROLE_RUOLO = [
     ("sezioni", ["sezion", "sez", "section"]),
     ("reperti", ["reperti", "reperto", "find", "rs_"]),
     ("campioni", ["campion", "sample"]),
-    ("quote", ["quot", "punti", "point", "spot", "height", "rilievo_punti", "elev"]),
+    ("quote", ["quot", "punti", "point", "spot", "height", "rilievo_punti", "elev", "level"]),
     ("us", ["us", "strat", "context", "unita", "unità", "unit", "layer"]),
 ]
 ALIAS_UNITA = ["us", "n_us", "num_us", "numero_us", "n. us", "n.us", "context", "su", "unita", "unità", "usm",
@@ -61,11 +61,42 @@ ALIAS_QUOTA = ["quota", "z", "q", "elev", "elevation", "h", "altezza", "quota_m"
 ALIAS_SEZIONE = ["sezione", "sez", "section", "nome", "name"]
 RAPPORTI_COLONNE = ["copre", "coperto da", "taglia", "tagliato da", "riempie", "riempito da", "si appoggia a",
                     "gli si appoggia", "si lega a", "uguale a"]
+# rapporti scritti in inglese (archivi britannici, Harris matrix) -> forma italiana usata dal motore
+RAPPORTI_INGLESE = {
+    "covers": "copre", "overlies": "copre", "above": "copre", "seals": "copre",
+    "covered by": "coperto da", "overlain by": "coperto da", "below": "coperto da", "sealed by": "coperto da",
+    "cuts": "taglia", "cut by": "tagliato da", "fills": "riempie", "fill of": "riempie", "filled by": "riempito da",
+    "abuts": "si appoggia a", "butts": "si appoggia a", "abutted by": "gli si appoggia", "butted by": "gli si appoggia",
+    "bonded with": "si lega a", "bonds with": "si lega a", "bonded to": "si lega a", "tied to": "si lega a",
+    "same as": "uguale a", "equal to": "uguale a", "equals": "uguale a",
+}
+# fogli con nomi inglesi -> foglio e colonne attesi dal visualizzatore
+FOGLI_ALIAS = {
+    sc.S_FASI: (["phases", "phase", "periods", "fasi"],
+                {"phase": "Fase", "title": "Titolo", "name": "Titolo", "period": "Periodo",
+                 "from (year)": "Da (anno)", "to (year)": "A (anno)", "from": "Da (anno)", "to": "A (anno)",
+                 "start": "Da (anno)", "end": "A (anno)"}),
+    sc.S_MATERIALI: (["finds", "materials", "artefacts", "artifacts", "materiali"],
+                     {"context": "US", "us": "US", "material": "Classe", "class": "Classe", "object": "Tipo / forma",
+                      "type": "Tipo / forma", "count": "NR", "quantity": "NR", "weight (g)": "Peso (g)",
+                      "weight": "Peso (g)", "mni": "NMI", "box": "Cassetta"}),
+    sc.S_DOC: (["documentation", "archive", "documentazione"],
+               {"context": "US/USM", "us": "US/USM", "subject": "Soggetto", "description": "Soggetto", "date": "Data"}),
+    sc.S_CAMPIONI: (["samples", "campioni"],
+                    {"sample": "Campione", "context": "US", "sample type": "Tipo", "type": "Tipo",
+                     "analysis": "Analisi", "collected for": "Analisi"}),
+}
 _INT_RE = re.compile(r"(\d{1,7})")
 
 
 def _norm(s):
     return re.sub(r"\s+", " ", str(s).strip().lower().replace("_", " "))
+
+
+def _rapporto(v):
+    """Nome del rapporto nella forma italiana del motore (accetta anche l'inglese)."""
+    n = _norm(v)
+    return RAPPORTI_INGLESE.get(n, n)
 
 
 def _intero(v):
@@ -365,9 +396,10 @@ def _schede(tabelle):
             frac = np.mean([_intero(v) is not None for v in vals])
             if frac < 0.8:
                 continue
-            if nc in ("us", "n us", "n. us", "numero us", "num us", "n.us", "context", "su", "unità stratigrafica",
-                      "unita stratigrafica"):
-                s = frac + (0.5 if _norm(nome) in ("us", "schede us", "schede", "unità stratigrafiche") else 0)
+            if nc in ("us", "n us", "n. us", "numero us", "num us", "n.us", "context", "context number", "context no",
+                      "su", "unità stratigrafica", "unita stratigrafica", "stratigraphic unit"):
+                s = frac + (0.5 if _norm(nome) in ("us", "schede us", "schede", "unità stratigrafiche", "contexts",
+                                                   "context register", "context sheets") else 0)
                 if s > best[2]:
                     best = (nome, c, s)
             if nc in ("usm", "n usm", "n. usm", "numero usm"):
@@ -381,16 +413,24 @@ def _colonne_scheda(df, col_id, canon_id):
     """Abbina le colonne note della scheda (tipo, spessore, margini, fase, ...)."""
     out = {canon_id: col_id}
     candidati = {
-        sc.C_TIPO: ["tipo", "tipo us", "positiva/negativa", "natura"],
-        sc.C_CATEGORIA: ["categoria", "definizione generale", "tipo di unità"],
+        sc.C_TIPO: ["tipo", "tipo us", "positiva/negativa", "natura", "type", "context type", "positive/negative"],
+        sc.C_CATEGORIA: ["categoria", "definizione generale", "tipo di unità", "category", "class"],
         sc.C_SPESSORE: ["spessore medio stimato (m)", "spessore", "spessore medio", "spessore (m)", "spessore medio (m)",
-                        "potenza", "spessore (cm)"],
-        sc.C_MARGINI: ["margini", "limiti", "limite", "limiti/margini"],
-        sc.C_FASE: ["fase", "phase"],
-        sc.C_COLORE: ["colore hex", "colore rgb", "hex"],
-        "Definizione": ["definizione", "descrizione breve", "interpretazione sintetica"],
+                        "potenza", "spessore (cm)", "thickness (m)", "thickness", "average thickness (m)",
+                        "thickness (cm)"],
+        sc.C_MARGINI: ["margini", "limiti", "limite", "limiti/margini", "boundary", "edges", "boundaries"],
+        sc.C_FASE: ["fase", "phase", "period/phase"],
+        sc.C_COLORE: ["colore hex", "colore rgb", "hex", "colour hex", "color hex", "colour", "color"],
+        "Definizione": ["definizione", "descrizione breve", "interpretazione sintetica", "definition",
+                        "interpretation keyword", "short description"],
+        "Descrizione": ["descrizione", "description", "brief description"],
+        "Interpretazione": ["interpretazione", "interpretation", "comments", "context comments"],
+        "Spessore/profondità max (m)": ["profondità (m)", "profondità", "depth (m)", "depth", "max depth (m)"],
+        "Data scavo": ["data scavo", "date recorded", "date excavated", "excavation date"],
+        "Responsabile": ["responsabile", "recorded by", "excavator", "supervisor"],
         sc.C_BASE_USM: ["quota base usata (rilevata o stimata)", "quota fondazione", "quota base", "base"],
     }
+    numerici = {sc.C_SPESSORE, sc.C_BASE_USM, "Spessore/profondità max (m)"}
     low = {_norm(c): c for c in df.columns}
     for canon, alias in candidati.items():
         if canon in df.columns:
@@ -398,7 +438,12 @@ def _colonne_scheda(df, col_id, canon_id):
             continue
         for a in alias:
             if _norm(a) in low:
-                out[canon] = low[_norm(a)]
+                col = low[_norm(a)]
+                if canon in numerici:       # "Base" può essere la forma del fondo, non una quota
+                    v = df[col].dropna()
+                    if len(v) and v.map(lambda x: _numero(x) is not None).mean() < 0.8:
+                        continue
+                out[canon] = col
                 break
     return out
 
@@ -408,11 +453,11 @@ def _rapporti(tabelle, foglio_us):
         cols = list(df.columns)
         for i, c in enumerate(cols):
             v = df[c].dropna().astype(str).map(_norm)
-            if len(v) >= 2 and v.isin(set(RAPPORTI_COLONNE)).mean() > 0.6 and 0 < i < len(cols) - 1:
+            if len(v) >= 2 and v.map(_rapporto).isin(set(RAPPORTI_COLONNE)).mean() > 0.6 and 0 < i < len(cols) - 1:
                 return {"modo": "foglio", "foglio": nome, "colonne": [cols[i - 1], c, cols[i + 1]]}
     if foglio_us and foglio_us in tabelle:
         df = tabelle[foglio_us]
-        mappa = {c: _norm(c) for c in df.columns if _norm(c) in RAPPORTI_COLONNE}
+        mappa = {c: _rapporto(c) for c in df.columns if _rapporto(c) in RAPPORTI_COLONNE}
         if mappa:
             return {"modo": "colonne", "foglio": foglio_us, "colonne": mappa}
     return {"modo": "nessuno"}
@@ -537,6 +582,20 @@ def _unita_da_testi(g, sorgente, gruppo_testi):
     return out
 
 
+def _foglio_canonico(nome, df):
+    """Fogli dal nome inglese (Phases, Finds, ...) -> foglio e colonne attesi dal programma."""
+    for canon, (nomi, colonne) in FOGLI_ALIAS.items():
+        if _norm(nome) in nomi and canon != nome:
+            ren, presi = {}, set()
+            for c in df.columns:
+                k = colonne.get(_norm(c))
+                if k and k not in presi and k not in df.columns:
+                    ren[c] = k
+                    presi.add(k)
+            return canon, df.rename(columns=ren)
+    return nome, df
+
+
 def _tipo_canonico(v, predefinito):
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return predefinito
@@ -643,7 +702,10 @@ def applica(abb, log=None):
     tabs = leggi_tabelle(abb.tabella) if abb.tabella else {}
     for nome, df in tabs.items():
         if nome not in (abb.foglio_us, abb.foglio_usm):
-            s.tabelle[nome] = df
+            canon, df = _foglio_canonico(nome, df)
+            if canon != nome:
+                note.append(f"Foglio «{nome}» letto come «{canon}»")
+            s.tabelle[canon] = df
     poli_us = set(s.layers[sc.L_US][sc.F_US]) if sc.L_US in s.layers else set()
     poli_usm = set(s.layers[sc.L_USM][sc.F_USM]) if sc.L_USM in s.layers else set()
     if abb.foglio_us:
@@ -666,7 +728,8 @@ def applica(abb, log=None):
         note.append("Colonna Tipo assente: US negative riconosciute dalla parola «taglio»")
     else:
         df[sc.C_TIPO] = df[sc.C_TIPO].astype(str).str.lower().map(
-            lambda v: "negativa" if ("neg" in v or "tagl" in v) else "positiva")
+            lambda v: "negativa" if ("neg" in v or "tagl" in v or v.strip() in ("cut", "interface", "interfaccia"))
+            else "positiva")
     if sc.C_SPESSORE in df.columns:
         sp = df[sc.C_SPESSORE].map(_numero)
         col = abb.colonne_us.get(sc.C_SPESSORE, "")
@@ -695,7 +758,7 @@ def applica(abb, log=None):
         for _, x in rdf.iterrows():
             ua, ub = _intero(x[a]), _intero(x[b])
             if ua is not None and ub is not None and pd.notna(x[t]):
-                righe.append((ua, _norm(x[t]), ub))
+                righe.append((ua, _rapporto(x[t]), ub))
         s.tabelle.pop(r["foglio"], None)
     elif r["modo"] == "colonne":
         src = tabs[r["foglio"]]
@@ -705,6 +768,7 @@ def applica(abb, log=None):
             if ua is None:
                 continue
             for col, rel in r["colonne"].items():
+                rel = _rapporto(rel)
                 v = x[col]
                 if v is None or (isinstance(v, float) and np.isnan(v)):
                     continue

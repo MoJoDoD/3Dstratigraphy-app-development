@@ -33,6 +33,8 @@ def densify_ring(ring, step):
     for i in range(1, len(out)):
         if np.linalg.norm(out[i] - out[keep[-1]]) > 0.01:
             keep.append(i)
+    while len(keep) > 3 and np.linalg.norm(out[keep[-1]] - out[keep[0]]) <= 0.01:   # chiusura dell'anello
+        keep.pop()
     return out[keep]
 
 
@@ -56,7 +58,10 @@ def _triangola_triangle(p, passo, area_max):
     d = dict(vertices=np.array(verts), segments=np.array(segs))
     if holes:
         d["holes"] = np.array(holes)
-    t = tr.triangulate(d, f"pq28a{area_max:.4f}Q")
+    # tetto ai punti aggiunti: con angoli molto acuti nel disegno il raffinamento di qualità
+    # potrebbe non finire mai (e riempire la memoria)
+    steiner = int(6 * p.area / area_max + 10 * len(verts) + 500)
+    t = tr.triangulate(d, f"pq28a{area_max:.4f}S{steiner}Q")
     return t["vertices"], t["triangles"]
 
 
@@ -129,11 +134,31 @@ def separa_vertici_pizzicati(V, F):
     return np.array(V), F
 
 
+def pulisci_poligono(geom, griglia=0.002):
+    """Vertici su una griglia di 2 mm (via doppioni e quasi-doppioni dei rilievi digitalizzati)
+    e geometria resa valida; restano solo i poligoni."""
+    import shapely
+    try:
+        g = shapely.set_precision(geom, griglia)
+        g = shapely.set_precision(g, 0)      # le operazioni successive tornano in virgola mobile
+    except Exception:
+        g = geom.buffer(0)
+    if not g.is_valid:
+        g = shapely.make_valid(g)
+    parti = [x for x in getattr(g, "geoms", [g]) if x.geom_type in ("Polygon", "MultiPolygon")]
+    out = []
+    for x in parti:
+        out.extend(getattr(x, "geoms", [x]))
+    from shapely.geometry import MultiPolygon
+    return MultiPolygon(out) if len(out) != 1 else out[0]
+
+
 def triangola(geom, passo=0.12, area_max=0.03, metodo=None):
     """Triangolazione di un (Multi)Polygon con buchi.
     Ritorna (V2 [n,2], F [m,3]) con triangoli in senso antiorario (normale verso l'alto)."""
     metodo = metodo or metodo_triangolazione()
     V, F = [], []
+    geom = pulisci_poligono(geom)
     for p in getattr(geom, "geoms", [geom]):
         if p.geom_type != "Polygon" or p.area < 0.005:
             continue

@@ -249,7 +249,10 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
 "use strict";
 const $=s=>document.getElementById(s);
 const D=JSON.parse($("modello").textContent);
-const CX=10, CY=8;                 // centro locale della scena (m)
+const EXT=D.estensione||[0,0,20,16];           // estensione in pianta (coordinate locali, m)
+const CX=(EXT[0]+EXT[2])/2, CY=(EXT[1]+EXT[3])/2;  // centro della scena
+const QU=D.quant||0.001;                         // passo delle coordinate intere
+const DIAG=Math.hypot(EXT[2]-EXT[0],EXT[3]-EXT[1]);
 const ORIG=D.origine;
 const S=D.schede;                  // schede per numero
 $("titolo").textContent=D.sito||"Scavo"; document.title=(D.sito||"Scavo")+" – Stratigrafia 3D"; $("tagDemo").hidden=!D.demo;
@@ -280,7 +283,7 @@ const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.localClippingEnabled=true;
 const scene=new THREE.Scene();
-const camera=new THREE.PerspectiveCamera(38,1,0.05,400);
+const camera=new THREE.PerspectiveCamera(38,1,Math.max(0.05,DIAG/2000),Math.max(400,DIAG*8));
 camera.position.set(-9,17,19);
 const controls=new THREE.OrbitControls(camera,canvas);
 controls.enableDamping=true; controls.dampingFactor=0.12; controls.screenSpacePanning=true;
@@ -309,7 +312,7 @@ function colorFor(u){
 D.meshes.forEach(m=>{
   const P=new Uint16Array(b64(m.pos)), I=m.i32?new Uint32Array(b64(m.idx)):new Uint16Array(b64(m.idx));
   const pos=new Float32Array(P.length);
-  for(let i=0;i<P.length;i+=3){pos[i]=P[i]/1000-CX;pos[i+1]=P[i+2]/1000;pos[i+2]=-(P[i+1]/1000-CY)}
+  for(let i=0;i<P.length;i+=3){pos[i]=P[i]*QU-CX;pos[i+1]=P[i+2]*QU;pos[i+2]=-(P[i+1]*QU-CY)}
   const g=new THREE.BufferGeometry();
   g.setAttribute("position",new THREE.BufferAttribute(pos,3));
   g.setIndex(new THREE.BufferAttribute(I,1));
@@ -367,12 +370,15 @@ const ref=new THREE.Group(); scene.add(ref);
 const refMat=c=>new THREE.LineBasicMaterial({color:c,transparent:true,opacity:.8});
 function refBuild(){
   ref.clear();
-  const zTop=(ORIG.Z0?3.35:3.35), zBase=.7;
+  const zBase=D.demo?.7:0;
   D.limiti.forEach(l=>{const pts=[];for(let i=0;i<l.c.length;i+=2)pts.push(V(l.c[i],l.c[i+1],l.tipo==="saggio"?zBase+.02:zBase));
     ref.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),refMat(l.tipo==="saggio"?0xc4321c:0x3a3a3a)))});
   const gp=[];
-  for(let x=0;x<=20;x+=2) gp.push(V(x,0,zBase),V(x,16,zBase));
-  for(let y=0;y<=16;y+=2) gp.push(V(0,y,zBase),V(20,y,zBase));
+  // griglia di riferimento: 2 m per scavi piccoli, 5 o 10 m per aree grandi
+  const est=Math.max(EXT[2]-EXT[0],EXT[3]-EXT[1]), g=est<=40?2:est<=150?5:10;
+  const x0=Math.floor(EXT[0]/g)*g, x1=Math.ceil(EXT[2]/g)*g, y0=Math.floor(EXT[1]/g)*g, y1=Math.ceil(EXT[3]/g)*g;
+  for(let x=x0;x<=x1+1e-6;x+=g) gp.push(V(x,y0,zBase),V(x,y1,zBase));
+  for(let y=y0;y<=y1+1e-6;y+=g) gp.push(V(x0,y,zBase),V(x1,y,zBase));
   const gl=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(gp),new THREE.LineBasicMaterial({color:0x8a918c,transparent:true,opacity:.35}));
   ref.add(gl);
   D.sezioni.forEach(s=>{const a=V(s.a[0],s.a[1],zBase),b=V(s.b[0],s.b[1],zBase);
@@ -528,6 +534,13 @@ function renderScheda(){
       ["Volume ricostruito",s.Tipo==="negativa"?"— (superficie)":num(m?.vol,2)+" m³"],["Affidabilità",qualTxt(s)],["Stato di scavo",esc(s["Stato scavo"])],["Settore",esc(s["Settore documentato"])],
       ["Data di scavo",esc(s["Data scavo"]||"—")],["Responsabile",esc(s.Responsabile||"—")]];
   const docs=(DOCU[u]||[]);
+  const MOSTRATI=new Set(["US","USM","Tipo","Categoria","Definizione","Descrizione","Interpretazione","Fase","Ambiente","Consistenza",
+    "Componenti","Morfologia","Margini","Criteri di distinzione","Colore Munsell","Colore HEX","Datazione da","Datazione a",
+    "Tecnica costruttiva","Materiali","Orientamento","Lunghezza (m)","Larghezza (m)","Quota rasatura min","Quota rasatura max",
+    "Quota base usata (rilevata o stimata)","Quota fondazione rilevata","Altezza conservata media (m)","Area documentata (m²)",
+    "Quota min (m)","Quota max (m)","Spessore/profondità max (m)","Spessore medio stimato (m)","Stato scavo",
+    "Settore documentato","Data scavo","Responsabile"]);
+  const altri=Object.entries(s).filter(([k,v])=>!k.startsWith("_")&&!MOSTRATI.has(k)&&v!=null&&String(v).trim()!=="");
   P.innerHTML=`<div class="sh"><div class="num">${isM?"<small style='font-size:14px'>USM</small> ":""}${u}</div><div class="kind">${isM?"Unità muraria":("US "+esc(s.Tipo))} · ${esc(s.Categoria)}</div><h2>${esc(s.Definizione)}</h2></div>
     <div class="chips"><span class="chip"><i style="background:${PH_COL[s.Fase]}"></i>Fase ${s.Fase} · ${esc(F?.Titolo)}</span>${F?.Periodo?`<span class="chip">${esc(F.Periodo)}</span>`:""}${dat&&!dat.startsWith("—")?`<span class="chip">${esc(dat)}</span>`:""}${!isM&&s["Colore Munsell"]?`<span class="chip"><i style="background:${esc(s["Colore HEX"])};border-radius:2px"></i>${esc(s["Colore Munsell"])}</span>`:""}</div>
     <div class="acts"><button id="aFocus">Centra</button><button id="aGhost" aria-pressed="${GHOST}" title="Rende semitrasparenti le altre unità">Trasparenza</button><button id="aIso" aria-pressed="${isolated}">Isola</button><button id="aHide">Nascondi</button><button id="aClip">Sezione qui</button><button id="aClose">Chiudi</button></div>
@@ -541,6 +554,7 @@ function renderScheda(){
     <details class="sec" ${(RSU[u]||CAU[u])?"open":""}><summary>Reperti speciali e campioni <small>${(RSU[u]||[]).length} + ${(CAU[u]||[]).length}</small></summary><div class="sec-b">${rsHTML(u)}</div></details>
     <details class="sec"><summary>Dati metrici</summary><div class="sec-b"><dl class="kv">${metr.map(([k,v])=>`<dt>${k}</dt><dd class="m">${v}</dd>`).join("")}</dl>
       <p class="note">Il volume è ricostruito dalle quote e dai profili: tetto e base interpolati (trend + kriging), base agganciata alle unità coperte secondo i rapporti stratigrafici.</p></div></details>
+    ${altri.length?`<details class="sec"><summary>Altri dati della scheda <small>${altri.length}</small></summary><div class="sec-b"><dl class="kv">${kvRighe(altri)}</dl></div></details>`:""}
     <details class="sec"><summary>Documentazione <small>${docs.length}</small></summary><div class="sec-b">${docs.length?`<table class="mt"><tbody>${docs.map(d=>`<tr><td class="r" style="text-align:left">${esc(d.ID)}</td><td>${esc(d.Soggetto)}</td><td class="muted">${esc(d.Data)}</td></tr>`).join("")}</tbody></table>`:"<p class='muted'>Nessuna voce.</p>"}</div></details>`;
   $("aFocus").onclick=()=>focusUnit(u);
   $("aIso").onclick=()=>{isolated=!isolated;updateVisibility();renderScheda()};
@@ -586,7 +600,9 @@ function viewFor(){
   const box=new THREE.Box3(); Object.values(units).forEach(U=>{if(U.grp.visible) box.expandByObject(U.front)});
   if(box.isEmpty()) box.set(new THREE.Vector3(-10,0,-8),new THREE.Vector3(10,3,8));
   const c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
-  const R=Math.max(sz.x,sz.z*1.1,sz.y*1.6)*.5, d=R/Math.tan(camera.fov*Math.PI/360)*(camera.aspect<1?2.1:1.5);
+  // scavi piccoli: inquadratura larga come nel prototipo; aree grandi: più vicini (la vista obliqua le accorcia)
+  const k=Math.max(sz.x,sz.z)>60?1.05:1.5;
+  const R=Math.max(sz.x,sz.z*1.1,sz.y*1.6)*.5, d=R/Math.tan(camera.fov*Math.PI/360)*k/Math.pow(Math.min(1,camera.aspect),0.7);
   const top=$("vtop").getAttribute("aria-pressed")==="true";
   const dir=top?new THREE.Vector3(0,1,0.001):new THREE.Vector3(-.5,.36,.8);
   return [c, c.clone().add(dir.normalize().multiplyScalar(d))];
@@ -641,11 +657,13 @@ function drawLabels(){
 
 // ------------------------------------------------------------ sezione (piano)
 let clipSign=1;
+// intervallo iniziale largo per entrambi gli assi: impostare il valore prima di scegliere l'asse non lo tronca
+$("clipPos").min=Math.floor(Math.min(EXT[0],EXT[1])); $("clipPos").max=Math.ceil(Math.max(EXT[2],EXT[3])); $("clipPos").value=CX;
 function setClip(){
   const ax=$("clipAx").value; clipOn=!!ax;
   const pos=+$("clipPos").value;
-  if(ax==="x"){ $("clipPos").max=20; clipPlane.normal.set(-clipSign,0,0); clipPlane.constant=clipSign*(pos-CX); $("clipO").textContent="x "+num(pos,2); }
-  else if(ax==="y"){ $("clipPos").max=16; clipPlane.normal.set(0,0,clipSign); clipPlane.constant=-clipSign*(CY-pos); $("clipO").textContent="y "+num(pos,2); }
+  if(ax==="x"){ $("clipPos").min=Math.floor(EXT[0]); $("clipPos").max=Math.ceil(EXT[2]); clipPlane.normal.set(-clipSign,0,0); clipPlane.constant=clipSign*(pos-CX); $("clipO").textContent="x "+num(pos,2); }
+  else if(ax==="y"){ $("clipPos").min=Math.floor(EXT[1]); $("clipPos").max=Math.ceil(EXT[3]); clipPlane.normal.set(0,0,clipSign); clipPlane.constant=-clipSign*(CY-pos); $("clipO").textContent="y "+num(pos,2); }
   else $("clipO").textContent="";
   applyClip(); highlight();
 }
@@ -718,7 +736,7 @@ $("explMode").onchange=e=>{EXPL_MODE=e.target.value;applyLayout()};
 $("exc").max=EXCMAX; $("exc").value=0;
 $("exc").oninput=e=>{EXC=+e.target.value; if(selected!=null && removedAt(selected)) {selected=null;highlight();renderScheda()} updateVisibility()};
 $("ve").oninput=e=>{VE=+e.target.value;$("veO").textContent="×"+VE;applyLayout()};
-$("clipAx").onchange=()=>{$("clipPos").value=$("clipAx").value==="y"?8:10;setClip()};
+$("clipAx").onchange=()=>{$("clipPos").value=$("clipAx").value==="y"?CY:CX;setClip()};
 $("clipPos").oninput=setClip;
 $("clipFlip").onclick=()=>{clipSign*=-1;setClip()};
 $("colMode").onchange=()=>{applyColors(); if(!$("pSez").hidden) renderSez()};
@@ -742,7 +760,9 @@ buildTree(); buildLegend(); renderScheda(); renderHarris(); applyLayout(); overl
 {const [t,p]=viewFor(); controls.target.copy(t); camera.position.copy(p)}
 $("loading").remove();
 requestAnimationFrame(loop);
-// all'apertura: esploso attivo e scheda di un'unità ricca di materiali, come esempio
-select(1008,false);
+// all'apertura: la scheda dell'unità con più materiali, come esempio
+{const nr=u=>(MAT[u]||[]).reduce((a,m)=>a+(+m.NR||0),0);
+ const best=Object.keys(MAT).filter(u=>S[u]&&units[u]).sort((a,b)=>nr(b)-nr(a))[0];
+ if(best!=null) select(+best,false);}
 })();
 </script>

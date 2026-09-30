@@ -25,7 +25,12 @@ CSV di punti, Excel o CSV delle schede. Riconoscono da soli:
 - il campo con il numero di US (anche scritto "US 1005") confrontandolo con le schede;
 - la quota dalla Z o da un campo, e il tipo di quota da un campo o dal nome del file;
 - i rapporti in un foglio a sé o nelle colonne della scheda ("Copre", "Tagliato da"…);
-- US negative dalla parola "taglio", spessori in centimetri, USM nello stesso foglio delle US.
+- US negative dalla parola "taglio", spessori in centimetri, USM nello stesso foglio delle US;
+- archivi in inglese: context register (Context, Type, Thickness…), rapporti "fills", "covers",
+  "cut by"…, livelli "top/bottom/cut/rim", fogli Phases, Finds, Samples, Documentation.
+
+Aree grandi (oltre 65 m) e centinaia di unità sono gestite; `strumenti/caso_studio_stansted.py`
+ricava un caso studio in inglese dall'archivio aperto di Framework Archaeology (Stansted).
 
 Ogni scelta è modificabile e si salva come profilo riutilizzabile per lo stesso cantiere.
 

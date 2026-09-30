@@ -64,12 +64,22 @@ def dati_visualizzatore(scavo):
     livello = st.livelli_dal_basso(rap)
     tab = scavo.tabelle
     meshes = []
+    # coordinate intere a 16 bit: passo di 1 mm fino a 65 m di estensione, poi 2 mm, 5 mm, 1 cm...
+    est = 0.0
+    for m in scavo.modello.unita.values():
+        if len(m.V2):
+            est = max(est, float(m.V2.max()), float(np.max(m.top) - Z0))
+    quant = next(q for q in (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 1.0) if est / q < 65000)
+    xy = [m.V2 for m in scavo.modello.unita.values() if len(m.V2)]
+    xy = np.vstack(xy) if xy else np.zeros((1, 2))
+    estensione = [round(float(v), 2) for v in (*xy.min(0), *xy.max(0))]
+    poli_us, poli_usm = scavo.poligoni_us(), scavo.poligoni_usm()
     for u, m in sorted(scavo.modello.unita.items()):
         P, F = mesh_unita(m)
         P = P.copy()
         P[:, 2] -= Z0
-        Pq = np.round(P * 1000).astype("<u2")
-        geom = (scavo.poligoni_us().get(u) if m.tipo != "usm" else scavo.poligoni_usm().get(u))
+        Pq = np.clip(np.round(P / quant), 0, 65535).astype("<u2")
+        geom = (poli_us.get(u) if m.tipo != "usm" else poli_usm.get(u))
         outline = []
         if geom is not None:
             for p in getattr(geom, "geoms", [geom]):
@@ -90,11 +100,13 @@ def dati_visualizzatore(scavo):
     for u, r in scavo.schede_usm().items():
         recs[u] = _rec(r); recs[u]["_tipo"] = "USM"
     q = scavo.quote_locali()
+    q_per_unita = dict(tuple(q.groupby("us")))
+    vuoto = q.iloc[:0]
     for u in recs:
         recs[u]["_livello"] = int(livello.get(u, 0))
         if u in scavo.modello.unita:
             recs[u]["_qualita"] = scavo.modello.unita[u].qualita
-        qq = q[q.us == u]
+        qq = q_per_unita.get(u, vuoto)
         if len(qq):
             if recs[u]["_tipo"] == "US":
                 recs[u].setdefault("Quota max (m)", round(float(qq.z.max()), 3))
@@ -169,7 +181,7 @@ def dati_visualizzatore(scavo):
         demo = any("IMMAGINARI" in str(v).upper() for v in info.astype(str).values.ravel()) or \
             "immaginario" in str(info.columns[0]).lower()
     return dict(
-        sito=sito, demo=bool(demo), origine=dict(E0=o["E0"], N0=o["N0"], Z0=Z0, crs=scavo.crs or ""),
+        sito=sito, demo=bool(demo), quant=quant, estensione=estensione, origine=dict(E0=o["E0"], N0=o["N0"], Z0=Z0, crs=scavo.crs or ""),
         meshes=meshes, livello_max=int(max(livello.values()) if livello else 0),
         fasi=fasi, schede=recs,
         rapporti=[[int(a), d["t"], int(b)] for a, b, d in rap.grafo.edges(data=True)] +
