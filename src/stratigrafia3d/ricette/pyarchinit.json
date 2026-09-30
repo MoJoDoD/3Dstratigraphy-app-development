@@ -1,16 +1,51 @@
 {
  "nome": "pyArchInit (database SpatiaLite o esportazioni)",
- "descrizione": "Database di pyArchInit per QGIS: layer pyunitastratigrafiche (limiti delle US) e pyarchinit_quote, tabella us_table con le schede e i rapporti scritti nel formato di pyArchInit. Se il database contiene più siti, aggiungi un filtro sul campo «sito» della scheda e su «scavo_s» del layer. Ricetta preparata sullo schema documentato di pyArchInit: verificala sul tuo database.",
+ "descrizione": "Database di pyArchInit per QGIS (SpatiaLite): layer pyunitastratigrafiche (limiti delle US), pyunitastratigrafiche_usm e pyarchinit_quote, tabella us_table con le schede e i rapporti scritti nel formato di pyArchInit, periodizzazione_table per le fasi (periodo + fase, ordinate per anno). Provata sul database di esempio distribuito con pyArchInit. Le unità senza quote proprie partono dalla superficie interpolata tra le quote rilevate. Se il database contiene più siti, aggiungi un filtro sul campo «sito» della scheda e su «scavo_s» del layer.",
  "layers": [
-  {"sorgente": "*", "layer": "pyunitastratigrafiche", "ruolo": "us", "campo_unita": "us_s"},
-  {"sorgente": "*", "layer": "pyunitastratigrafiche_usm", "ruolo": "usm", "campo_unita": "us_s"},
-  {"sorgente": "*", "layer": "pyarchinit_quote", "ruolo": "quote", "campo_unita": "us_q", "quota_da": "campo:quota_q",
-   "tipo_predefinito": "sup"},
-  {"sorgente": "*", "layer": "pyarchinit_quote_usm", "ruolo": "quote", "campo_unita": "us_q", "quota_da": "campo:quota_q",
-   "tipo_predefinito": "rasatura"},
-  {"sorgente": "*", "layer": "pyarchinit_sezioni", "ruolo": "sezioni"},
-  {"sorgente": "*", "layer": "pyarchinit_campionature", "ruolo": "campioni", "campo_unita": "us"},
-  {"sorgente": "*", "layer": "*", "ruolo": "ignora"}
+  {
+   "sorgente": "*",
+   "layer": "pyunitastratigrafiche",
+   "ruolo": "us",
+   "campo_unita": "us_s"
+  },
+  {
+   "sorgente": "*",
+   "layer": "pyunitastratigrafiche_usm",
+   "ruolo": "usm",
+   "campo_unita": "us_s"
+  },
+  {
+   "sorgente": "*",
+   "layer": "pyarchinit_quote",
+   "ruolo": "quote",
+   "campo_unita": "us_q",
+   "quota_da": "campo:quota_q",
+   "tipo_predefinito": "sup"
+  },
+  {
+   "sorgente": "*",
+   "layer": "pyarchinit_quote_usm",
+   "ruolo": "quote",
+   "campo_unita": "us_q",
+   "quota_da": "campo:quota_q",
+   "tipo_predefinito": "rasatura"
+  },
+  {
+   "sorgente": "*",
+   "layer": "pyarchinit_sezioni",
+   "ruolo": "sezioni"
+  },
+  {
+   "sorgente": "*",
+   "layer": "pyarchinit_campionature",
+   "ruolo": "campioni",
+   "campo_unita": "us"
+  },
+  {
+   "sorgente": "*",
+   "layer": "*",
+   "ruolo": "ignora"
+  }
  ],
  "foglio_us": "us_table",
  "colonne_us": {
@@ -18,23 +53,64 @@
   "Definizione": "d_stratigrafica",
   "Interpretazione": "d_interpretativa",
   "Descrizione": "descrizione",
-  "Fase": "fase_iniziale",
   "Spessore/profondità max (m)": "profondita_max",
   "Data scavo": "data_schedatura",
-  "Responsabile": "schedatore"
+  "Responsabile": "schedatore",
+  "Periodo": "datazione"
  },
- "rapporti": {"modo": "testo", "foglio": "us_table", "colonna": "rapporti", "colonna_unita": "us"},
+ "rapporti": {
+  "modo": "testo",
+  "foglio": "us_table",
+  "colonna": "rapporti",
+  "colonna_unita": "us"
+ },
  "vocabolari": {},
  "fogli_collegati": {
-  "Materiali": {"foglio": "inventario_materiali_table",
-                "colonne": {"US": "us", "Classe": "tipo_reperto", "Tipo / forma": "definizione", "NR": "totale_frammenti",
-                            "Peso (g)": "peso"}},
-  "Fasi": {"foglio": "periodizzazione_table", "colonne": {"Fase": "fase", "Titolo": "descrizione", "Periodo": "periodo"}},
-  "Campioni": {"foglio": "campioni_table", "colonne": {"US": "us", "Campione": "nr_campione", "Tipo": "tipo_campione"}}
+  "Materiali": {
+   "foglio": "inventario_materiali_table",
+   "colonne": {
+    "US": "us",
+    "Classe": "tipo_reperto",
+    "Tipo / forma": "definizione",
+    "NR": "totale_frammenti",
+    "Peso (g)": "peso"
+   }
+  },
+  "Fasi": {
+   "foglio": "periodizzazione_table",
+   "colonne": {}
+  },
+  "Campioni": {
+   "foglio": "campioni_table",
+   "colonne": {
+    "US": "us",
+    "Campione": "nr_campione",
+    "Tipo": "tipo_campione"
+   }
+  }
  },
- "valori_nulli": [-9999.0, -999.0],
+ "valori_nulli": [
+  -9999.0,
+  -999.0
+ ],
  "filtri": [],
  "poligoni_ereditati": false,
  "solo_con_poligono": false,
- "superficie": {"tipo": "nessuna"}
+ "superficie": {
+  "tipo": "quote"
+ },
+ "fase_composta": {
+  "scheda": [
+   "periodo_iniziale",
+   "fase_iniziale"
+  ],
+  "foglio": "periodizzazione_table",
+  "fasi": [
+   "periodo",
+   "fase"
+  ],
+  "da": "cron_iniziale",
+  "a": "cron_finale",
+  "titolo": "datazione_estesa"
+ }
 }

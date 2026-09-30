@@ -142,6 +142,8 @@ def ricostruisci(scavo, unita=None, log=None):
         if u in poly_usm:
             geom = poly_usm[u]
             V2, F = triangola(geom, passo=0.1, area_max=0.02)
+            if len(V2) == 0 or len(F) == 0:
+                log(f"USM {u}: poligono troppo piccolo o non valido, saltata"); continue
             S = np.vstack([qpts(u, [sc.Q_RASATURA]), scavo.punti_profilo(u, "sup", P.passo_profili)])
             if len(S) == 0:
                 log(f"USM {u}: nessuna quota di rasatura, saltata"); continue

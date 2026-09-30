@@ -344,7 +344,31 @@ _SISTEMA_SQLITE = ("sqlite_", "spatial_ref_sys", "spatialite_history", "sql_stat
                    "views_geometry_columns", "virts_geometry_columns", "geom_cols_ref_sys", "spatial_ref_sys_aux",
                    "idx_", "elementarygeometries", "spatialindex", "knn", "data_licenses", "rl2map_configurations",
                    "vector_coverages", "raster_coverages", "wms_", "se_", "topologies", "networks", "iso_metadata",
-                   "gpkg_", "rtree_", "layer_styles", "s3d_", "tab_")
+                   "gpkg_", "rtree_", "layer_styles", "s3d_", "tab_", "vector_layers", "stored_procedures", "stored_variables", "sqlitestudio_", "sql_statements")
+
+
+def _senza_bytes(df):
+    """Colonne con valori binari (BLOB): testo se si decodifica, altrimenti la colonna si toglie."""
+    for c in list(df.columns):
+        if df[c].dtype != object:
+            continue
+        v = df[c].dropna()
+        if not len(v) or not v.map(lambda x: isinstance(x, (bytes, bytearray, memoryview))).any():
+            continue
+        def testo(x):
+            if not isinstance(x, (bytes, bytearray, memoryview)):
+                return x
+            b = bytes(x)
+            try:
+                return b.decode("utf-8")
+            except UnicodeDecodeError:
+                return None
+        t = df[c].map(testo)
+        if t.notna().sum() < len(v) * 0.9:        # dati binari (geometrie, immagini): inutili qui
+            df = df.drop(columns=c)
+        else:
+            df[c] = t
+    return df
 
 
 def _tabelle_sqlite(path):
@@ -362,7 +386,8 @@ def _tabelle_sqlite(path):
             if n.lower() in spaziali or n.lower().startswith(_SISTEMA_SQLITE):
                 continue
             try:
-                out[n] = pd.read_sql_query(f'SELECT * FROM "{n}"', con)
+                con.text_factory = lambda b: b.decode("utf-8", errors="replace")
+                out[n] = _senza_bytes(pd.read_sql_query(f'SELECT * FROM "{n}"', con))
             except Exception:
                 pass
         return out
@@ -474,6 +499,9 @@ class Abbinamento:
     poligoni_ereditati: bool = False                    # riempimenti senza pianta: poligono del taglio
     solo_con_poligono: bool = False                     # tralascia le schede senza pianta
     fogli_collegati: dict = None                        # {"Materiali": {"foglio", "colonne"}, ...}
+    # fase scritta in due colonne (periodo + fase, come in pyArchInit): {"scheda": [periodo, fase],
+    # "fasi": [periodo, fase], "da": colonna anno iniziale, "a": anno finale, "titolo": colonna}
+    fase_composta: dict = None
 
     def a_json(self):
         return json.dumps(asdict(self), ensure_ascii=False, indent=1)
@@ -508,6 +536,8 @@ def _punteggio_unita(serie, noti, nome):
     else:
         overlap = 0.4 if len(set(ok)) > 1 else 0.1
     bonus = 0.3 if _norm(nome) in ALIAS_UNITA or _norm(nome).startswith(("us", "n us", "num")) else 0.0
+    # un campo con pochissimi valori diversi (area, saggio, settore) non è il numero dell'unità
+    overlap *= min(1.0, len(set(ok)) / 5)
     if pd.api.types.is_float_dtype(serie) and not np.allclose(vals, np.round(vals)):
         return 0.0            # quote, non numeri di US
     return frac * 0.3 + overlap + bonus
@@ -586,7 +616,13 @@ def _schede(tabelle):
             if nc in ("us", "n us", "n. us", "numero us", "num us", "n.us", "context", "context number", "context no",
                       "su", "unità stratigrafica", "unita stratigrafica", "stratigraphic unit"):
                 s = frac + (0.5 if _norm(nome) in ("us", "schede us", "schede", "unità stratigrafiche", "contexts",
-                                                   "context register", "context sheets") else 0)
+                                                   "context register", "context sheets", "us table") else 0)
+                # nel foglio delle schede ogni unità compare una volta sola, e le colonne sono molte;
+                # materiali, campioni e foto ripetono il numero di US
+                s += 0.3 * vals.map(_intero).nunique() / len(vals) + min(len(df.columns), 40) / 200
+                if any(k in _norm(nome) for k in ("materiali", "inventario", "reperti", "finds", "campion", "sample",
+                                                  "foto", "photo", "media", "quote", "toimp")):
+                    s -= 0.4
                 if s > best[2]:
                     best = (nome, c, s)
             if nc in ("usm", "n usm", "n. usm", "numero usm"):
@@ -911,6 +947,12 @@ def _rinomina(df, colonne):
     for canon, col in (colonne or {}).items():
         if col and col in df.columns and canon != col:
             usate.setdefault(col, []).append(canon)
+    # una colonna dell'archivio che ha già il nome (anche con altre maiuscole) di un campo del programma
+    # riempito da un'altra colonna: la si tiene con un nome diverso (i GeoPackage non distinguono le maiuscole)
+    nuovi = {c.lower() for cs in usate.values() for c in cs}
+    for c in list(df.columns):
+        if c.lower() in nuovi and c not in usate:
+            df = df.rename(columns={c: f"{c} (archivio)"})
     for col, canoni in usate.items():
         for canon in canoni:
             df[canon] = df[col]
@@ -1149,7 +1191,12 @@ def applica_ricetta(abb, ricetta):
             (r.rapporti.get("foglio") in tabelle or r.rapporti.get("foglio") is None):
         out.rapporti = copy.deepcopy(r.rapporti)
     out.rapporti_extra = [e for e in r.rapporti_extra if e.get("foglio") in tabelle]
-    for k in ("vocabolari", "unita_misura", "valori_nulli", "filtri", "poligoni_ereditati", "solo_con_poligono", "nome"):
+    if r.foglio_us and out.foglio_us == r.foglio_us:
+        # le note della proposta automatica sulle schede non valgono più
+        out.note = [n for n in out.note if not isinstance(n, str) or not n.startswith(
+            ("Schede US nel foglio", "Nessun rapporto", "Rapporti «", "Nessun foglio con i numeri"))]
+    for k in ("vocabolari", "unita_misura", "valori_nulli", "filtri", "poligoni_ereditati", "solo_con_poligono", "nome",
+              "fase_composta"):
         setattr(out, k, copy.deepcopy(getattr(r, k)))
     if r.fogli_collegati is not None:
         out.fogli_collegati = {k: v for k, v in r.fogli_collegati.items() if v.get("foglio") in tabelle}
@@ -1194,6 +1241,56 @@ def valori_distinti(path, foglio=None, colonna=None, layer=None, massimo=60):
     s = s.dropna().map(lambda v: str(_intero(v)) if isinstance(v, float) and v == int(v) else str(v).strip())
     c = s.value_counts()
     return [[k, int(v)] for k, v in c.head(massimo).items()], int(len(c))
+
+
+def _chiave_fase(p, f):
+    """Chiave di una fase composta: «2.1» e 2.10 restano distinti, 2.0 e «2» no."""
+    def t(v):
+        if v is None or (isinstance(v, float) and np.isnan(v)) or str(v).strip() in ("", "nan", "None"):
+            return None
+        n = _numero(v)
+        return str(int(n)) if n is not None and float(n).is_integer() else str(v).strip()
+    a, b = t(p), t(f)
+    return None if a is None and b is None else (a or "", b or "")
+
+
+def _fasi_composte(spec, tabs, df_schede, grezzo):
+    """Numera le fasi composte (periodo + fase) dalla più antica alla più recente.
+
+    Ritorna (numero per ogni riga delle schede, tabella Fasi nel formato del programma, note)."""
+    note = []
+    cp, cf = (spec.get("scheda") or [None, None])[:2]
+    if cp not in grezzo.columns or cf not in grezzo.columns:
+        return None, None, [f"Fase composta: colonne «{cp}» e «{cf}» non trovate nelle schede"]
+    chiavi_schede = [_chiave_fase(a, b) for a, b in zip(grezzo.loc[df_schede.index, cp], grezzo.loc[df_schede.index, cf])]
+    righe = {}
+    tf = tabs.get(spec.get("foglio")) if spec.get("foglio") else None
+    if tf is not None:
+        fp, ff = (spec.get("fasi") or [None, None])[:2]
+        if fp in tf.columns and ff in tf.columns:
+            for _, r in tf.iterrows():
+                k = _chiave_fase(r[fp], r[ff])
+                if k is None or k in righe:
+                    continue
+                righe[k] = dict(da=_numero(r.get(spec.get("da"))), a=_numero(r.get(spec.get("a"))),
+                                titolo=r.get(spec.get("titolo")) if spec.get("titolo") else None)
+    usate = {k for k in chiavi_schede if k is not None}
+    senza = sorted(usate - set(righe))
+    if senza:
+        note.append(f"{len(senza)} fasi delle schede non compaiono nella periodizzazione: messe dopo le altre")
+
+    def ordine(k):
+        r = righe.get(k)
+        anno = r["da"] if r and r["da"] is not None else (r["a"] if r and r["a"] is not None else None)
+        return (0 if anno is not None else 1, anno if anno is not None else 0, k)
+    tutte = sorted(set(righe) | usate, key=ordine)
+    numero = {k: i + 1 for i, k in enumerate(tutte)}
+    fasi = pd.DataFrame([dict(Fase=numero[k], Titolo=(righe.get(k) or {}).get("titolo") or f"Periodo {k[0]}, fase {k[1]}",
+                              Periodo=f"Periodo {k[0]} · fase {k[1]}", **{"Da (anno)": (righe.get(k) or {}).get("da"),
+                                                                          "A (anno)": (righe.get(k) or {}).get("a")})
+                         for k in tutte])
+    note.append(f"Fasi composte da «{cp}» e «{cf}»: {len(tutte)} fasi numerate dalla più antica")
+    return [numero.get(k) if k is not None else None for k in chiavi_schede], fasi, note
 
 
 def applica(abb, log=None):
@@ -1364,6 +1461,13 @@ def applica(abb, log=None):
     if (abb.rapporti or {}).get("modo") == "foglio":
         usati.add(abb.rapporti.get("foglio"))
     collegati = abb.fogli_collegati if abb.fogli_collegati is not None else _proponi_collegati(tabs, usati)
+    if sc.L_US in s.layers and sc.L_USM in s.layers:
+        # stesso numero disegnato sia come US sia come USM: vale la pianta delle US
+        doppi = set(s.layers[sc.L_US][sc.F_US]) & set(s.layers[sc.L_USM][sc.F_USM])
+        if doppi:
+            s.layers[sc.L_USM] = s.layers[sc.L_USM][~s.layers[sc.L_USM][sc.F_USM].isin(doppi)]
+            note.append(f"{len(doppi)} numeri disegnati sia tra le US sia tra le USM: tenuta la pianta delle US "
+                        f"({', '.join(map(str, sorted(doppi)[:12]))}{'…' if len(doppi) > 12 else ''})")
     poli_us = set(s.layers[sc.L_US][sc.F_US]) if sc.L_US in s.layers else set()
     poli_usm = set(s.layers[sc.L_USM][sc.F_USM]) if sc.L_USM in s.layers else set()
     nulli = {float(v) for v in (abb.valori_nulli or [])}
@@ -1375,6 +1479,12 @@ def applica(abb, log=None):
         df[sc.C_US] = df[sc.C_US].map(_intero)
         df = df[df[sc.C_US].notna()].copy()
         df[sc.C_US] = df[sc.C_US].astype(int)
+        fasi_composte = None
+        if abb.fase_composta:
+            num, fasi_composte, nf = _fasi_composte(abb.fase_composta, tabs, df, grezzo)
+            note.extend(nf)
+            if num is not None:
+                df[sc.C_FASE] = num
         # in alcuni archivi USM e US stanno nello stesso foglio: si separano con i poligoni
         if not abb.foglio_usm and poli_usm:
             usm_df = df[df[sc.C_US].isin(poli_usm) & ~df[sc.C_US].isin(poli_us)].rename(columns={sc.C_US: sc.C_USM})
@@ -1383,6 +1493,7 @@ def applica(abb, log=None):
                 s.tabelle[sc.S_USM] = usm_df
     else:
         df = pd.DataFrame({sc.C_US: sorted(poli_us)})
+        fasi_composte = None
     for canon, m in dal_layer.items():         # valori dagli attributi dei poligoni, dove la scheda non li ha
         val = df[sc.C_US].map(m)
         if canon in df.columns:
@@ -1459,7 +1570,7 @@ def applica(abb, log=None):
 
     # ------------------------------------------------ tabelle collegate (materiali, fasi, documentazione…)
     for nome, tab in tabs.items():
-        if nome in usati:
+        if nome in usati or not len(tab):        # le tabelle vuote non servono al progetto
             continue
         s.tabelle.setdefault(nome, tab)
     for canon, spec in (collegati or {}).items():
@@ -1480,9 +1591,13 @@ def applica(abb, log=None):
         for c in ("NR", "NMI", "Peso (g)", "Quota (m)"):
             if c in t.columns:
                 t[c] = _misura(t[c], "m", c, nulli)
+        if canon == sc.S_FASI and fasi_composte is not None:
+            t = fasi_composte
         s.tabelle.pop(nome, None)
         s.tabelle[canon] = t
         note.append(f"Foglio «{nome}» letto come «{canon}»")
+    if fasi_composte is not None and sc.S_FASI not in s.tabelle:
+        s.tabelle[sc.S_FASI] = fasi_composte
 
     # ------------------------------------------------ quote: US mancanti e tipi coerenti con la scheda
     if sc.L_QUOTE in s.layers:

@@ -115,12 +115,24 @@ def test_database_spatialite_pyarchinit(tmp_path):
     pyogrio.write_dataframe(q, db, layer="pyarchinit_quote", driver="SQLite", append=True)
     tab = pd.DataFrame({"sito": ["Sito"] * 3, "area": ["1"] * 3, "us": [1, 2, 3],
                         "d_stratigrafica": ["Strato", "Taglio", "Strato"], "d_interpretativa": ["Crollo", "Buca", "Piano"],
-                        "descrizione": ["a", "b", "c"], "fase_iniziale": ["2", "1", "1"],
+                        "descrizione": ["a", "b", "c"], "periodo_iniziale": ["1", "2", "2"], "fase_iniziale": ["1", "1", "2"],
+                        "interpretazione": ["x", "y", "z"],        # come «Interpretazione», con la minuscola
                         "rapporti": ["[['Copre', '3', '1', 'Sito'], ['Copre', '2', '1', 'Sito']]",
                                      "[['Coperto da', '1', '1', 'Sito'], ['Taglia', '3', '1', 'Sito']]",
                                      "[['Coperto da', '1', '1', 'Sito'], ['Tagliato da', '2', '1', 'Sito']]"],
                         "profondita_max": [None, 0.4, None]})
     pyogrio.write_dataframe(tab, db, layer="us_table", driver="SQLite", append=True)
+    # periodizzazione: periodo 1 il più recente, come in pyArchInit
+    per = pd.DataFrame({"sito": ["Sito"] * 3, "periodo": [1, 2, 2], "fase": [1, 1, 2], "cron_iniziale": [1800, 1500, 1200],
+                        "cron_finale": [2000, 1799, 1499], "datazione_estesa": ["Contemporanea", "Moderna", "Medievale"]})
+    pyogrio.write_dataframe(per, db, layer="periodizzazione_table", driver="SQLite", append=True)
+    usm = gpd.GeoDataFrame({"scavo_s": ["Sito"], "area_s": ["1"], "us_s": [3]}, geometry=[box(0, 0, 4, 4)], crs="EPSG:3004")
+    pyogrio.write_dataframe(usm, db, layer="pyunitastratigrafiche_usm", driver="SQLite", append=True)
+    import sqlite3
+    con = sqlite3.connect(db)                         # una colonna binaria (come le miniature dei media)
+    con.execute("CREATE TABLE media_thumb_table (id INTEGER, img BLOB)")
+    con.execute("INSERT INTO media_thumb_table VALUES (1, ?)", (bytes([0xbc, 0xff, 0x00, 0x81]),))
+    con.commit(); con.close()
     abb = importa.proponi([db])
     assert abb.tabella == db and abb.foglio_us == "us_table"
     abb, _ = importa.applica_ricetta(abb, importa.carica_ricetta_pronta("pyarchinit"))
@@ -132,6 +144,16 @@ def test_database_spatialite_pyarchinit(tmp_path):
     assert s.schede_us()[2]["Tipo"] == "negativa"                  # «Taglio» nella definizione
     assert len(s.layers["quote"]) == 6
     assert not [p for p in s.verifica() if p.livello == "errore"]
+    # fasi composte (periodo + fase) numerate dalla più antica, con titoli e date
+    fasi = s.tabelle["Fasi"].set_index("Fase")
+    assert fasi.loc[1, "Titolo"] == "Medievale" and fasi.loc[3, "Titolo"] == "Contemporanea"
+    assert fasi.loc[1, "Da (anno)"] == 1200
+    assert {u: r["Fase"] for u, r in s.schede_us().items()} == {1: 3, 2: 2, 3: 1}
+    assert "interpretazione (archivio)" in s.tabelle["US"].columns
+    assert "US 3" not in str(s.layers.get("usm")) and any("sia tra le US sia tra le USM" in n for n in s.note_importazione)
+    assert "media_thumb_table" not in s.tabelle or "img" not in s.tabelle["media_thumb_table"].columns
+    s.salva(str(tmp_path / "p.scavo"))                   # nessun conflitto di nomi nel GeoPackage
+    ricostruisci(s)
 
 
 # --------------------------------------------------------------------------- formati

@@ -430,7 +430,10 @@ const TOPD={}; (function(){
 })();
 const EXCMAX=Math.max(...Object.keys(S).filter(u=>S[u]._tipo!=="USM").map(u=>TOPD[u]))+1;
 const removedAt=u=>S[u]._tipo!=="USM" && TOPD[u]<EXC;
-function explIndex(u){ if(EXPL_MODE==="fase") return faseOf(u)*2 + (S[u]?._tipo==="USM"? .5:0); return S[u]?._livello??0 }
+// esploso per fase: la posizione della fase tra quelle presenti (le fasi possono avere numeri radi)
+const FRANK={}; [...new Set(Object.values(S).map(r=>+r.Fase||0))].sort((a,b)=>a-b).forEach((f,i)=>FRANK[f]=i);
+{const nf=Object.keys(FRANK).length; if(nf>9){GAP=Math.round(0.3*9/nf*100)/100; $("expl").value=GAP; $("explO").textContent=Math.round(GAP*100)+" cm"}}
+function explIndex(u){ if(EXPL_MODE==="fase") return (FRANK[faseOf(u)]??0)*2 + (S[u]?._tipo==="USM"? .5:0); return S[u]?._livello??0 }
 function applyLayout(){
   Object.entries(units).forEach(([u,U])=>{
     U.grp.scale.y=VE; U.grp.position.y=explIndex(+u)*GAP;
@@ -641,6 +644,7 @@ function focusRS(id){
   const s=obj.scale.x; let n=0; const pulse=setInterval(()=>{obj.scale.setScalar(n%2?s:s*2.2); if(++n>6){clearInterval(pulse);obj.scale.setScalar(s)}},180);
 }
 function viewFor(){
+  world.updateMatrixWorld(true);            // le posizioni dell'esploso non sono ancora state disegnate
   const box=new THREE.Box3(); Object.values(units).forEach(U=>{if(U.grp.visible) box.expandByObject(U.front)});
   if(box.isEmpty()) box.set(new THREE.Vector3(-10,0,-8),new THREE.Vector3(10,3,8));
   const c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
