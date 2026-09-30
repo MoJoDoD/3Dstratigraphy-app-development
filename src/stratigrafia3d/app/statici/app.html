@@ -29,6 +29,9 @@ button,input,select{font:inherit;color:inherit}
 [hidden]{display:none!important}
 .app{display:grid;grid-template-rows:auto 1fr;height:100%}
 
+.dib{max-height:50vh;overflow:auto;font-size:13.5px;line-height:1.5}
+.dib ul{padding-left:18px;margin:6px 0}
+.dib code{font-size:12px}
 header{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(--panel);border-bottom:1px solid var(--line);min-width:0;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;white-space:nowrap}
 .mark{width:20px;height:20px;border-radius:3px;background:linear-gradient(var(--ink) 0 0) 0 30%/100% 2px no-repeat,linear-gradient(var(--accent) 0 0) 0 64%/100% 2px no-repeat;border:1.5px solid var(--ink)}
@@ -191,6 +194,11 @@ dialog .row{justify-content:flex-end;margin-top:12px}
       </div>
       <button class="btn" id="bResoconto" aria-pressed="false" hidden>Resoconto</button>
     </div>
+    <div class="grp" id="gSinc" hidden>
+      <span class="sep"></span>
+      <button class="btn acc" id="bScrivi" hidden title="Scrive le modifiche fatte nell'app nei file da cui viene il progetto">Scrivi nei file</button>
+      <button class="btn" id="bAggiorna" hidden title="I file d'origine sono cambiati: rileggili">Aggiorna dai file</button>
+    </div>
   </header>
   <main>
     <!-- INIZIO -->
@@ -286,6 +294,7 @@ dialog .row{justify-content:flex-end;margin-top:12px}
 
 <div class="busy" id="busy" hidden><div><span class="spin"></span><span id="busyMsg">Attendere…</span></div></div>
 <div class="toast" id="toast" hidden></div>
+<dialog id="dlgInfo"><h3 id="diT"></h3><div id="diB" class="dib"></div><div class="row"><button class="btn" id="diNo">Annulla</button><button class="btn pri" id="diSi">OK</button></div></dialog>
 <dialog id="dlg"><h3 id="dlgT"></h3><p id="dlgP"></p><input id="dlgI" type="text"><div class="row"><button class="btn" id="dlgNo">Annulla</button><button class="btn pri" id="dlgSi">OK</button></div></dialog>
 
 <script>
@@ -309,6 +318,9 @@ let tT=null;
 function avviso(msg,err,azione){ const t=$("toast"); t.className="toast"+(err?" err":""); t.innerHTML=`<span>${esc(msg)}</span>`;
   if(azione){const b=document.createElement("button");b.textContent=azione[0];b.onclick=()=>{t.hidden=true;azione[1]()};t.appendChild(b)}
   t.hidden=false; clearTimeout(tT); tT=setTimeout(()=>t.hidden=true, err?9000:(azione?12000:4500)) }
+function informa(titolo,html,conferma){ return new Promise(res=>{ const d=$("dlgInfo"); $("diT").textContent=titolo; $("diB").innerHTML=html;
+  $("diNo").hidden=!conferma; $("diSi").textContent=conferma||"OK";
+  $("diSi").onclick=()=>{d.close();res(true)}; $("diNo").onclick=()=>{d.close();res(false)}; d.showModal() }) }
 function chiedi(titolo,testo,valore){ return new Promise(res=>{ const d=$("dlg"); $("dlgT").textContent=titolo; $("dlgP").textContent=testo; $("dlgI").value=valore||"";
   $("dlgSi").onclick=()=>{d.close();res($("dlgI").value.trim()||null)}; $("dlgNo").onclick=()=>{d.close();res(null)};
   $("dlgI").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();$("dlgSi").click()}}; d.showModal(); $("dlgI").focus() }) }
@@ -327,6 +339,10 @@ function aggiornaStato(s){
   $("dirty").hidden=!(s.aperto&&s.modificato);
   $("bSalva").disabled=$("bSalvaCome").disabled=$("bVerifica").disabled=$("bRicostruisci").disabled=!s.aperto;
   $("bEsporta").disabled=!(s.aperto&&s.ha_modello);
+  const n=s.aperto?(s.in_attesa||0):0;
+  $("bScrivi").hidden=!(n&&s.riscrivibile); $("bScrivi").textContent=`Scrivi nei file (${n})`;
+  if(!s.aperto) $("bAggiorna").hidden=true;
+  $("gSinc").hidden=$("bScrivi").hidden&&$("bAggiorna").hidden;
   const r=s.recenti||[]; $("recWrap").hidden=!r.length;
   $("rec").innerHTML=r.map(p=>`<button data-p="${esc(p)}"><span>${esc(base(p))}</span><code>${esc(p)}</code></button>`).join("");
   $("rec").querySelectorAll("button").forEach(b=>b.onclick=()=>apri(b.dataset.p));
@@ -348,6 +364,7 @@ async function apri(p){
   if(!await perdite()) return;
   const s=await lavoro("Apertura del progetto…",()=>api("apri",{percorso:p}));
   aggiornaStato(s); if(s.ha_modello) vaiModello(); else ricostruisciOra();
+  controllaSorgenti();
 }
 async function salva(come){
   if(!S.aperto) return;
@@ -673,11 +690,57 @@ function mostraProblemi(r){
     corr({superficie:{tipo:"costante",quota:v}},"Superficie di riferimento impostata").catch(()=>{}) });
 }
 
+// ------------------------------------------------------------------ modifiche e file d'origine
+addEventListener("message",async e=>{
+  const f=$("frame"); if(e.origin!==location.origin||!e.data||e.data.s3d!=="modifica"||e.source!==f.contentWindow) return;
+  const q=e.data, rispondi=x=>f.contentWindow.postMessage(Object.assign({s3d:"esito",richiesta:q.richiesta,unita:q.unita},x),location.origin);
+  try{
+    const r=await api("modifica",{unita:q.unita,campi:q.campi,aggiungi:q.aggiungi,togli:q.togli});
+    rispondi({ok:true,scheda:r.scheda,rapporti:r.rapporti}); aggiornaStato(r.stato);
+    if(r.ricostruire&&r.ricostruire.length&&S.ha_modello)
+      avviso(`Modifica salvata nel progetto. La forma di ${r.ricostruire.length} ${r.ricostruire.length===1?"unità":"unità"} va ricostruita.`,false,
+        ["Ricostruisci",()=>ricostruisciUnita(r.ricostruire,q.unita)]);
+    else avviso("Modifica salvata nel progetto");
+  }catch(err){ rispondi({ok:false,errore:err.message}) }
+});
+async function ricostruisciUnita(lista,sel){
+  try{ const r=await lavoro(`Ricostruzione di ${lista.length} unità…`,()=>api("ricostruisci",{unita:lista,forza:true}));
+    aggiornaStato(r.stato); mostra("vModello"); $("frame").src="/visualizzatore?v="+S.versione_modello+"&sel="+sel+"&t="+Date.now(); resoconto();
+    avviso(`Ricostruite in ${r.secondi} s.`) }catch(e){}
+}
+async function scriviNeiFile(){
+  const n=S.in_attesa||0; if(!n) return;
+  if(!await informa("Scrivi nei file d'origine",`<p>${n} modifiche fatte nell'app verranno scritte nei file da cui viene il progetto, attraverso la ricetta di importazione.</p><p>Prima di scrivere, una copia di ogni file va nella cartella <code>.stratigrafia3d/copie</code> della tua cartella utente. Se un file è aperto in Excel, chiudilo.</p>`,"Scrivi")) return;
+  const r=await lavoro("Scrittura nei file d'origine…",()=>api("riscrivi"));
+  aggiornaStato(r.stato);
+  const sal=r.saltate||[];
+  await informa(sal.length?"Scrittura parziale":"Scrittura completata",
+    `<p>${r.scritte} modifiche scritte${r.file.length?" in "+r.file.map(f=>`<code>${esc(f)}</code>`).join(", "):""}.</p>`+
+    (sal.length?`<p>${sal.length} restano solo nel progetto:</p><ul>${sal.map(x=>`<li>US ${esc(x.unita)} · ${esc(x.cosa)}: ${esc(x.motivo)}</li>`).join("")}</ul>`:""));
+}
+async function controllaSorgenti(){
+  try{ const r=await api("sorgenti"); const c=r.cambiate||[];
+    $("bAggiorna").hidden=!c.length; $("gSinc").hidden=$("bScrivi").hidden&&$("bAggiorna").hidden;
+    if(c.length) avviso(`${c.length===1?"Un file d'origine è cambiato":c.length+" file d'origine sono cambiati"} dall'ultima importazione`,false,["Aggiorna",aggiornaDaiFile]);
+  }catch(e){}
+}
+async function aggiornaDaiFile(){
+  let scarta=false;
+  if(S.in_attesa){ scarta=await informa("Modifiche non scritte",`<p>${S.in_attesa} modifiche fatte nell'app non sono ancora nei file d'origine. Rileggendo i file andranno perse.</p><p>Per tenerle, annulla e usa prima «Scrivi nei file».</p>`,"Rileggi e scartale");
+    if(!scarta) return }
+  const r=await lavoro("Lettura dei file d'origine e ricostruzione delle unità cambiate…",()=>api("ricarica",{scarta}));
+  aggiornaStato(r.stato); $("bAggiorna").hidden=true; $("gSinc").hidden=$("bScrivi").hidden;
+  if(S.ha_modello) vaiModello();
+  avviso((r.note||[]).join(" · ")+(r.ricostruite?` · ${r.ricostruite} unità ricostruite`:""));
+}
+
 // ------------------------------------------------------------------ eventi
 $("bNuovo").onclick=$("cNuovo").onclick=async()=>{ if(await perdite()) nuovo([]) };
 $("bApri").onclick=$("cApri").onclick=()=>apri();
 $("bSalva").onclick=()=>salva(false); $("bSalvaCome").onclick=()=>salva(true);
 $("bVerifica").onclick=verifica;
+$("bScrivi").onclick=()=>scriviNeiFile().catch(()=>{});
+$("bAggiorna").onclick=()=>aggiornaDaiFile().catch(()=>{});
 $("bRicostruisci").onclick=()=>ricostruisciOra();
 $("bEsporta").onclick=()=>{const m=$("mEsporta");m.hidden=!m.hidden;$("bEsporta").setAttribute("aria-expanded",String(!m.hidden))};
 document.querySelectorAll("[data-esp]").forEach(b=>b.onclick=()=>esporta(b.dataset.esp));
@@ -706,7 +769,7 @@ $("n3").onclick=()=>importaOra().catch(()=>{});
 $("n4").onclick=()=>ricostruisciOra($("n4").dataset.forza==="1");
 addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){ e.preventDefault(); salva(e.shiftKey) } });
 
-api("stato").then(s=>{ aggiornaStato(s); if(s.aperto&&s.ha_modello) vaiModello(); else mostra("vHome") }).catch(e=>avviso(e.message,true));
+api("stato").then(s=>{ aggiornaStato(s); if(s.aperto&&s.ha_modello) vaiModello(); else mostra("vHome"); if(s.aperto) controllaSorgenti() }).catch(e=>avviso(e.message,true));
 })();
 </script>
 </body>

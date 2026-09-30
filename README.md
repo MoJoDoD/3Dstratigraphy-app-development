@@ -75,6 +75,27 @@ cambiare la profondità e lo spessore tipici, usare la mediana delle unità dell
 («Posthole», «Pit»…) registrate nello scavo, dare una quota costante alla superficie, oppure escludere
 dal 3D un gruppo di unità. Le unità escluse restano nelle schede e si reincludono con un clic.
 
+## Modifiche e file d'origine
+
+Nell'app, la scheda di ogni unità ha il pulsante **Modifica**: si cambiano i campi (tipo, definizione,
+fase, descrizione, spessori, datazione e gli altri campi dell'archivio) e i rapporti. Un rapporto
+che creerebbe un ciclo nella sequenza viene rifiutato. Se la modifica cambia la forma di un'unità,
+l'app propone di ricostruire solo quella e le unità che vi stanno sopra.
+
+Le modifiche restano nel progetto finché non si sceglie **Scrivi nei file**. La scrittura usa la
+ricetta al contrario: colonna d'origine, vocabolario (negativa → «Cut»), unità di misura e forma dei
+rapporti (foglio a parte, colonne come «Copre» o «Fill of», testo di pyArchInit). Si possono scrivere:
+- file Excel, conservando formattazione e formule (le celle con una formula non si toccano);
+- file CSV, con la stessa codifica e lo stesso separatore;
+- tabelle di GeoPackage e di SQLite/SpatiaLite.
+
+Prima di scrivere, una copia di ogni file va in `~/.stratigrafia3d/copie`.
+
+Il verso opposto funziona allo stesso modo. Quando i file d'origine cambiano (per esempio l'Excel
+aggiornato in cantiere), all'apertura del progetto l'app propone **Aggiorna dai file**: rilegge tutto
+con la stessa ricetta e ricostruisce solo le unità toccate. Dalla riga di comando:
+`strat3d riscrivi progetto.scavo` e `strat3d aggiorna progetto.scavo`.
+
 ## Visualizzatore
 
 - **Colore**: sedimento, fase, categoria, affidabilità, oppure qualsiasi campo a categorie della scheda

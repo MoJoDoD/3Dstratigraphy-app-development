@@ -123,6 +123,21 @@ details.sec>summary small{margin-left:auto;font-weight:400;color:var(--muted);fo
 .kv dd{margin:0;font-variant-numeric:tabular-nums}
 .kv dd.m{font-family:var(--f-num);font-size:12.5px}
 .rel{display:grid;grid-template-columns:118px 1fr;gap:6px 10px;font-size:13px;align-items:baseline}
+.ed{display:grid;grid-template-columns:minmax(110px,38%) 1fr;gap:6px 10px;font-size:13px;align-items:center;margin:0 0 12px}
+.ed label{color:var(--muted)}
+.ed input,.ed select,.ed textarea{font:inherit;font-size:13px;width:100%;box-sizing:border-box;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.ed textarea{min-height:64px;resize:vertical;grid-column:1/-1}
+.ed .lungo{grid-column:1/-1}
+.edrel{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 8px;font-size:13px}
+.edrel .rp{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 10px}
+.edrel .rp.via{opacity:.45;text-decoration:line-through}
+.edrel button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1}
+.edadd{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.edadd select,.edadd input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.edbar{display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--panel);padding:10px 0 4px;border-top:1px solid var(--line)}
+.edbar button{border:1px solid var(--line);background:var(--panel-2);border-radius:var(--r);padding:6px 14px;cursor:pointer}
+.edbar button.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.ederr{color:var(--accent);font-size:13px;margin:6px 0}
 .rel dt{color:var(--muted)}
 .rel dd{margin:0;display:flex;flex-wrap:wrap;gap:4px}
 .ulink{font-family:var(--f-num);font-size:12px;border:1px solid var(--line);background:var(--paper);border-radius:3px;padding:1px 6px;cursor:pointer}
@@ -298,7 +313,9 @@ const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim
 
 // ------------------------------------------------------------ relazioni
 const REL={};
-D.rapporti.forEach(([a,t,b])=>{(REL[a]??={})[t]??=[];REL[a][t].push(b);(REL[b]??={})[INV[t]]??=[];REL[b][INV[t]].push(a)});
+function costruisciREL(){ Object.keys(REL).forEach(k=>delete REL[k]);
+  D.rapporti.forEach(([a,t,b])=>{(REL[a]??={})[t]??=[];REL[a][t].push(b);(REL[b]??={})[INV[t]]??=[];REL[b][INV[t]].push(a)}) }
+costruisciREL();
 const DEDOTTI={}; (D.dedotti||[]).forEach(([a,b])=>{(DEDOTTI[a]??={sopra:[],sotto:[]}).sotto.push(b);(DEDOTTI[b]??={sopra:[],sotto:[]}).sopra.push(a)});
 const MAT={}; D.materiali.forEach(m=>(MAT[m.US]??=[]).push(m));
 const RSU={}; D.rs.forEach(r=>(RSU[r.US]??=[]).push(r));
@@ -559,6 +576,72 @@ function qualTxt(s){ const q=s._qualita; if(!q) return "—";
   if(q.punti_taglio!=null) return `superficie da ${q.punti_taglio} quote e profili, ${q.punti_orlo} quote d'orlo`;
   const base={misurata:"base misurata",parziale:"base in parte misurata",stimata:"base stimata dalla scheda"}[q.base]||"";
   return `tetto da ${q.punti_tetto} punti · ${base} (${q.punti_base} punti)`; }
+// ------------------------------------------------------------ modifica della scheda (solo nell'app)
+const INAPP=window.parent!==window && location.pathname==="/visualizzatore";
+let editU=null, editReq=0;
+const CAMPI_ED_US=[["Tipo","sel"],["Definizione"],["Categoria"],["Fase","fase"],["Descrizione","area"],["Interpretazione","area"],
+  ["Spessore medio stimato (m)","num"],["Spessore/profondità max (m)","num"],["Datazione da","num"],["Datazione a","num"]];
+const CAMPI_ED_USM=[["Definizione"],["Categoria"],["Fase","fase"],["Descrizione","area"],["Interpretazione","area"],
+  ["Tecnica costruttiva"],["Materiali"],["Quota base usata (rilevata o stimata)","num"]];
+const NASCOSTI_ED=new Set(["US","USM","Colore HEX","Quota max (m)","Quota min (m)"]);   // le quote vengono dal rilievo
+function renderModifica(){
+  const P=$("pScheda"), u=editU, s=S[u], isM=s._tipo==="USM";
+  const base=(isM?CAMPI_ED_USM:CAMPI_ED_US);
+  const nomi=new Set(base.map(x=>x[0]));
+  const altri=Object.keys(s).filter(k=>!k.startsWith("_")&&!nomi.has(k)&&!NASCOSTI_ED.has(k)).sort((a,b)=>a.localeCompare(b,"it"));
+  const val=k=>s[k]==null?"":String(s[k]);
+  const campo=([k,t])=>{const id="ed_"+k;
+    if(t==="sel") return `<label for="${esc(id)}">${esc(k)}</label><select data-k="${esc(k)}" id="${esc(id)}">${["positiva","negativa"].map(v=>`<option${val(k)===v?" selected":""}>${v}</option>`).join("")}</select>`;
+    if(t==="fase"&&D.fasi.length) return `<label for="${esc(id)}">${esc(k)}</label><select data-k="${esc(k)}" id="${esc(id)}"><option value=""></option>${D.fasi.map(f=>`<option value="${f.Fase}"${String(f.Fase)===val(k)?" selected":""}>${f.Fase} · ${esc(f.Titolo??"")}</option>`).join("")}</select>`;
+    if(t==="area") return `<label for="${esc(id)}" class="lungo">${esc(k)}</label><textarea data-k="${esc(k)}" id="${esc(id)}">${esc(val(k))}</textarea>`;
+    return `<label for="${esc(id)}">${esc(k)}</label><input data-k="${esc(k)}" id="${esc(id)}" value="${esc(t==="num"?val(k).replace(".",","):val(k))}"${t==="num"?' inputmode="decimal"':""}>`};
+  const rel=[];
+  Object.entries(REL[u]||{}).forEach(([t,bs])=>[...new Set(bs)].forEach(b=>rel.push([t,b])));
+  rel.sort((x,y)=>REL_ORDER.indexOf(x[0])-REL_ORDER.indexOf(y[0])||x[1]-y[1]);
+  P.innerHTML=`<div class="sh"><div class="num">${isM?"<small style='font-size:14px'>USM</small> ":""}${u}</div><div class="kind">Modifica della scheda</div><h2>${esc(s.Definizione)}</h2></div>
+    <p class="note" style="margin-top:0">Le modifiche restano nel progetto e si possono scrivere nei file d'origine con «Scrivi nei file».</p>
+    <div class="ed">${base.map(campo).join("")}</div>
+    ${altri.length?`<details class="sec"><summary>Altri campi <small>${altri.length}</small></summary><div class="sec-b"><div class="ed">${altri.map(k=>campo([k])).join("")}</div></div></details>`:""}
+    <details class="sec" open><summary>Rapporti stratigrafici</summary><div class="sec-b">
+      <div class="edrel" id="edRel">${rel.map(([t,b],i)=>`<span class="rp" data-i="${i}">${esc(t)} <b>${b}</b><button aria-label="Togli ${esc(t)} ${b}" data-via="${i}">×</button></span>`).join("")||'<span class="muted">Nessun rapporto.</span>'}</div>
+      <div class="edadd"><select id="edT">${REL_ORDER.map(t=>`<option>${t}</option>`).join("")}</select>
+        <input id="edB" size="7" inputmode="numeric" placeholder="US"><button class="ulink" id="edAdd">Aggiungi</button></div>
+      <div class="edrel" id="edNuovi"></div></div></details>
+    <div class="ederr" id="edErr" hidden></div>
+    <div class="edbar"><button id="edNo">Annulla</button><button class="pri" id="edOk">Salva</button></div>`;
+  const togli=new Set(), aggiungi=[];
+  P.querySelectorAll("[data-via]").forEach(b=>b.onclick=()=>{const i=+b.dataset.via; togli.has(i)?togli.delete(i):togli.add(i); b.parentElement.classList.toggle("via",togli.has(i))});
+  const nuovi=()=>{$("edNuovi").innerHTML=aggiungi.map(([t,b],i)=>`<span class="rp">+ ${esc(t)} <b>${b}</b><button data-n="${i}" aria-label="Annulla">×</button></span>`).join("");
+    $("edNuovi").querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{aggiungi.splice(+b.dataset.n,1);nuovi()})};
+  $("edAdd").onclick=()=>{const b=parseInt($("edB").value,10); if(!Number.isFinite(b)){$("edB").focus();return}
+    if(!S[b]){errore(`L'unità ${b} non è nel progetto`);return}
+    aggiungi.push([$("edT").value,b]); $("edB").value=""; nuovi()};
+  $("edB").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();$("edAdd").click()}};
+  $("edNo").onclick=()=>{editU=null; renderScheda()};
+  $("edOk").onclick=()=>{
+    const campi={};
+    P.querySelectorAll("[data-k]").forEach(el=>{const k=el.dataset.k; let v=el.value.trim();
+      const prima=s[k]==null?"":String(s[k]);
+      if(el.getAttribute("inputmode")==="decimal"){ if(v.replace(",",".")!==prima && !(v===""&&prima==="")) campi[k]=v }
+      else if(v!==prima) campi[k]=v });
+    const via=[...togli].map(i=>rel[i]);
+    if(!Object.keys(campi).length&&!via.length&&!aggiungi.length){editU=null;renderScheda();return}
+    $("edOk").disabled=true;
+    parent.postMessage({s3d:"modifica",richiesta:++editReq,unita:u,campi,aggiungi,togli:via},location.origin);
+  };
+  function errore(t){$("edErr").textContent=t;$("edErr").hidden=false}
+}
+addEventListener("message",e=>{
+  if(e.origin!==location.origin||!e.data||e.data.s3d!=="esito"||e.data.richiesta!==editReq) return;
+  const r=e.data;
+  if(!r.ok){ const el=$("edErr"); if(el){el.textContent=r.errore;el.hidden=false} if($("edOk")) $("edOk").disabled=false; return }
+  const u=r.unita, vecchio=S[u]||{};
+  S[u]=Object.assign({},...Object.keys(vecchio).filter(k=>k.startsWith("_")).map(k=>({[k]:vecchio[k]})),r.scheda);
+  D.rapporti=D.rapporti.filter(([a,,b])=>a!==u&&b!==u).concat(r.rapporti);
+  costruisciREL();
+  editU=null; buildTree(); applyColors(); renderScheda(); select(u,false);
+});
+
 function renderScheda(){
   const P=$("pScheda");
   if(selected==null){
@@ -569,6 +652,8 @@ function renderScheda(){
       <ul><li><b>Esploso</b> separa le unità secondo la sequenza stratigrafica.</li><li><b>Scavo virtuale</b> le asporta dall'alto verso il basso.</li><li><b>Sezione</b> taglia il modello con un piano: le campiture mostrano lo spessore irregolare degli strati.</li></ul></div>`;
     return;
   }
+  if(editU!=null && editU===selected){ renderModifica(); return }
+  editU=null;
   const u=selected, s=S[u], m=units[u]?.def, isM=s._tipo==="USM", F=FASI[s.Fase];
   const nr=(MAT[u]||[]).reduce((a,b)=>a+(b.NR||0),0);
   const dat=!isM?(s["Datazione da"]==null&&s["Datazione a"]==null?"—":`${fmtY(s["Datazione da"])} – ${fmtY(s["Datazione a"])}`):(F?`${fmtY(F["Da (anno)"])} – ${fmtY(F["A (anno)"])}`:"—");
@@ -590,7 +675,7 @@ function renderScheda(){
   const altri=Object.entries(s).filter(([k,v])=>!k.startsWith("_")&&!MOSTRATI.has(k)&&v!=null&&String(v).trim()!=="");
   P.innerHTML=`<div class="sh"><div class="num">${isM?"<small style='font-size:14px'>USM</small> ":""}${u}</div><div class="kind">${isM?"Unità muraria":("US "+esc(s.Tipo))} · ${esc(s.Categoria)}</div><h2>${esc(s.Definizione)}</h2></div>
     <div class="chips"><span class="chip"><i style="background:${PH_COL[s.Fase]}"></i>Fase ${s.Fase} · ${esc(F?.Titolo)}</span>${F?.Periodo?`<span class="chip">${esc(F.Periodo)}</span>`:""}${dat&&!dat.startsWith("—")?`<span class="chip">${esc(dat)}</span>`:""}${!isM&&s["Colore Munsell"]?`<span class="chip"><i style="background:${esc(s["Colore HEX"])};border-radius:2px"></i>${esc(s["Colore Munsell"])}</span>`:""}</div>
-    <div class="acts"><button id="aFocus">Centra</button><button id="aGhost" aria-pressed="${GHOST}" title="Rende semitrasparenti le altre unità">Trasparenza</button><button id="aIso" aria-pressed="${isolated}">Isola</button><button id="aHide">Nascondi</button><button id="aClip">Sezione qui</button><button id="aClose">Chiudi</button></div>
+    <div class="acts"><button id="aFocus">Centra</button><button id="aGhost" aria-pressed="${GHOST}" title="Rende semitrasparenti le altre unità">Trasparenza</button><button id="aIso" aria-pressed="${isolated}">Isola</button><button id="aHide">Nascondi</button><button id="aClip">Sezione qui</button>${INAPP?`<button id="aEdit" title="Modifica la scheda e i rapporti">Modifica</button>`:""}<button id="aClose">Chiudi</button></div>
     <details class="sec" open><summary>Descrizione</summary><div class="sec-b">
       <p class="read">${esc(s.Descrizione)}</p>
       ${s.Interpretazione?`<p class="read"><i>Interpretazione.</i> ${esc(s.Interpretazione)}</p>`:""}
@@ -609,6 +694,7 @@ function renderScheda(){
   $("aHide").onclick=()=>{hidden.add(u);isolated=false;updateVisibility();select(null)};
   $("aClip").onclick=()=>{const L=m.label; $("clipAx").value="x"; clipOn=true; clipSign=1; $("clipPos").value=L[0]; setClip(); };
   $("aClose").onclick=()=>select(null);
+  if($("aEdit")) $("aEdit").onclick=()=>{editU=u; renderScheda()};
   P.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>select(+b.dataset.go,true));
   P.querySelectorAll("[data-rs]").forEach(b=>b.onclick=()=>focusRS(b.dataset.rs));
 }
@@ -819,7 +905,7 @@ function overlayToggle(){
 ["oLbl","oEdge","oQ","oP","oRS","oCut"].forEach(id=>$(id).onclick=()=>{const b=$(id);b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true");overlayToggle()});
 $("v3d").onclick=()=>{$("v3d").setAttribute("aria-pressed","true");$("vtop").setAttribute("aria-pressed","false");home()};
 $("vtop").onclick=()=>{$("vtop").setAttribute("aria-pressed","true");$("v3d").setAttribute("aria-pressed","false");home()};
-addEventListener("keydown",e=>{if(e.key==="Escape") select(null)});
+addEventListener("keydown",e=>{if(e.key!=="Escape") return; if(editU!=null){editU=null;renderScheda()} else select(null)});
 
 function resize(){ const w=stage.clientWidth,h=stage.clientHeight; if(!w||!h) return; $("legend").style.visibility=w<720?"hidden":""; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix() }
 new ResizeObserver(resize).observe(stage);
@@ -831,9 +917,15 @@ buildTree(); buildLegend(); renderScheda(); renderHarris(); applyLayout(); overl
 {const [t,p]=viewFor(); controls.target.copy(t); camera.position.copy(p)}
 $("loading").remove();
 requestAnimationFrame(loop);
-// all'apertura: la scheda dell'unità con più materiali, come esempio
-{const nr=u=>(MAT[u]||[]).reduce((a,m)=>a+(+m.NR||0),0);
- const best=Object.keys(MAT).filter(u=>S[u]&&units[u]).sort((a,b)=>nr(b)-nr(a))[0];
- if(best!=null) select(+best,false);}
+// all'apertura: l'unità e la vista di prima (dopo una ricostruzione nell'app), altrimenti
+// la scheda dell'unità con più materiali, come esempio
+{let prima=null; try{ prima=JSON.parse(sessionStorage.getItem("s3d_vista")||"null") }catch(e){}
+ const sel=+new URLSearchParams(location.search).get("sel");
+ if(prima&&prima.sito===D.sito&&Date.now()-prima.t<120000){ camera.position.fromArray(prima.p); controls.target.fromArray(prima.c) }
+ if(sel&&S[sel]) select(sel,false);
+ else{const nr=u=>(MAT[u]||[]).reduce((a,m)=>a+(+m.NR||0),0);
+  const best=Object.keys(MAT).filter(u=>S[u]&&units[u]).sort((a,b)=>nr(b)-nr(a))[0];
+  if(best!=null) select(+best,false);}}
+addEventListener("pagehide",()=>{try{sessionStorage.setItem("s3d_vista",JSON.stringify({sito:D.sito,t:Date.now(),p:camera.position.toArray(),c:controls.target.toArray()}))}catch(e){}});
 })();
 </script>

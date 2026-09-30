@@ -134,6 +134,7 @@ class Scavo:
         self.abbinamento = None           # importa.Abbinamento usato per l'import
         self.note_importazione = []
         self.raster_superficie = None     # superficie.Raster (modello del terreno), se usato
+        self.modifiche = []               # registro delle modifiche fatte nell'app (vedi modifiche.py)
 
     # ------------------------------------------------------------------ lettura
     @classmethod
@@ -435,7 +436,7 @@ class Scavo:
                   modello_rapporto=self.modello.rapporto if self.modello else [],
                   modello_dedotti=self.modello.dedotti if self.modello else [],
                   abbinamento=asdict(self.abbinamento) if self.abbinamento is not None else None,
-                  note_importazione=self.note_importazione)
+                  note_importazione=self.note_importazione, modifiche=self.modifiche)
         cur.executemany("INSERT INTO s3d_progetto VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in kv.items()])
         cur.executemany("INSERT INTO s3d_sorgenti (percorso, tipo, sha256, dimensione, importato) VALUES (?,?,?,?,?)",
                         [(s["percorso"], s["tipo"], s["sha256"], s["dimensione"], s["importato"]) for s in self.sorgenti])
@@ -475,6 +476,7 @@ class Scavo:
             from .importa import Abbinamento
             s.abbinamento = Abbinamento.da_json(kv["abbinamento"])
         s.note_importazione = kv.get("note_importazione", [])
+        s.modifiche = kv.get("modifiche", [])
         s.sorgenti = [dict(percorso=a, tipo=b, sha256=c, dimensione=d, importato=e) for a, b, c, d, e in
                       cur.execute("SELECT percorso, tipo, sha256, dimensione, importato FROM s3d_sorgenti")]
         s.storico = [dict(quando=a, azione=b, dettagli=json.loads(c)) for a, b, c in

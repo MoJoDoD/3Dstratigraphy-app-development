@@ -16,6 +16,7 @@ from importlib import resources
 from urllib.parse import urlparse
 
 from .. import __version__, esporta, importa
+from .. import modifiche as md
 from ..progetto import Scavo
 from ..ricostruzione import ricostruisci
 from ..risorse import statico, css_font
@@ -71,6 +72,7 @@ class Stato:
                      n_us=len(s.schede_us()), n_usm=len(s.schede_usm()),
                      note=list(getattr(s, "note_importazione", []) or []),
                      rapporto=s.modello.rapporto if s.modello else [],
+                     in_attesa=len(md.in_attesa(s)), riscrivibile=s.abbinamento is not None,
                      abbinamento=asdict(s.abbinamento) if s.abbinamento is not None else None)
         return d
 
@@ -146,6 +148,53 @@ class App:
         if nome == "verifica":
             self._serve_scavo()
             return dict(problemi=_problemi(st.scavo), parametri=_parametri(st.scavo), stato=st.descrizione())
+        if nome == "modifica":
+            # modifica di una scheda dal visualizzatore
+            self._serve_scavo()
+            with st.lock:
+                try:
+                    r = md.applica_modifica(st.scavo, a["unita"], a.get("campi") or {},
+                                            aggiungi=[tuple(x) for x in a.get("aggiungi") or []],
+                                            togli=[tuple(x) for x in a.get("togli") or []])
+                except md.ErroreModifica as e:
+                    raise Errore(str(e))
+                if r["voci"]:
+                    st.modificato = True
+                u = int(a["unita"])
+                nome_t, idc = md._tabella_di(st.scavo, u)
+                tab = st.scavo.tabelle[nome_t]
+                r["scheda"] = esporta._rec(tab[tab[idc].map(lambda v: esporta._json_val(v) == u)].iloc[0])
+            return dict(r, stato=st.descrizione())
+        if nome == "riscrivi":
+            self._serve_scavo()
+            with st.lock:
+                try:
+                    r = md.riscrivi(st.scavo)
+                except md.ErroreModifica as e:
+                    raise Errore(str(e))
+                except PermissionError as e:
+                    raise Errore(f"Impossibile scrivere {getattr(e, 'filename', '')}: il file è aperto in un altro "
+                                 "programma (Excel?). Chiudilo e riprova")
+                st.modificato = True
+            saltate = [dict(unita=v.get("unita"), cosa=v.get("campo") or f"{v.get('rapporto')} {v.get('altra')}",
+                            motivo=m) for v, m in r["saltate"]]
+            return dict(scritte=r["scritte"], saltate=saltate, file=[os.path.basename(p) for p in r["file"]],
+                        copie=r["copie"], stato=st.descrizione())
+        if nome == "sorgenti":
+            self._serve_scavo()
+            return dict(cambiate=md.sorgenti_cambiate(st.scavo) if st.scavo.abbinamento is not None else [])
+        if nome == "ricarica":
+            self._serve_scavo()
+            with st.lock:
+                try:
+                    nuovo, rif, note = md.ricarica(st.scavo, scarta_modifiche=bool(a.get("scarta")))
+                except md.ErroreModifica as e:
+                    raise Errore(str(e))
+                if rif:
+                    ricostruisci(nuovo, unita=rif)
+                st.scavo, st.modificato = nuovo, True
+                st.versione_modello += 1
+            return dict(note=note, ricostruite=len(rif), stato=st.descrizione())
         if nome == "correggi":
             # correzioni in blocco dal resoconto della verifica
             self._serve_scavo()
@@ -176,7 +225,10 @@ class App:
                 if any(p["livello"] == "errore" for p in _problemi(st.scavo)) and not a.get("forza"):
                     raise Errore("La verifica ha trovato errori: correggili prima di ricostruire")
                 t0 = time.time()
-                ricostruisci(st.scavo)
+                parziale = [int(u) for u in a.get("unita") or []] or None
+                if parziale and st.scavo.modello is None:
+                    parziale = None
+                ricostruisci(st.scavo, unita=parziale)
                 st.modificato = True
                 st.versione_modello += 1
             return dict(secondi=round(time.time() - t0, 1), stato=st.descrizione())

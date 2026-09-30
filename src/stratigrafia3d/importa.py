@@ -1649,9 +1649,11 @@ def applica(abb, log=None):
     now = _dt.datetime.now().isoformat(timespec="seconds")
     fonti = sorted({x.sorgente for x in abb.layers if x.ruolo != "ignora"} | ({abb.tabella} if abb.tabella else set())
                    | ({raster_fonte} if raster_fonte else set()))
+    fonti = sorted(set(fonti) | {f for f in (abb.tabelle_extra or []) if f and os.path.exists(f)})
     for p in fonti:
         s.sorgenti.append(dict(percorso=os.path.abspath(p),
-                               tipo="excel" if p == abb.tabella else ("raster" if p == raster_fonte else "gis"),
+                               tipo="excel" if p == abb.tabella else ("raster" if p == raster_fonte else
+                                                                     ("tabella" if p in (abb.tabelle_extra or []) else "gis")),
                                sha256=_sha256(p), dimensione=os.path.getsize(p), importato=now))
     base = next((x.sorgente for x in abb.layers if x.ruolo == "us"), fonti[0] if fonti else "scavo")
     s.meta = dict(creato=now, modificato=now, nome=os.path.splitext(os.path.basename(base))[0])

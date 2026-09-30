@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stratigrafia3d"
-version = "0.5.0"
+version = "0.6.0"
 description = "Ricostruzione 3D delle unità stratigrafiche da documentazione di scavo 2D (GIS + Excel)"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}

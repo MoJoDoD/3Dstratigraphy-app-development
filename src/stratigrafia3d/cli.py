@@ -59,6 +59,40 @@ def cmd_ricostruisci(a):
     print(f"Ricalcolate {len(unita) if unita else len(m.unita)} unità.")
 
 
+def cmd_riscrivi(a):
+    from .progetto import Scavo
+    from . import modifiche as md
+    s = Scavo.apri(a.progetto)
+    if not md.in_attesa(s):
+        print("Nessuna modifica da scrivere.")
+        return
+    r = md.riscrivi(s)
+    s.salva(a.progetto)
+    print(f"{r['scritte']} modifiche scritte in: {', '.join(r['file']) or '—'}")
+    for v, motivo in r["saltate"]:
+        print(f"  non scritta: US {v.get('unita')} {v.get('campo') or v.get('rapporto', '')}: {motivo}")
+    if r["copie"]:
+        print("Copie dei file prima della scrittura: " + ", ".join(r["copie"]))
+
+
+def cmd_aggiorna(a):
+    from .progetto import Scavo
+    from .ricostruzione import ricostruisci
+    from . import modifiche as md
+    s = Scavo.apri(a.progetto)
+    cambiate = md.sorgenti_cambiate(s)
+    if not cambiate and not a.forza:
+        print("I file d'origine non sono cambiati.")
+        return
+    for c in cambiate:
+        print(f"  {c['stato']}: {c['percorso']}")
+    nuovo, unita, note = md.ricarica(s, scarta_modifiche=a.scarta)
+    if unita:
+        ricostruisci(nuovo, unita=unita, log=print)
+    nuovo.salva(a.progetto)
+    print("; ".join(note) + (f"; ricostruite {len(unita)} unità" if unita else ""))
+
+
 def cmd_info(a):
     from .progetto import Scavo
     print(Scavo.apri(a.progetto).riepilogo())
@@ -134,6 +168,14 @@ def main(argv=None):
     r.add_argument("progetto"); r.add_argument("--unita", type=int, nargs="+",
                                                help="solo queste unità e quelle che stanno sopra")
     r.set_defaults(f=cmd_ricostruisci)
+
+    rs = sub.add_parser("riscrivi", help="scrive nei file d'origine le modifiche fatte nell'app")
+    rs.add_argument("progetto"); rs.set_defaults(f=cmd_riscrivi)
+    ag = sub.add_parser("aggiorna", help="rilegge i file d'origine cambiati e ricostruisce le unità toccate")
+    ag.add_argument("progetto"); ag.add_argument("--scarta", action="store_true",
+                                                 help="scarta le modifiche fatte nell'app non ancora scritte")
+    ag.add_argument("--forza", action="store_true", help="rilegge anche se i file sembrano uguali")
+    ag.set_defaults(f=cmd_aggiorna)
 
     i = sub.add_parser("info", help="riepilogo di un progetto"); i.add_argument("progetto"); i.set_defaults(f=cmd_info)
 
