@@ -10,11 +10,13 @@ Uso tipico::
     s.salva("scavo.scavo")
     esporta.visualizzatore(s, "index.html")
 """
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 import warnings as _w
 # un .scavo è un GeoPackage con un'estensione propria: GDAL lo segnala, ma è voluto
 _w.filterwarnings("ignore", message=".*non conformant file extension")
+# shapefile «M» (con misura): la misura non serve, GDAL la toglie e avvisa
+_w.filterwarnings("ignore", message="Measured \\(M\\) geometry types are not supported")
 
 from .progetto import Scavo, Parametri, Modello, UnitaModello  # noqa: F401
 from .ricostruzione import ricostruisci, da_ricalcolare  # noqa: F401

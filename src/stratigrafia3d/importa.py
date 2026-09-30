@@ -27,7 +27,8 @@ from shapely.ops import unary_union
 
 from . import schema as sc
 
-EST_GIS = {".gpkg", ".shp", ".geojson", ".json", ".dxf"}
+EST_GIS = {".gpkg", ".shp", ".geojson", ".json", ".dxf", ".sqlite", ".db"}
+EST_CONTENITORI = {".gpkg", ".sqlite", ".db"}          # possono contenere anche tabelle senza geometria
 EST_TAB = {".xlsx", ".xlsm", ".xls", ".ods"}
 RUOLI = ["us", "usm", "quote", "profili", "fondi", "area", "sezioni", "sezioni_disegno", "reperti", "campioni",
          "ignora"]
@@ -49,7 +50,8 @@ PAROLE_RUOLO = [
                "fondo_taglio", "break of slope"]),
     ("ignora", ["griglia", "grid", "quadrett", "layer_styles", "hachure", "tratteggi"]),
     ("usm", ["usm", "mur", "wall", "muratur", "struttur"]),
-    ("area", ["area_scavo", "limite", "limit", "saggio", "trincea", "trench", "perimetr", "area"]),
+    ("area", ["area_scavo", "limite", "limit", "saggio", "trincea", "trench", "perimetr", "area", "excavation",
+              "scavi", "evaluation"]),
     ("profili", ["profil", "interfacc"]),
     ("sezioni_disegno", ["sezioni_disegno", "disegno_sez"]),
     ("sezioni", ["sezion", "sez", "section"]),
@@ -79,10 +81,13 @@ FOGLI_ALIAS = {
                 {"phase": "Fase", "title": "Titolo", "name": "Titolo", "period": "Periodo",
                  "from (year)": "Da (anno)", "to (year)": "A (anno)", "from": "Da (anno)", "to": "A (anno)",
                  "start": "Da (anno)", "end": "A (anno)"}),
-    sc.S_MATERIALI: (["finds", "materials", "artefacts", "artifacts", "materiali"],
-                     {"context": "US", "us": "US", "material": "Classe", "class": "Classe", "object": "Tipo / forma",
-                      "type": "Tipo / forma", "count": "NR", "quantity": "NR", "weight (g)": "Peso (g)",
-                      "weight": "Peso (g)", "mni": "NMI", "box": "Cassetta"}),
+    sc.S_MATERIALI: (["finds", "materials", "artefacts", "artifacts", "materiali", "findssummaries", "finds summaries",
+                      "finds summary", "reperti", "inventario materiali"],
+                     {"context": "US", "us": "US", "deposit": "US", "context number": "US", "material": "Classe",
+                      "class": "Classe", "classe": "Classe", "object": "Tipo / forma", "type": "Tipo / forma",
+                      "count": "NR", "quantity": "NR", "objectcount": "NR", "object count": "NR", "nr": "NR",
+                      "weight (g)": "Peso (g)", "weight": "Peso (g)", "peso": "Peso (g)", "mni": "NMI", "nmi": "NMI",
+                      "box": "Cassetta", "cassetta": "Cassetta"}),
     sc.S_DOC: (["documentation", "archive", "documentazione"],
                {"context": "US/USM", "us": "US/USM", "subject": "Soggetto", "description": "Soggetto", "date": "Data"}),
     sc.S_CAMPIONI: (["samples", "campioni"],
@@ -173,8 +178,56 @@ def _dxf_gruppi(path):
     return df
 
 
+_CACHE_CSV = {}
+
+
+def leggi_csv(path):
+    """CSV con separatore e codifica riconosciuti (UTF-8, altrimenti Windows/Latin-1)."""
+    import csv
+    chiave = (os.path.abspath(path), os.path.getmtime(path))
+    if chiave in _CACHE_CSV:
+        return _CACHE_CSV[chiave].copy()
+    campione = open(path, "rb").read(65536).decode("latin-1")
+    try:
+        sep = csv.Sniffer().sniff("\n".join(campione.splitlines()[:20]), delimiters=",;\t|").delimiter
+    except csv.Error:
+        sep = ","
+    df = None
+    for cod in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            df = pd.read_csv(path, sep=sep, encoding=cod, low_memory=False)
+            break
+        except UnicodeDecodeError:
+            continue
+        except pd.errors.ParserError:
+            df = pd.read_csv(path, sep=None, engine="python", encoding=cod)
+            break
+    if len(_CACHE_CSV) > 40:
+        _CACHE_CSV.clear()
+    _CACHE_CSV[chiave] = df
+    return df.copy()
+
+
+_WKT_RE = re.compile(r"^\s*(MULTI)?(POINT|LINESTRING|POLYGON)\s*(Z|M|ZM)?\s*\(", re.I)
+
+
+def _colonna_wkt(df):
+    for c in df.columns:
+        if _norm(c) in ("geometry", "wkt", "geom", "the geom", "geometria", "shape", "wkt geom") or \
+                str(c).lower() in ("geometry", "wkt", "the_geom"):
+            v = df[c].dropna().astype(str).head(20)
+            if len(v) and v.map(lambda x: bool(_WKT_RE.match(x))).mean() > 0.8:
+                return c
+    return None
+
+
 def _leggi_csv_punti(path):
-    df = pd.read_csv(path, sep=None, engine="python")
+    df = leggi_csv(path)
+    cw = _colonna_wkt(df)
+    if cw is not None:           # geometrie scritte come testo (WKT)
+        from shapely import wkt as _wkt
+        geom = [(_wkt.loads(v) if isinstance(v, str) and _WKT_RE.match(v) else None) for v in df[cw]]
+        return gpd.GeoDataFrame(df.drop(columns=[cw]), geometry=geom)
     low = {_norm(c): c for c in df.columns}
     cx = next((low[k] for k in ("x", "e", "est", "east", "easting") if k in low), None)
     cy = next((low[k] for k in ("y", "n", "nord", "north", "northing") if k in low), None)
@@ -263,22 +316,121 @@ def esamina(files):
             for k in sorted(df["_chiave"].unique()):
                 layers.append(_info(f, k, leggi_layer(f, k)))
         elif ext in EST_GIS:
-            for nome, _ in pyogrio.list_layers(f):
-                if nome.startswith(("s3d_", "tab_", "layer_styles")):
+            for nome, tipo in pyogrio.list_layers(f):
+                if nome.startswith(("s3d_", "tab_", "layer_styles", "gpkg_", "rtree_", "sqlite_", "spatial_ref_sys",
+                                    "geometry_columns", "views_geometry", "virts_geometry", "spatialite_history",
+                                    "sql_statements_log", "idx_")):
+                    continue
+                if ext in EST_CONTENITORI and tipo is None:
+                    if ext == ".gpkg":
+                        tabelle.setdefault(f, {})[nome] = pyogrio.read_dataframe(f, layer=nome, read_geometry=False)
                     continue
                 layers.append(_info(f, nome, gpd.read_file(f, layer=nome)))
+            if ext in (".sqlite", ".db"):
+                t = _tabelle_sqlite(f)
+                if t:
+                    tabelle[f] = t
         elif ext == ".csv" and _csv_e_punti(f):
-            layers.append(_info(f, os.path.basename(f), _leggi_csv_punti(f)))
+            g = _leggi_csv_punti(f)
+            layers.append(_info(f, os.path.basename(f), g))
+            if _colonna_wkt(leggi_csv(f)) is not None:     # le colonne di un CSV con geometrie sono anche schede
+                tabelle[f] = leggi_tabelle(f)
         elif ext in EST_TAB or ext == ".csv":
             tabelle[f] = leggi_tabelle(f)
     return layers, tabelle
 
 
+_SISTEMA_SQLITE = ("sqlite_", "spatial_ref_sys", "spatialite_history", "sql_statements_log", "geometry_columns",
+                   "views_geometry_columns", "virts_geometry_columns", "geom_cols_ref_sys", "spatial_ref_sys_aux",
+                   "idx_", "elementarygeometries", "spatialindex", "knn", "data_licenses", "rl2map_configurations",
+                   "vector_coverages", "raster_coverages", "wms_", "se_", "topologies", "networks", "iso_metadata",
+                   "gpkg_", "rtree_", "layer_styles", "s3d_", "tab_")
+
+
+def _tabelle_sqlite(path):
+    """Tabelle senza geometria di un database SQLite/SpatiaLite (GDAL elenca solo quelle spaziali)."""
+    import sqlite3
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        nomi = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view')")]
+        try:
+            spaziali = {r[0].lower() for r in con.execute("SELECT f_table_name FROM geometry_columns")}
+        except sqlite3.Error:
+            spaziali = set()
+        out = {}
+        for n in nomi:
+            if n.lower() in spaziali or n.lower().startswith(_SISTEMA_SQLITE):
+                continue
+            try:
+                out[n] = pd.read_sql_query(f'SELECT * FROM "{n}"', con)
+            except Exception:
+                pass
+        return out
+    finally:
+        con.close()
+
+
 def leggi_tabelle(path):
     ext = os.path.splitext(path)[1].lower()
+    if ext in (".sqlite", ".db"):
+        return _tabelle_sqlite(path)
+    if ext in EST_CONTENITORI:          # tabelle senza geometria di un GeoPackage
+        return {n: pyogrio.read_dataframe(path, layer=n, read_geometry=False)
+                for n, t in pyogrio.list_layers(path) if t is None and not n.startswith(("s3d_", "gpkg_", "rtree_"))
+                and n not in ("layer_styles", "spatial_ref_sys", "geometry_columns")}
     if ext == ".csv":
-        return {os.path.splitext(os.path.basename(path))[0]: pd.read_csv(path, sep=None, engine="python")}
+        df = leggi_csv(path)
+        cw = _colonna_wkt(df)
+        return {os.path.splitext(os.path.basename(path))[0]: df.drop(columns=[cw]) if cw else df}
     return pd.read_excel(path, sheet_name=None)
+
+
+EST_ZIP = {".zip"}
+EST_ACCESS = {".mdb", ".accdb"}
+_ACCOMPAGNANO = {".dbf", ".shx", ".prj", ".cpg", ".qpj", ".tfw", ".tifw", ".wld", ".aux", ".xml", ".sbn", ".sbx"}
+
+
+def espandi(files, cartella=None):
+    """Apre gli archivi .zip tra i file (in una cartella di lavoro) e ritorna l'elenco dei file utili.
+    Ritorna (file, note)."""
+    import hashlib
+    import zipfile
+    from .superficie import EST_RASTER
+    utili = EST_GIS | EST_TAB | EST_RASTER | {".csv"}
+    out, note = [], []
+    base = cartella or os.path.join(os.path.expanduser("~"), ".stratigrafia3d", "estratti")
+    for f in files:
+        ext = os.path.splitext(f)[1].lower()
+        if ext in EST_ACCESS:
+            note.append(f"«{os.path.basename(f)}» è un database Access: esporta le tabelle in CSV "
+                        "(in Access: Dati esterni → Esporta → File di testo) e aggiungi i CSV")
+            continue
+        if ext not in EST_ZIP:
+            out.append(f)
+            continue
+        try:
+            z = zipfile.ZipFile(f)
+        except zipfile.BadZipFile:
+            note.append(f"«{os.path.basename(f)}» non è un archivio zip valido (download incompleto?)")
+            continue
+        chiave = hashlib.sha1(f"{os.path.abspath(f)}|{os.path.getmtime(f)}".encode()).hexdigest()[:12]
+        dest = os.path.join(base, os.path.splitext(os.path.basename(f))[0] + "_" + chiave)
+        nomi = [n for n in z.namelist() if not n.endswith("/") and "__MACOSX" not in n]
+        scelti = [n for n in nomi if os.path.splitext(n)[1].lower() in utili | _ACCOMPAGNANO]
+        principali = [n for n in scelti if os.path.splitext(n)[1].lower() in utili]
+        if not principali:
+            note.append(f"«{os.path.basename(f)}»: nessun file di dati riconosciuto nell'archivio")
+            continue
+        for n in scelti:
+            p = os.path.join(dest, *n.split("/"))
+            if not os.path.exists(p):
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with z.open(n) as src, open(p, "wb") as dst:
+                    dst.write(src.read())
+        for n in principali:
+            out.append(os.path.join(dest, *n.split("/")))
+        note.append(f"«{os.path.basename(f)}»: {len(principali)} file estratti")
+    return out, note
 
 
 # ============================================================================ abbinamento
@@ -293,6 +445,8 @@ class RuoloLayer:
     tipo_predefinito: str = None   # se manca campo_tipo
     quota_da: str = "z"            # "z" | "campo:<nome>" | "testo"
     campo_sezione: str = None
+    campi_scheda: dict = field(default_factory=dict)   # {colonna del programma: campo del layer}
+    quote_vertici: bool = False    # poligoni 3D: i vertici diventano quote (del tetto, o dell'orlo per i tagli)
     motivo: str = ""
 
 
@@ -309,6 +463,17 @@ class Abbinamento:
     note: list = field(default_factory=list)
     # superficie di riferimento per le unità senza quote (vedi superficie.py)
     superficie: dict = field(default_factory=lambda: {"tipo": "nessuna"})
+    # ---- ricetta: trasformazioni dei dati
+    nome: str = ""                                      # nome della ricetta (es. "Framework Archaeology")
+    tabelle_extra: list = field(default_factory=list)   # altri file di tabelle (CSV collegati, Excel)
+    vocabolari: dict = field(default_factory=dict)      # {"tipo"|"rapporto"|"tipo_quota": {valore: valore}}
+    rapporti_extra: list = field(default_factory=list)  # [{"foglio", "colonna", "rapporto", "colonna_unita"}]
+    unita_misura: dict = field(default_factory=dict)    # {colonna del programma: "m"|"cm"|"mm"|"auto"}
+    valori_nulli: list = field(default_factory=lambda: [-9999.0, -999.0, -99.99])
+    filtri: list = field(default_factory=list)          # [{"dove": "scheda"|"layer", "colonna", "valori", ...}]
+    poligoni_ereditati: bool = False                    # riempimenti senza pianta: poligono del taglio
+    solo_con_poligono: bool = False                     # tralascia le schede senza pianta
+    fogli_collegati: dict = None                        # {"Materiali": {"foglio", "colonne"}, ...}
 
     def a_json(self):
         return json.dumps(asdict(self), ensure_ascii=False, indent=1)
@@ -316,8 +481,9 @@ class Abbinamento:
     @classmethod
     def da_json(cls, s):
         d = json.loads(s) if isinstance(s, str) else dict(s)
-        d["layers"] = [RuoloLayer(**x) for x in d.get("layers", [])]
-        return cls(**d)
+        campi_layer = RuoloLayer.__dataclass_fields__
+        d["layers"] = [RuoloLayer(**{k: v for k, v in x.items() if k in campi_layer}) for x in d.get("layers", [])]
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
     def salva_profilo(self, path):
         with open(path, "w", encoding="utf-8") as f:
@@ -438,16 +604,21 @@ def _colonne_scheda(df, col_id, canon_id):
         sc.C_CATEGORIA: ["categoria", "definizione generale", "tipo di unità", "category", "class"],
         sc.C_SPESSORE: ["spessore medio stimato (m)", "spessore", "spessore medio", "spessore (m)", "spessore medio (m)",
                         "potenza", "spessore (cm)", "thickness (m)", "thickness", "average thickness (m)",
-                        "thickness (cm)"],
+                        "thickness (cm)", "context depth (m)", "context depth"],
         sc.C_MARGINI: ["margini", "limiti", "limite", "limiti/margini", "boundary", "edges", "boundaries"],
         sc.C_FASE: ["fase", "phase", "period/phase"],
         sc.C_COLORE: ["colore hex", "colore rgb", "hex", "colour hex", "color hex", "colour", "color"],
         "Definizione": ["definizione", "descrizione breve", "interpretazione sintetica", "definition",
                         "interpretation keyword", "short description"],
-        "Descrizione": ["descrizione", "description", "brief description"],
+        "Descrizione": ["descrizione", "description", "brief description", "descriz", "desc"],
         "Interpretazione": ["interpretazione", "interpretation", "comments", "context comments"],
-        "Spessore/profondità max (m)": ["profondità (m)", "profondità", "depth (m)", "depth", "max depth (m)"],
+        "Spessore/profondità max (m)": ["profondità (m)", "profondità", "depth (m)", "depth", "max depth (m)",
+                                        "context depth (m)", "context depth", "profondità max (m)"],
         "Data scavo": ["data scavo", "date recorded", "date excavated", "excavation date"],
+        "Datazione da": ["datazione da", "da (anno)", "from (year)", "start year", "start_year", "anno inizio",
+                         "cronologia iniziale", "date from"],
+        "Datazione a": ["datazione a", "a (anno)", "to (year)", "end year", "end_year", "anno fine", "cronologia finale",
+                        "date to"],
         "Responsabile": ["responsabile", "recorded by", "excavator", "supervisor"],
         sc.C_BASE_USM: ["quota base usata (rilevata o stimata)", "quota fondazione", "quota base", "base"],
     }
@@ -481,6 +652,13 @@ def _rapporti(tabelle, foglio_us):
         mappa = {c: _rapporto(c) for c in df.columns if _rapporto(c) in RAPPORTI_COLONNE}
         if mappa:
             return {"modo": "colonne", "foglio": foglio_us, "colonne": mappa}
+        # una colonna di testo con i rapporti scritti per esteso (o nel formato di pyArchInit)
+        for c in df.columns:
+            if _norm(c) in ("rapporti", "rapporti stratigrafici", "relations", "relationships", "stratigraphic relations",
+                            "matrix", "harris"):
+                v = df[c].dropna().astype(str).head(50)
+                if len(v) and v.map(lambda x: len(_rapporti_da_testo(x)) > 0).mean() > 0.5:
+                    return {"modo": "testo", "foglio": foglio_us, "colonna": c}
     return {"modo": "nessuno"}
 
 
@@ -489,27 +667,51 @@ def proponi(files):
     layers_info, tabelle_per_file = esamina(files)
     abb = Abbinamento()
     noti = set()
+    tabs = {}
     if tabelle_per_file:
-        # il file con il foglio US più convincente
-        for f, tabs in tabelle_per_file.items():
-            (fus, cus), (fusm, cusm) = _schede(tabs)
+        # il file con il foglio US più convincente; gli altri file di tabelle restano collegati
+        for f, t in tabelle_per_file.items():
+            (fus, cus), (fusm, cusm) = _schede(t)
             if fus and abb.tabella is None:
                 abb.tabella, abb.foglio_us = f, fus
-                abb.colonne_us = _colonne_scheda(tabs[fus], cus, sc.C_US)
-                noti |= {_intero(v) for v in tabs[fus][cus].dropna()}
+                abb.colonne_us = _colonne_scheda(t[fus], cus, sc.C_US)
+                noti |= {_intero(v) for v in t[fus][cus].dropna()}
                 if fusm:
                     abb.foglio_usm = fusm
-                    abb.colonne_usm = _colonne_scheda(tabs[fusm], cusm, sc.C_USM)
-                    noti |= {_intero(v) for v in tabs[fusm][cusm].dropna()}
-                abb.rapporti = _rapporti(tabs, fus)
+                    abb.colonne_usm = _colonne_scheda(t[fusm], cusm, sc.C_USM)
+                    noti |= {_intero(v) for v in t[fusm][cusm].dropna()}
                 abb.note.append(f"Schede US nel foglio «{fus}» (colonna «{cus}»)" +
                                 (f", USM nel foglio «{fusm}»" if fusm else ""))
-                r = abb.rapporti
-                abb.note.append({"foglio": f"Rapporti dal foglio «{r.get('foglio')}»",
-                                 "colonne": f"Rapporti dalle colonne della scheda US ({', '.join(r.get('colonne', {}))})",
-                                 "nessuno": "Nessun rapporto stratigrafico trovato: le basi non saranno agganciate"}[r["modo"]])
         if abb.tabella is None:
             abb.note.append("Nessun foglio con i numeri di US: le schede verranno create dai poligoni")
+        else:
+            abb.tabelle_extra = [f for f in tabelle_per_file if f != abb.tabella]
+            for f in [abb.tabella] + abb.tabelle_extra:
+                for nome, df in tabelle_per_file[f].items():
+                    tabs[nome if nome not in tabs else f"{os.path.splitext(os.path.basename(f))[0]} · {nome}"] = df
+            if abb.tabelle_extra:
+                abb.note.append(f"{len(abb.tabelle_extra)} altri file di tabelle collegati")
+            abb.rapporti = _rapporti(tabs, abb.foglio_us)
+            r = abb.rapporti
+            # colonne «padre»: l'unità che questa riempie (Fill of, Riempie…)
+            dus = tabs[abb.foglio_us]
+            idc = abb.colonne_us.get(sc.C_US)
+            for c in dus.columns:
+                rel = COLONNE_PADRE.get(_norm(c))
+                if rel and c != idc and (r.get("modo") != "colonne" or c not in r.get("colonne", {})):
+                    v = dus[c].dropna()
+                    if len(v) and np.mean([_intero(x) is not None for x in v]) > 0.8:
+                        abb.rapporti_extra.append({"foglio": abb.foglio_us, "colonna": c, "rapporto": rel,
+                                                   "colonna_unita": idc})
+                        abb.note.append(f"Rapporti «{rel}» dalla colonna «{c}»")
+            if r["modo"] != "nessuno" or not abb.rapporti_extra:
+                abb.note.append({"foglio": f"Rapporti dal foglio «{r.get('foglio')}»",
+                                 "colonne": f"Rapporti dalle colonne della scheda US ({', '.join(r.get('colonne', {}))})",
+                                 "testo": f"Rapporti dal testo della colonna «{r.get('colonna')}»",
+                                 "nessuno": "Nessun rapporto stratigrafico trovato: le basi non saranno agganciate"}[r["modo"]])
+            abb.vocabolari = _proponi_vocabolari(abb, tabs)
+            usati = {abb.foglio_us, abb.foglio_usm, r.get("foglio") if r.get("modo") == "foglio" else None}
+            abb.fogli_collegati = _proponi_collegati(tabs, usati)
     noti.discard(None)
     testi = [li for li in layers_info if li.geometria == "testo"]
     for li in layers_info:
@@ -550,6 +752,9 @@ def proponi(files):
         else:
             ruolo = "ignora"
         r.ruolo = ruolo
+        if ruolo in ("us", "usm") and li.ha_z:
+            r.quote_vertici = True
+            motivo.append("quote dai vertici 3D")
         if ruolo in ("us", "usm", "quote", "profili", "reperti", "campioni", "sezioni_disegno"):
             campo, punti = _campo_unita(g, noti)
             if campo:
@@ -589,9 +794,42 @@ def proponi(files):
         abb.layers.append(r)
     crs = [li.crs for li in layers_info if li.crs]
     abb.crs = crs[0] if crs else None
+    # CSV con geometrie senza un foglio di schede riconosciuto: le sue colonne sono le schede
+    if abb.tabella is None:
+        for r in abb.layers:
+            if r.ruolo == "us" and r.campo_unita and r.sorgente in tabelle_per_file:
+                t = tabelle_per_file[r.sorgente]
+                nome = next(iter(t))
+                if r.campo_unita in t[nome].columns:
+                    abb.tabella, abb.foglio_us = r.sorgente, nome
+                    abb.colonne_us = _colonne_scheda(t[nome], r.campo_unita, sc.C_US)
+                    tabs = dict(t)
+                    abb.vocabolari = _proponi_vocabolari(abb, tabs)
+                    abb.note = [n for n in abb.note if not n.startswith("Nessun foglio con i numeri")]
+                    abb.note.append(f"Schede dalle colonne di «{os.path.basename(r.sorgente)}» (numero: «{r.campo_unita}»)")
+                    break
+    # archivi più ampi della pianta, riempimenti senza pianta propria
+    if abb.foglio_us and abb.foglio_us in tabs:
+        poli = set()
+        for r in abb.layers:
+            if r.ruolo == "us" and r.campo_unita:
+                poli |= {_intero(v) for v in leggi_layer(r.sorgente, r.layer)[r.campo_unita]}
+        poli.discard(None)
+        schede = {_intero(v) for v in tabs[abb.foglio_us][abb.colonne_us[sc.C_US]]}
+        schede.discard(None)
+        senza = schede - poli
+        riempie = bool(abb.rapporti_extra) or sc.R_RIEMPIE in (abb.rapporti.get("colonne") or {}).values() \
+            if isinstance(abb.rapporti.get("colonne"), dict) else bool(abb.rapporti_extra)
+        if poli and riempie and len(senza) > 0.2 * len(schede):
+            abb.poligoni_ereditati = True
+            abb.note.append("Molte schede senza pianta: i riempimenti useranno il poligono del taglio che riempiono")
+        if poli and len(schede) > 3 * len(poli):
+            abb.solo_con_poligono = True
+            abb.note.append(f"Le schede ({len(schede)}) sono molte più dei poligoni ({len(poli)}): "
+                            "si tengono solo le unità con una pianta")
     # superficie di riferimento: serve quando mancano le quote o quando ci sono profondità da usare
     raster = [f for f, d in esamina_raster(files).items() if "errore" not in d]
-    ha_quote = any(r.ruolo == "quote" for r in abb.layers)
+    ha_quote = any(r.ruolo == "quote" or r.quote_vertici for r in abb.layers)
     if raster:
         abb.superficie = {"tipo": "raster", "sorgente": raster[0], "abbassa": 0.0}
         abb.note.append(f"Modello del terreno «{os.path.basename(raster[0])}» usato come superficie di riferimento "
@@ -634,6 +872,330 @@ def _tipo_canonico(v, predefinito):
     return _SIN.get(_norm(v), predefinito)
 
 
+# ============================================================================ ricetta: trasformazioni
+PAROLE_NEGATIVA = ("neg", "tagl", "interfacc")
+VALORI_NEGATIVA = {"cut", "interface", "intervention", "cut feature", "negative feature", "n"}
+FATTORI = {"m": 1.0, "cm": 0.01, "mm": 0.001}
+COLONNE_PADRE = {"fill of": sc.R_RIEMPIE, "filled in": sc.R_RIEMPIE, "fills": sc.R_RIEMPIE, "riempie": sc.R_RIEMPIE,
+                 "riempimento di": sc.R_RIEMPIE, "parent": sc.R_RIEMPIE, "contained by": sc.R_RIEMPIE,
+                 "within": sc.R_RIEMPIE}
+TUTTI_RAPPORTI = sorted(set(RAPPORTI_COLONNE) | set(RAPPORTI_INGLESE), key=len, reverse=True)
+
+
+def _tipo_da_valore(v):
+    t = _norm(v)
+    return "negativa" if any(p in t for p in PAROLE_NEGATIVA) or t in VALORI_NEGATIVA else "positiva"
+
+
+def _vocabolario(abb, chiave):
+    """Tabella di corrispondenza della ricetta (valore dell'archivio -> valore del programma)."""
+    return {_norm(k): v for k, v in ((abb.vocabolari or {}).get(chiave) or {}).items()}
+
+
+def _tutte_le_tabelle(abb):
+    """I fogli del file delle schede e dei file collegati, in un solo dizionario."""
+    tabs = {}
+    for f in [abb.tabella] + list(abb.tabelle_extra or []):
+        if not f or not os.path.exists(f):
+            continue
+        for nome, df in leggi_tabelle(f).items():
+            k = nome if nome not in tabs else f"{os.path.splitext(os.path.basename(f))[0]} · {nome}"
+            tabs[k] = df
+    return tabs
+
+
+def _rinomina(df, colonne):
+    """Colonne dell'archivio -> nomi del programma. Se due nomi usano la stessa colonna la si copia."""
+    df = df.copy()
+    usate = {}
+    for canon, col in (colonne or {}).items():
+        if col and col in df.columns and canon != col:
+            usate.setdefault(col, []).append(canon)
+    for col, canoni in usate.items():
+        for canon in canoni:
+            df[canon] = df[col]
+        if len(canoni) == 1:
+            df = df.drop(columns=[col])
+    return df
+
+
+def _filtra(df, filtri, dove, layer=None):
+    tolte = 0
+    for f in filtri or []:
+        if f.get("dove", "scheda") != dove or (layer and f.get("layer") not in (None, "", layer)):
+            continue
+        col = f.get("colonna")
+        if col not in df.columns:
+            continue
+        valori = {str(v).strip() for v in f.get("valori") or []}
+        dentro = df[col].map(lambda v: str(_intero(v) if isinstance(v, float) and v == int(v) else v).strip()
+                             if v is not None and not (isinstance(v, float) and np.isnan(v)) else "").isin(valori)
+        tieni = ~dentro if f.get("escludi") else dentro
+        tolte += int((~tieni).sum())
+        df = df[tieni]
+    return df, tolte
+
+
+def _misura(serie, unita, nome_col, nulli):
+    v = serie.map(_numero)
+    if nulli:
+        v = v.map(lambda x: None if x is not None and any(abs(x - n) < 1e-9 for n in nulli) else x)
+    v = pd.to_numeric(v, errors="coerce")
+    if unita in FATTORI:
+        return v * FATTORI[unita]
+    if "cm" in _norm(nome_col).split() or "(cm)" in _norm(nome_col) or (v.dropna() > 5).mean() > 0.5:
+        return v / 100.0
+    if "mm" in _norm(nome_col).split() or "(mm)" in _norm(nome_col):
+        return v / 1000.0
+    return v
+
+
+def _rapporti_da_testo(testo):
+    """Rapporti scritti in un campo di testo: «copre 1002, 1003; taglia 1005», oppure il formato
+    di pyArchInit [['Copre', '1002', '1', 'Sito'], …]. Ritorna [(rapporto, unità)]."""
+    if testo is None or (isinstance(testo, float) and np.isnan(testo)):
+        return []
+    s = str(testo).strip()
+    out = []
+    if s.startswith("[["):
+        import ast
+        try:
+            for el in ast.literal_eval(s):
+                if len(el) >= 2 and _intero(el[1]) is not None:
+                    out.append((_rapporto(el[0]), _intero(el[1])))
+            return out
+        except (ValueError, SyntaxError):
+            pass
+    t = _norm(s)
+    trovati = []
+    for r in TUTTI_RAPPORTI:
+        for m in re.finditer(r"(^|[^a-z])" + re.escape(r) + r"($|[^a-z])", t):
+            a, b = m.start() + len(m.group(1)), m.end() - len(m.group(2))
+            if not any(x[0] <= a < x[1] or x[0] < b <= x[1] for x in trovati):
+                trovati.append((a, b, r))
+    trovati.sort()
+    for i, (a, b, r) in enumerate(trovati):
+        fine = trovati[i + 1][0] if i + 1 < len(trovati) else len(t)
+        for n in re.findall(r"\d+", t[b:fine]):
+            out.append((_rapporto(r), int(n)))
+    return out
+
+
+def _leggi_rapporti(abb, tabs, note):
+    """Tutti i rapporti della ricetta: foglio, colonne, testo, colonne «padre»."""
+    voc = _vocabolario(abb, "rapporto")
+
+    def canonico(t):
+        k = _norm(t)
+        if k in voc:
+            return voc[k] or None          # "" = da ignorare
+        r = _rapporto(t)
+        return r if r in RAPPORTI_COLONNE else None
+
+    righe, ignoti = [], set()
+    r = abb.rapporti or {"modo": "nessuno"}
+    idcol = abb.colonne_us.get(sc.C_US)
+    if r.get("modo") == "foglio" and r.get("foglio") in tabs:
+        rdf = tabs[r["foglio"]]
+        a, t, b = r["colonne"]
+        for ua, tt, ub in zip(rdf[a], rdf[t], rdf[b]):
+            ua, ub = _intero(ua), _intero(ub)
+            if ua is None or ub is None or tt is None or (isinstance(tt, float) and np.isnan(tt)):
+                continue
+            c = canonico(tt)
+            if c:
+                righe.append((ua, c, ub))
+            else:
+                ignoti.add(str(tt))
+    elif r.get("modo") == "colonne" and r.get("foglio") in tabs:
+        src = tabs[r["foglio"]]
+        for _, x in src.iterrows():
+            ua = _intero(x[idcol])
+            if ua is None:
+                continue
+            for col, rel in r["colonne"].items():
+                rel = canonico(rel)
+                v = x[col]
+                if rel is None or v is None or (isinstance(v, float) and np.isnan(v)):
+                    continue
+                numeri = [_intero(v)] if isinstance(v, (int, float, np.integer, np.floating)) else \
+                    [int(b) for b in re.findall(r"\d+", str(v))]
+                righe.extend((ua, rel, b) for b in numeri if b is not None)
+    elif r.get("modo") == "testo" and r.get("foglio") in tabs:
+        src = tabs[r["foglio"]]
+        cu = r.get("colonna_unita") or idcol
+        for ua, testo in zip(src[cu], src[r["colonna"]]):
+            ua = _intero(ua)
+            if ua is None:
+                continue
+            for rel, ub in _rapporti_da_testo(testo):
+                c = canonico(rel)
+                if c:
+                    righe.append((ua, c, ub))
+    for e in abb.rapporti_extra or []:
+        if e.get("foglio") not in tabs:
+            continue
+        src = tabs[e["foglio"]]
+        cu = e.get("colonna_unita") or idcol
+        if cu not in src.columns or e.get("colonna") not in src.columns:
+            continue
+        rel = canonico(e.get("rapporto", sc.R_RIEMPIE)) or sc.R_RIEMPIE
+        n = 0
+        for ua, ub in zip(src[cu], src[e["colonna"]]):
+            ua, ub = _intero(ua), _intero(ub)
+            if ua is not None and ub is not None and ua != ub:
+                righe.append((ua, rel, ub))
+                n += 1
+        note.append(f"{n} rapporti «{rel}» dalla colonna «{e['colonna']}»")
+    if ignoti:
+        note.append("Rapporti non riconosciuti e ignorati: " + ", ".join(sorted(ignoti)[:12]) +
+                    " (si possono tradurre nel vocabolario dei rapporti)")
+    return righe
+
+
+def _mappa_alias(df, canon):
+    """Colonne di un foglio scelto a mano -> colonne attese per quel tipo di foglio."""
+    colonne = FOGLI_ALIAS.get(canon, ([], {}))[1]
+    mappa, presi = {}, set()
+    for c in df.columns:
+        k = colonne.get(_norm(c))
+        if k and k not in presi and k not in df.columns:
+            mappa[k] = c
+            presi.add(k)
+    return mappa
+
+
+def _proponi_collegati(tabs, usati):
+    """Fogli da leggere come materiali, fasi, documentazione, campioni (dal nome del foglio)."""
+    out = {}
+    for nome, df in tabs.items():
+        if nome in usati:
+            continue
+        for canon, (nomi, colonne) in FOGLI_ALIAS.items():
+            if canon in out:
+                continue
+            if _norm(nome) in nomi or _norm(nome) == _norm(canon):
+                mappa, presi = {}, set()
+                for c in df.columns:
+                    k = colonne.get(_norm(c))
+                    if k and k not in presi and k not in df.columns:
+                        mappa[k] = c
+                        presi.add(k)
+                out[canon] = {"foglio": nome, "colonne": mappa}
+    return out
+
+
+def _proponi_vocabolari(abb, tabs):
+    """Tabelle di corrispondenza proposte, da correggere nel wizard: tipo di unità, rapporti."""
+    voc = {}
+    col = abb.colonne_us.get(sc.C_TIPO)
+    if col and abb.foglio_us in tabs and col in tabs[abb.foglio_us].columns:
+        vals = tabs[abb.foglio_us][col].dropna().astype(str).str.strip().unique()
+        if 0 < len(vals) <= 40:
+            voc["tipo"] = {v: _tipo_da_valore(v) for v in sorted(vals)}
+    r = abb.rapporti or {}
+    if r.get("modo") == "foglio" and r.get("foglio") in tabs:
+        vals = tabs[r["foglio"]][r["colonne"][1]].dropna().astype(str).str.strip().unique()
+        if 0 < len(vals) <= 60:
+            voc["rapporto"] = {v: (_rapporto(v) if _rapporto(v) in RAPPORTI_COLONNE else "") for v in sorted(vals)}
+    return voc
+
+
+def applica_ricetta(abb, ricetta):
+    """Adatta una ricetta salvata (o pronta) ai file di adesso: layer riconosciuti per nome (anche con *),
+    fogli e colonne se esistono, trasformazioni copiate. Ritorna (abbinamento, note)."""
+    import copy
+    import fnmatch
+    r = ricetta if isinstance(ricetta, Abbinamento) else Abbinamento.da_json(ricetta)
+    out = copy.deepcopy(abb)
+    note = []
+    n = 0
+    for l in out.layers:
+        cand = [x for x in r.layers if fnmatch.fnmatch(l.layer.lower(), x.layer.lower()) and
+                (not x.sorgente or x.sorgente in ("*", "") or
+                 fnmatch.fnmatch(os.path.basename(l.sorgente).lower(), os.path.basename(x.sorgente).lower()))]
+        if cand:
+            x = cand[0]
+            for k in ("ruolo", "campo_unita", "testi_unita", "campo_tipo", "tipo_predefinito", "quota_da", "campo_sezione", "quote_vertici",
+                      "campi_scheda"):
+                setattr(l, k, getattr(x, k))
+            l.motivo = f"ricetta «{r.nome or 'salvata'}»"
+            n += 1
+        elif any(x.layer == "*" for x in r.layers):
+            l.ruolo = "ignora"
+    note.append(f"Ricetta applicata a {n} layer")
+    tabelle = {}
+    for f in [out.tabella] + list(out.tabelle_extra or []):
+        if f:
+            try:
+                for nome in leggi_tabelle(f):
+                    tabelle.setdefault(nome, f)
+            except Exception:
+                pass
+    if r.foglio_us and r.foglio_us in tabelle:
+        principale = tabelle[r.foglio_us]
+        out.tabelle_extra = [f for f in dict.fromkeys([out.tabella] + list(out.tabelle_extra or [])) if f and f != principale]
+        out.tabella, out.foglio_us = principale, r.foglio_us
+        cols = set(leggi_tabelle(principale)[r.foglio_us].columns)
+        out.colonne_us = {k: v for k, v in r.colonne_us.items() if v in cols}
+        mancano = sorted(set(r.colonne_us) - set(out.colonne_us))
+        if mancano:
+            note.append("Colonne della ricetta non trovate: " + ", ".join(mancano))
+    elif r.foglio_us:
+        note.append(f"Il foglio «{r.foglio_us}» della ricetta non c'è tra i file")
+    if r.foglio_usm and r.foglio_usm in tabelle:
+        out.foglio_usm, out.colonne_usm = r.foglio_usm, dict(r.colonne_usm)
+    if (r.rapporti or {}).get("modo", "nessuno") != "nessuno" and \
+            (r.rapporti.get("foglio") in tabelle or r.rapporti.get("foglio") is None):
+        out.rapporti = copy.deepcopy(r.rapporti)
+    out.rapporti_extra = [e for e in r.rapporti_extra if e.get("foglio") in tabelle]
+    for k in ("vocabolari", "unita_misura", "valori_nulli", "filtri", "poligoni_ereditati", "solo_con_poligono", "nome"):
+        setattr(out, k, copy.deepcopy(getattr(r, k)))
+    if r.fogli_collegati is not None:
+        out.fogli_collegati = {k: v for k, v in r.fogli_collegati.items() if v.get("foglio") in tabelle}
+    if r.crs:
+        out.crs = r.crs
+    sup = dict(r.superficie or {})
+    if sup.get("tipo") == "raster":
+        if (out.superficie or {}).get("tipo") == "raster":
+            out.superficie = dict(out.superficie, abbassa=sup.get("abbassa", 0.0))
+        else:
+            note.append("La ricetta usa un modello del terreno: aggiungilo ai file")
+    elif sup.get("tipo") not in (None, "nessuna"):
+        out.superficie = sup
+    return out, note
+
+
+def ricette_pronte():
+    """Ricette fornite con il programma: nome -> descrizione."""
+    from importlib import resources
+    out = {}
+    for f in sorted(resources.files("stratigrafia3d.ricette").iterdir(), key=lambda x: x.name):
+        if f.name.endswith(".json"):
+            d = json.loads(f.read_text(encoding="utf-8"))
+            out[f.name[:-5]] = dict(nome=d.get("nome") or f.name[:-5], descrizione=d.get("descrizione", ""))
+    return out
+
+
+def carica_ricetta_pronta(chiave):
+    from importlib import resources
+    d = json.loads(resources.files("stratigrafia3d.ricette").joinpath(chiave + ".json").read_text(encoding="utf-8"))
+    d.pop("descrizione", None)
+    return Abbinamento.da_json(d)
+
+
+def valori_distinti(path, foglio=None, colonna=None, layer=None, massimo=60):
+    """Valori distinti (con il conteggio) di una colonna di un foglio o di un campo di un layer."""
+    if layer is not None:
+        g = leggi_layer(path, layer)
+        s = g[colonna]
+    else:
+        s = leggi_tabelle(path)[foglio][colonna]
+    s = s.dropna().map(lambda v: str(_intero(v)) if isinstance(v, float) and v == int(v) else str(v).strip())
+    c = s.value_counts()
+    return [[k, int(v)] for k, v in c.head(massimo).items()], int(len(c))
+
+
 def applica(abb, log=None):
     """Costruisce uno Scavo canonico applicando l'abbinamento."""
     from .progetto import Scavo, _sha256
@@ -642,6 +1204,7 @@ def applica(abb, log=None):
     note = []
     crs = abb.crs
     raccolti = {}          # ruolo -> list di GeoDataFrame canonici
+    dal_layer = {}         # colonna del programma -> {unità: valore} presi dagli attributi dei poligoni
 
     def a_crs(g):
         if crs and g.crs is not None and g.crs.to_string() != crs:
@@ -657,6 +1220,11 @@ def applica(abb, log=None):
         if g is None or g.empty:
             continue
         g = a_crs(gpd.GeoDataFrame(g, geometry="geometry")) if r.ruolo != "sezioni_disegno" else gpd.GeoDataFrame(g)
+        g, tolti = _filtra(g, abb.filtri, "layer", r.layer)
+        if tolti:
+            note.append(f"Filtri: {tolti} elementi di «{r.layer}» esclusi")
+        if g.empty:
+            continue
         if r.campo_unita:
             unita = [_intero(v) for v in g[r.campo_unita]]
         elif r.testi_unita:
@@ -664,6 +1232,28 @@ def applica(abb, log=None):
         else:
             unita = [None] * len(g)
         g = g.assign(_u=unita)
+        for canon, campo in (r.campi_scheda or {}).items():
+            if campo in g.columns:
+                m = dal_layer.setdefault(canon, {})
+                for u, v in zip(g._u, g[campo]):
+                    if u is not None and v is not None and not (isinstance(v, float) and np.isnan(v)) and u not in m:
+                        m[u] = v
+        if r.ruolo in ("us", "usm") and r.quote_vertici:
+            nulli_v = [float(v) for v in (abb.valori_nulli or [])]
+            pts, uu = [], []
+            for u, geom in zip(g._u, g.geometry):
+                if u is None or geom is None or not geom.has_z:
+                    continue
+                for x, y, zv in _coords(geom):
+                    if zv is None or not np.isfinite(zv) or abs(zv) < 1e-9 or any(abs(zv - n) < 1e-6 for n in nulli_v):
+                        continue
+                    pts.append(Point(x, y, zv))
+                    uu.append(int(u))
+            if pts:
+                tipo_v = "rasatura" if r.ruolo == "usm" else "vertice"
+                raccolti.setdefault("quote", []).append(gpd.GeoDataFrame(
+                    {sc.F_US: uu, sc.F_TIPO_QUOTA: tipo_v}, geometry=pts, crs=g.crs))
+                note.append(f"{len(pts)} quote dai vertici 3D di «{r.layer}»")
         if r.ruolo in ("us", "usm"):
             g = g[g._u.notna() & g.geometry.notna()]
             mancanti = len(unita) - len(g)
@@ -684,6 +1274,9 @@ def applica(abb, log=None):
                 if geom.geom_type == "Polygon":
                     geom = MultiPolygon([geom])
                 parts.append({campo: int(u), "geometry": geom})
+            if not parts:
+                note.append(f"«{r.layer}»: nessun poligono con un numero di unità, layer ignorato")
+                continue
             out = gpd.GeoDataFrame(parts, geometry="geometry", crs=g.crs)
         elif r.ruolo == "quote":
             if r.quota_da == "testo":
@@ -692,10 +1285,17 @@ def applica(abb, log=None):
                 z = g[r.quota_da[6:]].map(_numero)
             else:
                 z = pd.Series([c.z if c.has_z else None for c in g.geometry], index=g.index)
-            tipi = [_tipo_canonico(v, r.tipo_predefinito or "sup") for v in
+            nulli = [float(v) for v in (abb.valori_nulli or [])]
+            vuote = z.map(lambda v: v is None or (isinstance(v, float) and np.isnan(v)) or
+                          any(abs(float(v) - n) < 1e-6 for n in nulli))
+            if vuote.any():
+                note.append(f"{int(vuote.sum())} punti di «{r.layer}» senza quota o con quota nulla: ignorati")
+            z = z.where(~vuote, None)
+            voc_q = _vocabolario(abb, "tipo_quota")
+            tipi = [voc_q.get(_norm(v)) or _tipo_canonico(v, r.tipo_predefinito or "sup") for v in
                     (g[r.campo_tipo] if r.campo_tipo else [None] * len(g))]
             out = gpd.GeoDataFrame({sc.F_US: g._u.values, sc.F_TIPO_QUOTA: tipi},
-                                   geometry=[Point(p.x, p.y, zz) if zz is not None else None
+                                   geometry=[Point(p.x, p.y, zz) if zz is not None and not pd.isna(zz) else None
                                              for p, zz in zip(g.geometry, z)], crs=g.crs)
             out = out[out.geometry.notna()]
         elif r.ruolo == "profili":
@@ -732,19 +1332,46 @@ def applica(abb, log=None):
         g = pd.concat(gl, ignore_index=True)
         s.layers[NOME_LAYER[ruolo]] = gpd.GeoDataFrame(g, geometry="geometry", crs=gl[0].crs)
     s.crs = crs
+    # limiti di scavo molto più ampi delle US (un intero cantiere): si tiene la parte che serve
+    if sc.L_AREA in s.layers and sc.L_US in s.layers and len(s.layers[sc.L_US]):
+        from shapely.geometry import box as _box
+        b = s.layers[sc.L_US].total_bounds
+        a = s.layers[sc.L_AREA]
+        if (a.total_bounds[2] - a.total_bounds[0]) > 3 * (b[2] - b[0]) + 50 or \
+                (a.total_bounds[3] - a.total_bounds[1]) > 3 * (b[3] - b[1]) + 50:
+            riquadro = _box(*b).buffer(20)
+            a = a[a.intersects(riquadro)].copy()
+            a["geometry"] = [x.intersection(riquadro) for x in a.geometry]
+            a = a[~a.geometry.is_empty]
+            a["geometry"] = [max(getattr(x, "geoms", [x]), key=lambda p: p.area) if x.geom_type != "Polygon" else x
+                             for x in a.geometry]
+            s.layers[sc.L_AREA] = a[[x.geom_type == "Polygon" for x in a.geometry]]
+            note.append("Limite di scavo ritagliato attorno alle unità importate")
+    if sc.L_US in s.layers and len(s.layers[sc.L_US]):
+        from shapely.geometry import box as _box
+        riquadro = _box(*s.layers[sc.L_US].total_bounds).buffer(20)
+        for nome in (sc.L_FONDI, sc.L_SEZIONI):
+            if nome in s.layers:
+                g = s.layers[nome]
+                dentro = g[g.intersects(riquadro)]
+                if len(dentro) < len(g):
+                    s.layers[nome] = dentro
+                    note.append(f"«{nome}»: tenuti i {len(dentro)} elementi attorno alle unità (su {len(g)})")
 
-    # ------------------------------------------------ tabelle
-    tabs = leggi_tabelle(abb.tabella) if abb.tabella else {}
-    for nome, df in tabs.items():
-        if nome not in (abb.foglio_us, abb.foglio_usm):
-            canon, df = _foglio_canonico(nome, df)
-            if canon != nome:
-                note.append(f"Foglio «{nome}» letto come «{canon}»")
-            s.tabelle[canon] = df
+    # ------------------------------------------------ tabelle (file principale + file collegati)
+    tabs = _tutte_le_tabelle(abb)
+    usati = {abb.foglio_us, abb.foglio_usm}
+    if (abb.rapporti or {}).get("modo") == "foglio":
+        usati.add(abb.rapporti.get("foglio"))
+    collegati = abb.fogli_collegati if abb.fogli_collegati is not None else _proponi_collegati(tabs, usati)
     poli_us = set(s.layers[sc.L_US][sc.F_US]) if sc.L_US in s.layers else set()
     poli_usm = set(s.layers[sc.L_USM][sc.F_USM]) if sc.L_USM in s.layers else set()
+    nulli = {float(v) for v in (abb.valori_nulli or [])}
     if abb.foglio_us:
-        df = tabs[abb.foglio_us].rename(columns={v: k for k, v in abb.colonne_us.items() if v != k})
+        grezzo, tolte = _filtra(tabs[abb.foglio_us], abb.filtri, "scheda")     # i filtri usano i nomi dell'archivio
+        if tolte:
+            note.append(f"Filtri: {tolte} schede escluse")
+        df = _rinomina(grezzo, abb.colonne_us)
         df[sc.C_US] = df[sc.C_US].map(_intero)
         df = df[df[sc.C_US].notna()].copy()
         df[sc.C_US] = df[sc.C_US].astype(int)
@@ -756,62 +1383,106 @@ def applica(abb, log=None):
                 s.tabelle[sc.S_USM] = usm_df
     else:
         df = pd.DataFrame({sc.C_US: sorted(poli_us)})
+    for canon, m in dal_layer.items():         # valori dagli attributi dei poligoni, dove la scheda non li ha
+        val = df[sc.C_US].map(m)
+        if canon in df.columns:
+            vuoti = df[canon].isna() | (df[canon].astype(str).str.strip() == "")
+            df.loc[vuoti, canon] = val[vuoti]
+        else:
+            df[canon] = val
+        note.append(f"«{canon}» completato dagli attributi dei poligoni per {int(val.notna().sum())} unità")
+    voc_tipo = _vocabolario(abb, "tipo")
     if sc.C_TIPO not in df.columns:
         testo = df.get(sc.C_CATEGORIA, pd.Series([""] * len(df))).astype(str) + " " + \
-                df.get("Definizione", pd.Series([""] * len(df))).astype(str)
+            df.get("Definizione", pd.Series([""] * len(df))).astype(str)
         df[sc.C_TIPO] = np.where(testo.str.lower().str.contains("taglio|cut|negativ"), "negativa", "positiva")
         note.append("Colonna Tipo assente: US negative riconosciute dalla parola «taglio»")
     else:
-        df[sc.C_TIPO] = df[sc.C_TIPO].astype(str).str.lower().map(
-            lambda v: "negativa" if ("neg" in v or "tagl" in v or v.strip() in ("cut", "interface", "interfaccia"))
-            else "positiva")
-    if sc.C_SPESSORE in df.columns:
-        sp = df[sc.C_SPESSORE].map(_numero)
-        col = abb.colonne_us.get(sc.C_SPESSORE, "")
-        if "cm" in _norm(col) or (sp.dropna() > 5).mean() > 0.5:
-            sp = sp / 100.0          # spessori in centimetri
-        df[sc.C_SPESSORE] = sp
+        df[sc.C_TIPO] = df[sc.C_TIPO].map(lambda v: voc_tipo.get(_norm(v)) or _tipo_da_valore(v))
+    for canon in (sc.C_SPESSORE, sc.C_PROFONDITA):
+        if canon in df.columns:
+            df[canon] = _misura(df[canon], (abb.unita_misura or {}).get(canon, "auto"),
+                                (abb.colonne_us or {}).get(canon, canon), nulli)
+    righe = _leggi_rapporti(abb, tabs, note)
+    # unità che non hanno una pianta propria (riempimenti): il poligono dell'unità che riempiono
+    schede_ids = set(df[sc.C_US])
+    if abb.poligoni_ereditati and sc.L_US in s.layers:
+        g_us = s.layers[sc.L_US]
+        geo = dict(zip(g_us[sc.F_US], g_us.geometry))
+        nuovi = []
+        for a, t, b in righe:
+            if t == sc.R_RIEMPIE and a in schede_ids and a not in geo and b in geo and a not in {x[0] for x in nuovi}:
+                nuovi.append((a, geo[b]))
+        if nuovi:
+            agg = gpd.GeoDataFrame({sc.F_US: [a for a, _ in nuovi], "poligono_di": "unità riempita"},
+                                   geometry=[g for _, g in nuovi], crs=g_us.crs)
+            s.layers[sc.L_US] = gpd.GeoDataFrame(pd.concat([g_us, agg], ignore_index=True), geometry="geometry",
+                                                 crs=g_us.crs)
+            poli_us = set(s.layers[sc.L_US][sc.F_US])
+            note.append(f"{len(nuovi)} unità senza pianta propria: usato il poligono dell'unità che riempiono")
+    if abb.solo_con_poligono:
+        prima = len(df)
+        df = df[df[sc.C_US].isin(poli_us | poli_usm)]
+        if prima - len(df):
+            note.append(f"{prima - len(df)} schede senza poligono escluse")
     for u in sorted(poli_us - set(df[sc.C_US])):
         note.append(f"US {u} ha un poligono ma nessuna scheda: aggiunta una scheda vuota")
     extra = sorted(poli_us - set(df[sc.C_US]))
     if extra:
-        df = pd.concat([df, pd.DataFrame({sc.C_US: extra, sc.C_TIPO: "positiva"})], ignore_index=True)
+        if abb.filtri:
+            # i filtri sulle schede tolgono anche i poligoni corrispondenti
+            s.layers[sc.L_US] = s.layers[sc.L_US][~s.layers[sc.L_US][sc.F_US].isin(extra)]
+            note[-len(extra):] = [f"{len(extra)} poligoni senza scheda (o con la scheda fuori dai filtri) esclusi"]
+            poli_us -= set(extra)
+        else:
+            df = pd.concat([df, pd.DataFrame({sc.C_US: extra, sc.C_TIPO: "positiva"})], ignore_index=True)
     s.tabelle[sc.S_US] = df
     if abb.foglio_usm:
-        du = tabs[abb.foglio_usm].rename(columns={v: k for k, v in abb.colonne_usm.items() if v != k})
+        du = _rinomina(tabs[abb.foglio_usm], abb.colonne_usm)
         du[sc.C_USM] = du[sc.C_USM].map(_intero)
         s.tabelle[sc.S_USM] = du[du[sc.C_USM].notna()].astype({sc.C_USM: int})
     elif poli_usm and sc.S_USM not in s.tabelle:
         s.tabelle[sc.S_USM] = pd.DataFrame({sc.C_USM: sorted(poli_usm)})
 
-    # ------------------------------------------------ rapporti
-    r = abb.rapporti or {"modo": "nessuno"}
-    righe = []
-    if r["modo"] == "foglio":
-        rdf = tabs[r["foglio"]]
-        a, t, b = r["colonne"]
-        for _, x in rdf.iterrows():
-            ua, ub = _intero(x[a]), _intero(x[b])
-            if ua is not None and ub is not None and pd.notna(x[t]):
-                righe.append((ua, _rapporto(x[t]), ub))
-        s.tabelle.pop(r["foglio"], None)
-    elif r["modo"] == "colonne":
-        src = tabs[r["foglio"]]
-        idcol = abb.colonne_us.get(sc.C_US)
-        for _, x in src.iterrows():
-            ua = _intero(x[idcol])
-            if ua is None:
-                continue
-            for col, rel in r["colonne"].items():
-                rel = _rapporto(rel)
-                v = x[col]
-                if v is None or (isinstance(v, float) and np.isnan(v)):
-                    continue
-                numeri = [_intero(v)] if isinstance(v, (int, float, np.integer, np.floating)) else \
-                    [int(b) for b in re.findall(r"\d+", str(v))]
-                for b in numeri:
-                    righe.append((ua, rel, b))
+    # ------------------------------------------------ rapporti: senza doppioni, senza autoriferimenti
+    tutte = set(df[sc.C_US]) | (set(s.tabelle[sc.S_USM][sc.C_USM]) if sc.S_USM in s.tabelle else set())
+    auto = [x for x in righe if x[0] == x[2]]
+    righe = [x for x in righe if x[0] != x[2]]
+    if auto:
+        note.append(f"{len(auto)} rapporti di un'unità con se stessa ignorati")
+    if abb.filtri or abb.solo_con_poligono:
+        fuori = [x for x in righe if x[0] not in tutte or x[2] not in tutte]
+        righe = [x for x in righe if x[0] in tutte and x[2] in tutte]
+        if fuori:
+            note.append(f"{len(fuori)} rapporti con unità escluse dai filtri tralasciati")
     s.tabelle[sc.S_RAPPORTI] = pd.DataFrame(righe, columns=[sc.C_US, "Rapporto", "US correlata"]).drop_duplicates()
+
+    # ------------------------------------------------ tabelle collegate (materiali, fasi, documentazione…)
+    for nome, tab in tabs.items():
+        if nome in usati:
+            continue
+        s.tabelle.setdefault(nome, tab)
+    for canon, spec in (collegati or {}).items():
+        nome = spec.get("foglio")
+        if nome not in tabs:
+            continue
+        mappa = spec.get("colonne") or _proponi_collegati({nome: tabs[nome]}, set()).get(canon, {}).get("colonne", {})
+        if not mappa:
+            mappa = {k: v for k, v in _mappa_alias(tabs[nome], canon).items()}
+        t = tabs[nome].rename(columns={v: k for k, v in mappa.items() if v and v != k})
+        chiave = "US/USM" if canon == sc.S_DOC else ("Fase" if canon == sc.S_FASI else "US")
+        if chiave in t.columns and canon != sc.S_FASI:
+            t[chiave] = t[chiave].map(_intero)
+            prima = len(t)
+            t = t[t[chiave].isin(tutte)]
+            if prima - len(t) and prima > 5 * max(len(t), 1):
+                note.append(f"«{nome}»: tenute le {len(t)} righe delle unità del progetto su {prima}")
+        for c in ("NR", "NMI", "Peso (g)", "Quota (m)"):
+            if c in t.columns:
+                t[c] = _misura(t[c], "m", c, nulli)
+        s.tabelle.pop(nome, None)
+        s.tabelle[canon] = t
+        note.append(f"Foglio «{nome}» letto come «{canon}»")
 
     # ------------------------------------------------ quote: US mancanti e tipi coerenti con la scheda
     if sc.L_QUOTE in s.layers:
@@ -836,6 +1507,8 @@ def applica(abb, log=None):
         neg = set(df.loc[df[sc.C_TIPO] == "negativa", sc.C_US])
         muri = poli_usm | (set(s.tabelle[sc.S_USM][sc.C_USM]) if sc.S_USM in s.tabelle else set())
         t = q[sc.F_TIPO_QUOTA].copy()
+        t[q[sc.F_US].isin(neg) & (t == "vertice")] = "orlo"          # il contorno di un taglio è il suo orlo
+        t[t == "vertice"] = "sup"
         t[q[sc.F_US].isin(neg) & t.isin(["sup", "inf"])] = "taglio"
         t[q[sc.F_US].isin(muri) & (t == "sup")] = "rasatura"
         t[q[sc.F_US].isin(muri) & (t == "inf")] = "fondazione"

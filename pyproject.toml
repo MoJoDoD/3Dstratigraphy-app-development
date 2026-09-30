@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stratigrafia3d"
-version = "0.3.0"
+version = "0.4.0"
 description = "Ricostruzione 3D delle unità stratigrafiche da documentazione di scavo 2D (GIS + Excel)"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -29,6 +29,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "stratigrafia3d.visualizzatore" = ["*.html"]
+"stratigrafia3d.ricette" = ["*.json"]
 "stratigrafia3d.app" = ["statici/*.html", "statici/vendor/*", "statici/fonts/*"]
 
 [tool.pytest.ini_options]

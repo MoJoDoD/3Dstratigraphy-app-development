@@ -101,6 +101,19 @@ def _pulisci(df):
     return df
 
 
+def nome_crs(crs):
+    """Nome leggibile di un sistema di riferimento (codice EPSG o WKT)."""
+    if not crs:
+        return "—"
+    try:
+        from pyproj import CRS
+        c = CRS.from_user_input(crs)
+        ep = c.to_epsg()
+        return f"{c.name} (EPSG:{ep})" if ep else c.name
+    except Exception:
+        return str(crs)[:60]
+
+
 class Scavo:
     """Tutti i dati di uno scavo: layer GIS, tabelle, modello 3D, parametri."""
 
@@ -161,9 +174,10 @@ class Scavo:
     def origine(self):
         """Origine locale (E0, N0, Z0): angolo SO dell'area e quota sotto il punto più basso."""
         if self._origine is None:
-            src = self.layers.get(sc.L_AREA)
+            # l'angolo delle US (il limite di scavo può essere molto più ampio dell'area documentata)
+            src = self.layers.get(sc.L_US)
             if src is None or src.empty:
-                src = self.layers[sc.L_US]
+                src = self.layers.get(sc.L_AREA)
             b = src.total_bounds
             if sc.L_QUOTE in self.layers and len(self.layers[sc.L_QUOTE]):
                 z0 = float(self.layers[sc.L_QUOTE].geometry.z.min())
@@ -464,7 +478,7 @@ class Scavo:
     def riepilogo(self):
         us = self.schede_us(); usm = self.schede_usm()
         righe = [f"Progetto: {self.meta.get('nome', '—')}",
-                 f"Sistema di riferimento: {self.crs or '—'}",
+                 f"Sistema di riferimento: {nome_crs(self.crs)}",
                  f"US: {len(us)}  USM: {len(usm)}  quote: {len(self.layers.get(sc.L_QUOTE, []))}",
                  f"Layer: {', '.join(sorted(self.layers))}",
                  f"Tabelle: {', '.join(sorted(self.tabelle))}"]

@@ -65,7 +65,8 @@ class Stato:
         d = dict(aperto=s is not None, percorso=self.percorso, modificato=self.modificato,
                  versione=__version__, versione_modello=self.versione_modello, recenti=leggi_recenti())
         if s is not None:
-            d.update(nome=s.meta.get("nome", "scavo"), riepilogo=s.riepilogo(), crs=s.crs,
+            from ..progetto import nome_crs
+            d.update(nome=s.meta.get("nome", "scavo"), riepilogo=s.riepilogo(), crs=nome_crs(s.crs),
                      ha_modello=s.modello is not None,
                      n_us=len(s.schede_us()), n_usm=len(s.schede_usm()),
                      note=list(getattr(s, "note_importazione", []) or []),
@@ -79,6 +80,7 @@ def _problemi(s):
 
 
 def _esamina(files):
+    files, note_file = importa.espandi(files)
     layers, tabelle = importa.esamina(files)
     tab = {}
     for f, fogli in tabelle.items():
@@ -86,7 +88,8 @@ def _esamina(files):
                           esempio=json.loads(df.head(5).to_json(orient="values", date_format="iso", default_handler=str)))
                   for n, df in fogli.items()}
     abb = importa.proponi(files)
-    return dict(layers=[asdict(l) for l in layers], tabelle=tab, raster=importa.esamina_raster(files),
+    abb.note = note_file + abb.note
+    return dict(files=files, layers=[asdict(l) for l in layers], tabelle=tab, raster=importa.esamina_raster(files),
                 abbinamento=asdict(abb))
 
 
@@ -177,6 +180,27 @@ class App:
             else:
                 esporta.visualizzatore(st.scavo, p, modo="offline")
             return dict(percorso=p)
+        if nome == "valori":
+            v, n = importa.valori_distinti(a["sorgente"], foglio=a.get("foglio"), colonna=a["colonna"],
+                                           layer=a.get("layer"))
+            prop = {}
+            if a.get("proponi") == "tipo":
+                prop = {x: importa._tipo_da_valore(x) for x, _ in v}
+            elif a.get("proponi") == "rapporto":
+                prop = {x: (importa._rapporto(x) if importa._rapporto(x) in importa.RAPPORTI_COLONNE else "")
+                        for x, _ in v}
+            return dict(valori=v, totale=n, proposte=prop)
+        if nome == "ricette":
+            return dict(ricette=importa.ricette_pronte())
+        if nome == "ricetta_applica":
+            abb = importa.Abbinamento.da_json(a["abbinamento"])
+            if a.get("pronta"):
+                ric = importa.carica_ricetta_pronta(a["pronta"])
+            else:
+                ric = importa.Abbinamento.carica_profilo(a["percorso"])
+            nuovo, note = importa.applica_ricetta(abb, ric)
+            nuovo.note = list(abb.note) + note
+            return dict(abbinamento=asdict(nuovo), note=note)
         if nome == "profilo_salva":
             p = a.get("percorso")
             abb = importa.Abbinamento.da_json(a["abbinamento"])

@@ -29,7 +29,7 @@ from .superficie import campionatore
 STRATEGIE = ["misurata", "profondita", "impilata", "schematica", "nessuna"]
 DESCRIZIONE = {
     "misurata": "quote o profili rilevati",
-    "profondita": "superficie di riferimento e profondità della scheda",
+    "profondita": "superficie di riferimento (o tetto delle unità tagliate) e profondità della scheda",
     "impilata": "posizione nella sequenza e spessore della scheda",
     "schematica": "valori tipici (profondità o spessore non registrati)",
     "nessuna": "non ricostruibile: servono quote o una superficie di riferimento",
@@ -61,8 +61,9 @@ def _bordo(geom, n_max=120, passo_min=0.25):
 
 
 def _griglia(geom, n=60, passo_min=0.25, distanza=0.0):
-    passo = max(passo_min, math.sqrt(max(geom.area, 1e-6) / n))
     x0, y0, x1, y1 = geom.bounds
+    # anche per forme lunghe e sottili (una strada, un fossato di km) la griglia resta di poche migliaia di punti
+    passo = max(passo_min, math.sqrt(max(geom.area, 1e-6) / n), math.sqrt(max((x1 - x0) * (y1 - y0), 1e-6) / 5000))
     xs, ys = np.meshgrid(np.arange(x0 + passo / 2, x1, passo), np.arange(y0 + passo / 2, y1, passo))
     P = np.c_[xs.ravel(), ys.ravel()]
     zona = geom.buffer(-distanza) if distanza > 0 else geom
@@ -107,6 +108,15 @@ def _rango(testo):
     for chiave, r in RANGO_RIEMPIMENTO:
         if chiave in t:
             return r
+    return None
+
+
+def _rango_scheda(r):
+    """Posizione tipica di un riempimento (più alto = più in basso) dal primo campo che la dice."""
+    for k in ("Definizione", sc.C_CATEGORIA, "Interpretazione"):
+        v = _rango(r.get(k))
+        if v is not None:
+            return v
     return 2
 
 
@@ -140,6 +150,17 @@ def stima_quote(scavo):
         for (x, y), zz in zip(xy, z):
             righe.append((u, tipo, float(x), float(y), float(zz)))
 
+    def _superficie_tagliata(u):
+        """Senza superficie di riferimento: l'orlo di un taglio sta sul tetto misurato delle unità che taglia."""
+        if u not in G:
+            return None
+        pts = [q[(q.us == v) & q.tipo.isin([sc.Q_SUP, sc.Q_RASATURA])][["x", "y", "z"]].to_numpy()
+               for v in G.successors(u) if G.edges[u, v]["t"] == sc.R_TAGLIA]
+        pts = np.vstack(pts) if pts else np.zeros((0, 3))
+        if len(pts) < 1:
+            return None
+        return Krig(pts, trend=len(pts) >= 8)
+
     # ---------------------------------------------------------------- tagli
     rif_taglio, prof_taglio = {}, {}
     for u in sorted(negativa & set(poly_us)):
@@ -158,7 +179,8 @@ def stima_quote(scavo):
             if alto is not None and len(fondo):
                 prof_taglio[u] = max(float(alto - fondo[:, 2].min()), 0.02)
             continue
-        if S is None:
+        Su = S if S is not None else _superficie_tagliata(u)
+        if Su is None:
             strategia[u] = "nessuna"
             continue
         d = _numero(schede_us[u].get(sc.C_PROFONDITA))
@@ -180,15 +202,15 @@ def stima_quote(scavo):
             w0 = float(min(0.6 * d, 0.9 * rin if rin > 0 else 0.3, 1.1))
         w0 = max(w0, 0.04)
         orlo = _bordo(g)
-        aggiungi(u, sc.Q_ORLO, orlo, S(orlo))
+        aggiungi(u, sc.Q_ORLO, orlo, Su(orlo))
         meta = _bordo(g.buffer(-w0 / 2), n_max=80, passo_min=0.2) if not g.buffer(-w0 / 2).is_empty else np.zeros((0, 2))
         if len(meta):
-            aggiungi(u, sc.Q_TAGLIO, meta, S(meta) - 0.5 * d)
+            aggiungi(u, sc.Q_TAGLIO, meta, Su(meta) - 0.5 * d)
         piano = np.vstack([base, _griglia(g, distanza=w0)]) if len(base) else _griglia(g, distanza=w0)
         if len(piano) == 0:
             piano = _punto_interno(g)
-        aggiungi(u, sc.Q_TAGLIO, piano, S(piano) - d)
-        rif_taglio[u], prof_taglio[u] = S, d
+        aggiungi(u, sc.Q_TAGLIO, piano, Su(piano) - d)
+        rif_taglio[u], prof_taglio[u] = Su, d
 
     # ---------------------------------------------------------------- riempimenti, per taglio
     positive = [u for u in sorted(poly_us) if u not in negativa and u in schede_us]
@@ -219,7 +241,7 @@ def stima_quote(scavo):
         if not nx.is_directed_acyclic_graph(H):
             H = nx.DiGraph(); H.add_nodes_from(F)
         # dall'alto: prima i rapporti "copre", poi il tipo di riempimento, poi il numero
-        chiave = lambda u: (_rango(schede_us[u].get("Definizione")), u)
+        chiave = lambda u: (_rango_scheda(schede_us[u]), u)
         ordine = list(nx.lexicographical_topological_sort(H, key=chiave))
         t = np.array([spessore(u) if spessore(u) and spessore(u) > 0 else np.nan for u in ordine], float)
         D = prof_taglio.get(c, P.profondita_predefinita)

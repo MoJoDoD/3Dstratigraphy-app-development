@@ -160,6 +160,9 @@ def ricostruisci(scavo, unita=None, log=None):
         area = geom.area
         area_max = float(np.clip(area / P.area_triangolo_fattore, P.area_triangolo_min, P.area_triangolo_max))
         passo = P.passo_bordo_piccole if area < 3 else (P.passo_bordo_medie if area < 20 else P.passo_bordo_grandi)
+        # unità molto grandi (carte archeologiche, aree estese): al massimo ~20 000 triangoli e 4 000 lati di bordo
+        area_max = max(area_max, area / 20000)
+        passo = max(passo, geom.length / 4000)
         V2, F = triangola(geom, passo=passo, area_max=area_max)
         if len(V2) == 0:
             continue

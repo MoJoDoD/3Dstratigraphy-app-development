@@ -5,7 +5,7 @@ poligoni in pianta, quote, profili di sezione (GeoPackage) e schede (Excel).
 
 Tappe completate: **1** (motore, riga di comando, formato `.scavo`) e **2** (app desktop con import
 guidato: si apre un rilievo reale, si abbinano i campi, si ricostruisce il 3D e si salva, senza codice).
-In corso la tappa **2.5** (import flessibile): la ricostruzione adattiva è pronta.
+In corso la tappa **2.5** (import flessibile): pronte la ricostruzione adattiva e le ricette.
 
 ## App su Windows
 
@@ -29,6 +29,28 @@ CSV di punti, Excel o CSV delle schede. Riconoscono da soli:
 - US negative dalla parola "taglio", spessori in centimetri, USM nello stesso foglio delle US;
 - archivi in inglese: context register (Context, Type, Thickness…), rapporti "fills", "covers",
   "cut by"…, livelli "top/bottom/cut/rim", fogli Phases, Finds, Samples, Documentation.
+
+## Ricette di importazione
+
+Una **ricetta** raccoglie tutte le scelte dell'importazione e si salva in un file `.json`, da riusare
+per un altro scavo dello stesso tipo o da condividere. Oltre a quale layer e quale colonna usare, dice
+come trasformare i dati:
+
+- **tabelle collegate**: più CSV o fogli insieme (un archivio relazionale esportato), con materiali,
+  campioni, fasi e documentazione agganciati al numero dell'unità;
+- **vocabolari**: come leggere i valori dell'archivio («Cut» = negativa, «fills» = riempie…);
+- **rapporti** da un foglio, da colonne («Copre», «Tagliato da»), da una colonna di testo
+  («copre 12, 15; taglia 20», anche il formato di pyArchInit) o da una colonna «padre» («Fill of»);
+- **unità di misura** di spessori e profondità, **valori nulli** (-9999, -99,99…);
+- **filtri**: un sito, un settore, un tipo di elemento di un archivio più grande;
+- **poligoni ereditati**: i riempimenti senza pianta propria usano il poligono del taglio;
+- **campi dai poligoni**: valori della scheda presi dagli attributi del layer (es. la profondità);
+- **quote dai vertici 3D** di poligoni rilevati con la stazione totale.
+
+Ricette pronte: **Framework Archaeology** (archivi di Stansted e Heathrow T5 così come si scaricano) e
+**pyArchInit** (database SpatiaLite; preparata sullo schema documentato, da verificare su un database
+reale). Si leggono anche archivi `.zip`, database SpatiaLite, CSV con geometrie in WKT e CSV in codifica
+Windows; per Access l'app indica come esportare le tabelle in CSV.
 
 ## Ricostruzione adattiva
 

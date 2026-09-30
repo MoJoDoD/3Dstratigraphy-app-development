@@ -104,6 +104,19 @@ table.t td.mot{min-width:230px}
 .box h3{margin:0;font-size:15px}
 .kv{display:grid;grid-template-columns:minmax(120px,40%) 1fr;gap:6px 10px;align-items:center;font-size:13px}
 .kv label{color:var(--muted)}
+.sel{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:5px 8px;font:inherit;max-width:340px}
+.filtri,.padri{display:grid;gap:8px}
+.fil{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:start;border:1px solid var(--line);border-radius:var(--r);padding:8px;background:var(--paper)}
+.fil select{border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:3px 5px;font:inherit;font-size:12.5px;min-width:0;width:100%}
+.fil select[multiple]{grid-column:1/3;min-height:84px}
+.fil .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1}
+.voc{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:4px 10px;align-items:center;font-size:13px;max-height:260px;overflow:auto}
+.voc code{font-family:var(--f-num);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.voc small{color:var(--muted)}
+.voc select{border:1px solid var(--line);background:var(--paper);border-radius:4px;padding:2px 5px;font:inherit;font-size:12.5px}
+.voc h4{grid-column:1/3;margin:6px 0 0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.chk{display:flex;gap:8px;align-items:flex-start;grid-column:1/3;color:var(--ink)!important}
+.chk input{width:auto!important;margin-top:3px}
 .kv select,.kv input{border:1px solid var(--line);background:var(--paper);border-radius:4px;padding:4px 6px;width:100%;min-width:0;font:inherit;color:inherit}
 .note{display:grid;gap:6px;margin:0 0 14px;padding:0;list-style:none}
 .note li{font-family:var(--f-read);font-size:14px;line-height:1.45;padding-left:16px;position:relative}
@@ -203,19 +216,23 @@ dialog .row{justify-content:flex-end;margin-top:12px}
         </div>
 
         <div id="s1">
-          <p class="lead">Aggiungi i file del rilievo (GeoPackage, shapefile, DXF, GeoJSON, CSV di punti), il file delle schede (Excel o CSV) e, se non hai quote per tutte le unità, un modello del terreno (GeoTIFF). Puoi anche caricare un profilo di abbinamento salvato da un progetto precedente dello stesso cantiere.</p>
+          <p class="lead">Aggiungi i file del rilievo (GeoPackage, SpatiaLite, shapefile, DXF, GeoJSON, CSV anche con geometrie, archivi .zip), le schede (Excel o più CSV collegati) e, se mancano le quote, un modello del terreno (GeoTIFF). Una <b>ricetta</b> ripete le scelte fatte per un archivio dello stesso tipo: ce ne sono di pronte, e ogni importazione si può salvare come ricetta.</p>
           <div class="flist" id="flist"></div>
           <div class="row">
             <button class="btn pri" id="bAggiungi">Aggiungi file…</button>
             <input type="text" id="percorsoFile" placeholder="…oppure incolla qui il percorso di un file e premi Invio" aria-label="Percorso di un file">
           </div>
-          <div class="row" style="margin-top:10px"><button class="btn" id="bProfilo">Carica profilo di abbinamento…</button><span class="mot" id="profInfo"></span></div>
+          <div class="row" style="margin-top:10px"><label for="selRicetta" class="mot" style="max-width:none">Ricetta</label><select id="selRicetta" class="sel"></select><button class="btn" id="bProfilo">Da file…</button><span class="mot" id="profInfo" style="max-width:60ch"></span></div>
           <div class="nav"><button class="btn" data-annulla>Annulla</button><button class="btn acc" id="n1">Esamina i file →</button></div>
         </div>
 
         <div id="s2" hidden>
           <p class="lead">Per ogni layer trovato indica a cosa serve. Le scelte sono già proposte in base a nomi, geometrie e valori; il motivo è scritto accanto. Correggi solo ciò che non torna.</p>
           <div class="tw"><table class="t" id="tLayer"></table></div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="box"><h3>Sistema di riferimento</h3><div class="kv"><label for="crsIn">Codice</label><input id="crsIn" type="text" placeholder="es. EPSG:32633"></div><p class="mot" id="crsInfo" style="margin:0"></p></div>
+            <div class="box"><h3>Filtri</h3><div id="filtri" class="filtri"></div><div class="row"><button class="btn" id="bFiltro">Aggiungi un filtro</button></div><p class="mot" style="margin:0">Per tenere solo una parte di un archivio più grande: un sito, un settore, un tipo di elemento.</p></div>
+          </div>
           <div class="nav"><button class="btn" data-vai="1">← File</button><button class="btn acc" id="n2">Schede e rapporti →</button></div>
         </div>
 
@@ -223,7 +240,11 @@ dialog .row{justify-content:flex-end;margin-top:12px}
           <p class="lead">Indica dove stanno le schede delle US e i rapporti stratigrafici. I rapporti possono stare in un foglio a sé (US · rapporto · US) oppure in colonne della scheda come «Copre», «Tagliato da».</p>
           <div class="grid2">
             <div class="box"><h3>Schede US</h3><div class="kv" id="kvUS"></div></div>
-            <div class="box"><h3>Rapporti stratigrafici</h3><div class="kv" id="kvRap"></div></div>
+            <div class="box"><h3>Rapporti stratigrafici</h3><div class="kv" id="kvRap"></div>
+              <div id="padri"></div><div class="row"><button class="btn" id="bPadre" title="Una colonna che indica l'unità riempita o coperta, come «Fill of» o «Riempie»">Aggiungi una colonna «padre»</button></div></div>
+            <div class="box"><h3>Vocabolari</h3><div id="voc"></div><p class="mot" style="margin:0">Come leggere i valori dell'archivio. Proposti dal programma, correggili se serve.</p></div>
+            <div class="box"><h3>Tabelle collegate</h3><div class="kv" id="kvColl"></div><p class="mot" style="margin:0">Righe collegate alle unità tramite il loro numero: si vedono nella scheda di ogni unità.</p></div>
+            <div class="box"><h3>Opzioni</h3><div class="kv" id="kvOpz"></div></div>
             <div class="box"><h3>Schede USM</h3><div class="kv" id="kvUSM"></div></div>
             <div class="box"><h3>Superficie di riferimento</h3><div class="kv" id="kvSup"></div>
               <p class="mot" style="margin:8px 0 0">Da qui partono le unità senza quote proprie: i tagli scendono della loro profondità, gli strati e i riempimenti si impilano con il loro spessore. Le unità con quote rilevate non cambiano.</p></div>
@@ -239,7 +260,7 @@ dialog .row{justify-content:flex-end;margin-top:12px}
           <div class="prob" id="prob"></div>
           <div class="nav">
             <button class="btn" data-vai="3">← Schede e rapporti</button>
-            <div class="row"><button class="btn" id="bSalvaProf">Salva profilo di abbinamento…</button><button class="btn acc" id="n4">Ricostruisci il 3D →</button></div>
+            <div class="row"><button class="btn" id="bSalvaProf">Salva come ricetta…</button><button class="btn acc" id="n4">Ricostruisci il 3D →</button></div>
           </div>
         </div>
       </div>
@@ -271,7 +292,7 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const base=p=>String(p||"").split(/[\\/]/).pop();
 let S={aperto:false};          // stato dal server
 let W=null;                    // procedura: {files, esame, abb}
-let profilo=null;
+let ricette={};
 
 async function api(nome,dati){
   const r=await fetch("/api/"+nome,{method:"POST",headers:{"Content-Type":"application/json","X-Gettone":GETTONE},body:JSON.stringify(dati||{})});
@@ -360,7 +381,7 @@ const TIPI=["sup","inf","taglio","orlo","rasatura","fondazione"];
 const GEO={poligono:"poligoni",linea:"linee",punto:"punti",testo:"testi",misto:"misto",nessuna:"—"};
 
 function nuovo(files){
-  W={files:files||[],esame:null,abb:null,passo:1}; profilo=null; $("profInfo").textContent="";
+  W={files:files||[],esame:null,abb:null,passo:1,ricetta:null}; $("profInfo").textContent=""; $("selRicetta").value="";
   mostra("vWizard"); passo(1); disegnaFile();
 }
 function passo(n){
@@ -379,19 +400,11 @@ function aggiungiFile(ps){ ps.forEach(p=>{ if(p&&!W.files.includes(p)) W.files.p
 async function esamina(){
   const r=await lavoro("Lettura dei file…",()=>api("esamina",{files:W.files}));
   W.esame=r; W.abb=r.abbinamento;
-  if(profilo) applicaProfilo();
+  if(W.ricetta){
+    const q=await lavoro("Applicazione della ricetta…",()=>api("ricetta_applica",{abbinamento:W.abb,...W.ricetta}));
+    W.abb=q.abbinamento; avviso(q.note.join(" · "));
+  }
   disegnaLayer(); passo(2);
-}
-function applicaProfilo(){
-  // stesso nome di file e di layer: si riprendono ruolo e campi scelti la volta precedente
-  let n=0;
-  W.abb.layers.forEach(l=>{ const p=profilo.layers.find(x=>base(x.sorgente)===base(l.sorgente)&&x.layer===l.layer);
-    if(p){ Object.assign(l,{...p,sorgente:l.sorgente}); n++ } });
-  ["foglio_us","colonne_us","foglio_usm","colonne_usm","rapporti","crs"].forEach(k=>{ if(profilo[k]!=null) W.abb[k]=profilo[k] });
-  if(profilo.superficie){ const sp={...profilo.superficie};
-    if(sp.tipo==="raster"){ const f=W.files.find(x=>base(x)===base(sp.sorgente||"")); if(f) sp.sorgente=f; else delete sp.sorgente }
-    if(sp.tipo!=="raster"||sp.sorgente) W.abb.superficie=sp }
-  avviso(`Profilo applicato a ${n} layer`);
 }
 function infoLayer(l){ return W.esame.layers.find(x=>x.sorgente===l.sorgente&&x.layer===l.layer) }
 function opzioni(lista,sel){ return lista.map(([v,t])=>`<option value="${esc(v)}" ${v===sel?"selected":""}>${esc(t)}</option>`).join("") }
@@ -413,7 +426,7 @@ function disegnaLayer(){
       <td><span class="geo">${li.n} ${GEO[li.geometria]||li.geometria}${li.ha_z?" 3D":""}</span></td>
       <td><select data-k="ruolo" aria-label="Uso del layer">${opzioni(RUOLI,l.ruolo)}</select></td>
       <td>${["us","usm","quote","profili","reperti","campioni","sezioni_disegno"].includes(l.ruolo)?`<select data-k="unita" aria-label="Numero di US">${opzioni(usOpt,usSel)}</select>`:"—"}</td>
-      <td>${isQ?`<select data-k="quota" aria-label="Quota">${opzioni(qOpt,l.quota_da)}</select>`:"—"}</td>
+      <td>${isQ?`<select data-k="quota" aria-label="Quota">${opzioni(qOpt,l.quota_da)}</select>`:(["us","usm"].includes(l.ruolo)&&li.ha_z?`<select data-k="vertici" aria-label="Quote dai vertici">${opzioni([["no","non usare la Z"],["si","vertici 3D come quote"]],l.quote_vertici?"si":"no")}</select>`:"—")}</td>
       <td>${isQ||isP?`<select data-k="tipo" aria-label="Tipo di quota">${opzioni(tOpt,tSel)}</select>`:"—"}</td>
       <td class="mot">${esc(l.motivo)}</td></tr>`;
   });
@@ -423,14 +436,65 @@ function disegnaLayer(){
     if(s.dataset.k==="ruolo"){ l.ruolo=v; if(v==="quote"&&!l.tipo_predefinito&&!l.campo_tipo) l.tipo_predefinito="sup"; disegnaLayer(); return }
     if(s.dataset.k==="unita"){ l.campo_unita=v.startsWith("c:")?v.slice(2):null; l.testi_unita=v.startsWith("t:")?v.slice(2):null }
     if(s.dataset.k==="quota") l.quota_da=v;
+    if(s.dataset.k==="vertici") l.quote_vertici=v==="si";
     if(s.dataset.k==="tipo"){ l.campo_tipo=v.startsWith("c:")?v.slice(2):null; l.tipo_predefinito=v.startsWith("f:")?v.slice(2):null }
     l.motivo="scelto a mano";
     s.closest("tr").querySelector(".mot").textContent=l.motivo;
   });
+  // sistema di riferimento
+  const crsL=[...new Set(W.esame.layers.map(x=>x.crs).filter(Boolean))];
+  $("crsIn").value=W.abb.crs||"";
+  $("crsInfo").textContent=crsL.length?(crsL.length>1?"I layer usano sistemi diversi: si convertono in quello indicato.":"Letto dai file."):
+    "I layer non dichiarano un sistema di riferimento: indicalo se lo conosci (per esempio EPSG:3003, EPSG:32633, EPSG:27700).";
+  $("crsIn").onchange=e=>{W.abb.crs=e.target.value.trim()||null};
+  disegnaFiltri();
 }
 
-const CANON_US=[["US","Numero di US"],["Tipo","Positiva / negativa"],["Categoria","Categoria"],["Definizione","Definizione"],["Spessore medio stimato (m)","Spessore"],["Spessore/profondità max (m)","Profondità (tagli)"],["Margini","Margini (netti / rastremati)"],["Fase","Fase"],["Colore HEX","Colore (#rrggbb)"]];
+// ------------------------------------------------------------------ filtri
+function sorgentiFiltro(){
+  const out=W.abb.layers.filter(l=>["us","usm","quote","fondi","area","sezioni"].includes(l.ruolo)).map(l=>({k:"layer:"+l.layer,t:"layer «"+l.layer+"»",dove:"layer",layer:l.layer,sorgente:l.sorgente,campi:(infoLayer(l)||{campi:[]}).campi}));
+  const T=tabelleTutte(), f=W.abb.foglio_us;
+  if(f&&T[f]) out.push({k:"scheda",t:"schede US «"+f+"»",dove:"scheda",sorgente:T[f].file,foglio:T[f].nome,campi:T[f].colonne});
+  return out;
+}
+function disegnaFiltri(){
+  W.abb.filtri=W.abb.filtri||[];
+  const S=sorgentiFiltro();
+  $("filtri").innerHTML=W.abb.filtri.map((f,i)=>{
+    const k=f.dove==="layer"?"layer:"+f.layer:"scheda", s=S.find(x=>x.k===k);
+    const campi=s?s.campi:[];
+    return `<div class="fil" data-i="${i}"><select data-f="src" aria-label="Dove">${opzioni(S.map(x=>[x.k,x.t]),k)}</select>
+      <select data-f="col" aria-label="Campo">${opzioni([["","— campo —"],...campi.map(c=>[c,c])],f.colonna||"")}</select>
+      <button class="x" data-f="rm" aria-label="Togli il filtro">×</button>
+      <select data-f="val" multiple aria-label="Valori da tenere">${(f._valori||f.valori||[]).map(v=>{const val=Array.isArray(v)?v[0]:v, n=Array.isArray(v)?` (${v[1]})`:"";return `<option value="${esc(val)}" ${(f.valori||[]).includes(val)?"selected":""}>${esc(val)}${n}</option>`}).join("")}</select>
+      <select data-f="modo" aria-label="Tieni o escludi"><option value="tieni" ${f.escludi?"":"selected"}>tieni questi valori</option><option value="escludi" ${f.escludi?"selected":""}>escludi questi valori</option></select></div>`}).join("")||`<span class="mot">Nessun filtro: si importa tutto.</span>`;
+  $("filtri").querySelectorAll(".fil").forEach(d=>{
+    const f=W.abb.filtri[+d.dataset.i];
+    d.querySelector('[data-f="rm"]').onclick=()=>{W.abb.filtri.splice(+d.dataset.i,1);disegnaFiltri()};
+    d.querySelector('[data-f="src"]').onchange=e=>{const s=S.find(x=>x.k===e.target.value); Object.assign(f,{dove:s.dove,layer:s.layer||null,colonna:null,valori:[],_valori:[]}); disegnaFiltri()};
+    d.querySelector('[data-f="col"]').onchange=async e=>{ f.colonna=e.target.value; f.valori=[]; f._valori=[];
+      const s=S.find(x=>x.k===(f.dove==="layer"?"layer:"+f.layer:"scheda"));
+      if(f.colonna&&s){ const r=await api("valori",{sorgente:s.sorgente,layer:s.dove==="layer"?s.layer:null,foglio:s.foglio,colonna:f.colonna}); f._valori=r.valori }
+      disegnaFiltri() };
+    d.querySelector('[data-f="val"]').onchange=e=>{f.valori=[...e.target.selectedOptions].map(o=>o.value)};
+    d.querySelector('[data-f="modo"]').onchange=e=>{f.escludi=e.target.value==="escludi"};
+  });
+}
+
+// ------------------------------------------------------------------ schede, rapporti, vocabolari
+const CANON_US=[["US","Numero di US"],["Tipo","Positiva / negativa"],["Categoria","Categoria"],["Definizione","Definizione"],["Descrizione","Descrizione"],["Interpretazione","Interpretazione"],["Spessore medio stimato (m)","Spessore"],["Spessore/profondità max (m)","Profondità (tagli)"],["Margini","Margini (netti / rastremati)"],["Fase","Fase"],["Data scavo","Data di scavo"],["Datazione da","Datazione da (anno)"],["Datazione a","Datazione a (anno)"],["Colore HEX","Colore (#rrggbb)"]];
+const MISURE=[["auto","unità: automatica"],["m","metri"],["cm","centimetri"],["mm","millimetri"]];
+const REL_IT=["copre","coperto da","taglia","tagliato da","riempie","riempito da","si appoggia a","gli si appoggia","si lega a","uguale a"];
+const COLLEGATI=[["Materiali","Materiali e reperti"],["Fasi","Fasi"],["Documentazione","Documentazione (foto, disegni)"],["Campioni","Campioni"]];
 const TIPI_SUP=[["nessuna","nessuna: solo le quote rilevate"],["costante","piano a quota costante"],["raster","modello del terreno (GeoTIFF)"],["quote","interpolata dalle quote rilevate"]];
+function tabelleTutte(){
+  // stessi nomi usati dal programma: il foglio col nome del file se due file hanno fogli omonimi
+  const out={}, files=[W.abb.tabella,...(W.abb.tabelle_extra||[])].filter(Boolean);
+  files.forEach(f=>Object.entries(W.esame.tabelle[f]||{}).forEach(([n,t])=>{ const k=out[n]?base(f).replace(/\.[^.]+$/,"")+" · "+n:n; out[k]={...t,file:f,nome:n} }));
+  return out;
+}
+function fogli(){ return tabelleTutte() }
+function colonne(f){ return (fogli()[f]||{}).colonne||[] }
 function disegnaSuperficie(){
   const a=W.abb; a.superficie=a.superficie||{tipo:"nessuna"}; const s=a.superficie;
   const rs=Object.entries(W.esame.raster||{});
@@ -451,16 +515,66 @@ function disegnaSuperficie(){
   on("supR",e=>{a.superficie.sorgente=e.target.value; disegnaSuperficie()});
   on("supAbb",e=>{a.superficie.abbassa=parseFloat(e.target.value)||0});
 }
-function fogli(){ return W.abb.tabella?(W.esame.tabelle[W.abb.tabella]||{}):{} }
-function colonne(f){ return (fogli()[f]||{}).colonne||[] }
+async function caricaVocabolario(tipo){
+  // valori distinti della colonna del tipo o dei rapporti, con la proposta del programma
+  const a=W.abb, T=fogli(); let f,c;
+  if(tipo==="tipo"){ f=a.foglio_us; c=a.colonne_us.Tipo }
+  else { const r=a.rapporti||{}; if(r.modo!=="foglio"||!r.foglio||!(r.colonne||[])[1]) { delete (a.vocabolari||{}).rapporto; disegnaVocabolari(); return } f=r.foglio; c=r.colonne[1] }
+  if(!f||!c||!T[f]){ if(a.vocabolari) delete a.vocabolari[tipo]; disegnaVocabolari(); return }
+  const r=await api("valori",{sorgente:T[f].file,foglio:T[f].nome,colonna:c,proponi:tipo});
+  a.vocabolari=a.vocabolari||{};
+  const vecchio=a.vocabolari[tipo]||{};
+  a.vocabolari[tipo]=Object.fromEntries(r.valori.map(([v])=>[v,v in vecchio?vecchio[v]:r.proposte[v]]));
+  W.conteggi=W.conteggi||{}; W.conteggi[tipo]=Object.fromEntries(r.valori);
+  disegnaVocabolari();
+}
+function disegnaVocabolari(){
+  const v=W.abb.vocabolari||{}, n=(W.conteggi||{});
+  let h="";
+  if(v.tipo&&Object.keys(v.tipo).length){ h+=`<h4>Tipo di unità</h4>`+Object.entries(v.tipo).map(([k,x])=>`<code title="${esc(k)}">${esc(k)} <small>${(n.tipo||{})[k]??""}</small></code><select data-voc="tipo" data-k="${esc(k)}">${opzioni([["positiva","positiva (strato)"],["negativa","negativa (taglio)"]],x)}</select>`).join("") }
+  if(v.rapporto&&Object.keys(v.rapporto).length){ h+=`<h4>Rapporti</h4>`+Object.entries(v.rapporto).map(([k,x])=>`<code title="${esc(k)}">${esc(k)} <small>${(n.rapporto||{})[k]??""}</small></code><select data-voc="rapporto" data-k="${esc(k)}">${opzioni([["","— ignora —"],...REL_IT.map(r=>[r,r])],x||"")}</select>`).join("") }
+  $("voc").innerHTML=h?`<div class="voc">${h}</div>`:`<span class="mot">Nessun valore da tradurre: il tipo di unità e i rapporti sono già nei termini del programma, oppure mancano.</span>`;
+  $("voc").querySelectorAll("[data-voc]").forEach(s=>s.onchange=()=>{W.abb.vocabolari[s.dataset.voc][s.dataset.k]=s.value});
+}
+function disegnaPadri(){
+  const a=W.abb; a.rapporti_extra=a.rapporti_extra||[]; const T=fogli(), fo=Object.keys(T);
+  $("padri").innerHTML=a.rapporti_extra.length?`<div class="padri">`+a.rapporti_extra.map((e,i)=>`<div class="fil" data-i="${i}">
+      <select data-p="foglio" aria-label="Foglio">${opzioni(fo.map(f=>[f,f]),e.foglio)}</select>
+      <select data-p="colonna" aria-label="Colonna">${opzioni([["","— colonna —"],...colonne(e.foglio).map(c=>[c,c])],e.colonna||"")}</select>
+      <button class="x" data-p="rm" aria-label="Togli">×</button>
+      <select data-p="rapporto" aria-label="Rapporto" style="grid-column:1/3">${opzioni(REL_IT.map(r=>[r,"l'unità della riga "+r+" l'unità indicata"]),e.rapporto||"riempie")}</select></div>`).join("")+`</div>`:"";
+  $("padri").querySelectorAll(".fil").forEach(d=>{ const e=a.rapporti_extra[+d.dataset.i];
+    d.querySelector('[data-p="rm"]').onclick=()=>{a.rapporti_extra.splice(+d.dataset.i,1);disegnaPadri()};
+    d.querySelector('[data-p="foglio"]').onchange=x=>{e.foglio=x.target.value; e.colonna=null; e.colonna_unita=e.foglio===a.foglio_us?a.colonne_us.US:null; disegnaPadri()};
+    d.querySelector('[data-p="colonna"]').onchange=x=>{e.colonna=x.target.value};
+    d.querySelector('[data-p="rapporto"]').onchange=x=>{e.rapporto=x.target.value};
+  });
+}
+function disegnaCollegati(){
+  const a=W.abb, fo=Object.keys(fogli()); a.fogli_collegati=a.fogli_collegati||{};
+  $("kvColl").innerHTML=COLLEGATI.map(([k,t])=>`<label for="co_${k}">${esc(t)}</label><select id="co_${k}" data-co="${k}">${opzioni([["","—"],...fo.filter(f=>f!==a.foglio_us).map(f=>[f,f])],(a.fogli_collegati[k]||{}).foglio||"")}</select>`).join("");
+  $("kvColl").querySelectorAll("[data-co]").forEach(s=>s.onchange=()=>{ const k=s.dataset.co;
+    if(s.value) a.fogli_collegati[k]={foglio:s.value,colonne:null}; else delete a.fogli_collegati[k] });
+}
+function disegnaOpzioni(){
+  const a=W.abb;
+  $("kvOpz").innerHTML=`<label class="chk"><input type="checkbox" id="opEre" ${a.poligoni_ereditati?"checked":""}> Le unità senza pianta propria (riempimenti) usano il poligono dell'unità che riempiono</label>
+    <label class="chk"><input type="checkbox" id="opSolo" ${a.solo_con_poligono?"checked":""}> Tieni solo le unità che hanno una pianta</label>
+    <label for="opNulli">Valori «vuoti»</label><input id="opNulli" type="text" value="${esc((a.valori_nulli||[]).join("; "))}" title="Numeri usati nell'archivio per dire «nessun valore», per esempio -9999 o -99,99">`;
+  $("opEre").onchange=e=>{a.poligoni_ereditati=e.target.checked};
+  $("opSolo").onchange=e=>{a.solo_con_poligono=e.target.checked};
+  $("opNulli").onchange=e=>{a.valori_nulli=e.target.value.split(/[;\s]+/).map(x=>parseFloat(x.replace(",","."))).filter(x=>!isNaN(x))};
+}
 function disegnaSchede(){
   const a=W.abb, tabFiles=Object.keys(W.esame.tabelle);
   const fo=Object.keys(fogli());
-  let h=`<label for="selTab">File</label><select id="selTab">${opzioni([["","nessuno: schede dai poligoni"],...tabFiles.map(f=>[f,base(f)])],a.tabella||"")}</select>`;
+  let h=`<label for="selTab">File principale</label><select id="selTab">${opzioni([["","nessuno: schede dai poligoni"],...tabFiles.map(f=>[f,base(f)])],a.tabella||"")}</select>`;
   if(a.tabella){
+    if((a.tabelle_extra||[]).length) h+=`<label>Altri file</label><details class="mot"><summary>${a.tabelle_extra.length} file collegati</summary>${a.tabelle_extra.map(f=>esc(base(f))).join(", ")}</details>`;
     h+=`<label for="selFUS">Foglio</label><select id="selFUS">${opzioni([["","—"],...fo.map(f=>[f,f])],a.foglio_us||"")}</select>`;
     const cols=[["","—"],...colonne(a.foglio_us).map(c=>[c,c])];
-    CANON_US.forEach(([k,t])=>h+=`<label for="cu_${k}">${esc(t)}</label><select id="cu_${k}" data-cu="${esc(k)}">${opzioni(cols,a.colonne_us[k]||"")}</select>`);
+    CANON_US.forEach(([k,t])=>{ h+=`<label for="cu_${k}">${esc(t)}</label><select id="cu_${k}" data-cu="${esc(k)}">${opzioni(cols,a.colonne_us[k]||"")}</select>`;
+      if(k==="Spessore medio stimato (m)"||k==="Spessore/profondità max (m)") h+=`<label for="um_${k}" class="mot">…misurata in</label><select id="um_${k}" data-um="${esc(k)}">${opzioni(MISURE,(a.unita_misura||{})[k]||"auto")}</select>` });
   }
   $("kvUS").innerHTML=h;
   // USM
@@ -470,34 +584,39 @@ function disegnaSchede(){
   $("kvUSM").innerHTML=u;
   // rapporti
   const r=a.rapporti||{modo:"nessuno"};
-  let rp=`<label for="selRM">Dove sono</label><select id="selRM">${opzioni([["foglio","in un foglio a sé"],["colonne","nelle colonne della scheda US"],["nessuno","nessun rapporto"]],r.modo)}</select>`;
+  let rp=`<label for="selRM">Dove sono</label><select id="selRM">${opzioni([["foglio","in un foglio a sé (US · rapporto · US)"],["colonne","in colonne della scheda US («Copre», «Taglia»…)"],["testo","in una colonna di testo («copre 12, 15; taglia 20»)"],["nessuno","solo le colonne «padre» qui sotto, o nessuno"]],r.modo)}</select>`;
   if(r.modo==="foglio"){
     rp+=`<label for="selRF">Foglio</label><select id="selRF">${opzioni([["","—"],...fo.map(f=>[f,f])],r.foglio||"")}</select>`;
     const cols=[["","—"],...colonne(r.foglio).map(c=>[c,c])];
     ["Prima US","Rapporto","Seconda US"].forEach((t,i)=>rp+=`<label for="rc${i}">${t}</label><select id="rc${i}" data-rc="${i}">${opzioni(cols,(r.colonne||[])[i]||"")}</select>`);
   } else if(r.modo==="colonne"){
-    const REL=["copre","coperto da","taglia","tagliato da","riempie","riempito da","si appoggia a","gli si appoggia","si lega a","uguale a"];
     const cols=colonne(a.foglio_us);
-    rp+=cols.filter(c=>REL.includes(c.toLowerCase().trim())||(r.colonne||{})[c]).map(c=>`<label>${esc(c)}</label><span>${esc((r.colonne||{})[c]||"")}</span>`).join("")||"<span class='mot'>Nessuna colonna riconosciuta</span>";
+    rp+=cols.filter(c=>REL_IT.includes(c.toLowerCase().trim())||(r.colonne||{})[c]).map(c=>`<label>${esc(c)}</label><span>${esc((r.colonne||{})[c]||"")}</span>`).join("")||"<span class='mot'>Nessuna colonna riconosciuta</span>";
+  } else if(r.modo==="testo"){
+    rp+=`<label for="selRT">Colonna</label><select id="selRT">${opzioni([["","—"],...colonne(a.foglio_us).map(c=>[c,c])],r.colonna||"")}</select>`;
   }
   $("kvRap").innerHTML=rp;
-  disegnaSuperficie();
+  disegnaPadri(); disegnaVocabolari(); disegnaCollegati(); disegnaOpzioni(); disegnaSuperficie();
   // anteprima
   const f=fogli()[a.foglio_us];
   $("tPrev").innerHTML=f?`<thead><tr>${f.colonne.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${f.esempio.map(r=>`<tr>${r.map(v=>`<td>${esc(v==null?"":String(v).slice(0,60))}</td>`).join("")}</tr>`).join("")}</tbody>`:`<tbody><tr><td class="mot">Nessun foglio scelto.</td></tr></tbody>`;
   // eventi
   const on=(id,fn)=>{const e=$(id); if(e) e.onchange=fn};
-  on("selTab",e=>{a.tabella=e.target.value||null; a.foglio_us=null; a.colonne_us={}; a.foglio_usm=null; a.colonne_usm={}; a.rapporti={modo:"nessuno"}; disegnaSchede()});
+  on("selTab",e=>{a.tabella=e.target.value||null; a.tabelle_extra=tabFiles.filter(x=>x!==a.tabella); a.foglio_us=null; a.colonne_us={}; a.foglio_usm=null; a.colonne_usm={}; a.rapporti={modo:"nessuno"}; a.rapporti_extra=[]; disegnaSchede()});
   on("selFUS",e=>{a.foglio_us=e.target.value||null; a.colonne_us={}; disegnaSchede()});
-  $("kvUS").querySelectorAll("[data-cu]").forEach(s=>s.onchange=()=>{ if(s.value) a.colonne_us[s.dataset.cu]=s.value; else delete a.colonne_us[s.dataset.cu] });
+  $("kvUS").querySelectorAll("[data-cu]").forEach(s=>s.onchange=()=>{ if(s.value) a.colonne_us[s.dataset.cu]=s.value; else delete a.colonne_us[s.dataset.cu];
+    if(s.dataset.cu==="Tipo") caricaVocabolario("tipo") });
+  $("kvUS").querySelectorAll("[data-um]").forEach(s=>s.onchange=()=>{ a.unita_misura=a.unita_misura||{}; a.unita_misura[s.dataset.um]=s.value });
   on("selFUSM",e=>{a.foglio_usm=e.target.value||null; a.colonne_usm={}; disegnaSchede()});
   on("cm_USM",e=>{a.colonne_usm.USM=e.target.value});
   on("selRM",e=>{ const m=e.target.value;
-    if(m==="colonne"){ const REL=["copre","coperto da","taglia","tagliato da","riempie","riempito da","si appoggia a","gli si appoggia","si lega a","uguale a"];
-      const c={}; colonne(a.foglio_us).forEach(x=>{const k=x.toLowerCase().trim(); if(REL.includes(k)) c[x]=k}); a.rapporti={modo:m,foglio:a.foglio_us,colonne:c} }
-    else a.rapporti={modo:m,foglio:null,colonne:[]}; disegnaSchede() });
+    if(m==="colonne"){ const c={}; colonne(a.foglio_us).forEach(x=>{const k=x.toLowerCase().trim(); if(REL_IT.includes(k)) c[x]=k}); a.rapporti={modo:m,foglio:a.foglio_us,colonne:c} }
+    else if(m==="testo") a.rapporti={modo:m,foglio:a.foglio_us,colonna:null,colonna_unita:a.colonne_us.US};
+    else a.rapporti={modo:m,foglio:null,colonne:[]};
+    disegnaSchede(); caricaVocabolario("rapporto") });
   on("selRF",e=>{a.rapporti.foglio=e.target.value; a.rapporti.colonne=[]; disegnaSchede()});
-  $("kvRap").querySelectorAll("[data-rc]").forEach(s=>s.onchange=()=>{a.rapporti.colonne=a.rapporti.colonne||[];a.rapporti.colonne[+s.dataset.rc]=s.value});
+  on("selRT",e=>{a.rapporti.colonna=e.target.value});
+  $("kvRap").querySelectorAll("[data-rc]").forEach(s=>s.onchange=()=>{a.rapporti.colonne=a.rapporti.colonne||[];a.rapporti.colonne[+s.dataset.rc]=s.value; if(s.dataset.rc==="1") caricaVocabolario("rapporto")});
 }
 
 async function importaOra(){
@@ -533,14 +652,21 @@ $("cDemo").onclick=async()=>{ if(!await perdite()) return;
   const r=await lavoro("Creazione dello scavo dimostrativo…",()=>api("demo")); nuovo(r.files) };
 $("bAggiungi").onclick=async()=>aggiungiFile(await scegli("apri",["dati"],true,null,"Aggiungi file"));
 $("percorsoFile").onkeydown=e=>{ if(e.key==="Enter"){ aggiungiFile([e.target.value.trim()]); e.target.value="" } };
-$("bProfilo").onclick=async()=>{ const r=await scegli("apri",["json"],false,null,"Profilo di abbinamento"); if(!r[0]) return;
-  profilo=(await api("profilo_carica",{percorso:r[0]})).abbinamento; $("profInfo").textContent="Profilo: "+base(r[0]) };
-$("bSalvaProf").onclick=async()=>{ const r=await scegli("salva",["json"],false,"abbinamento.json","Salva profilo"); if(!r[0]) return;
-  await api("profilo_salva",{percorso:r[0],abbinamento:W.abb}); avviso("Profilo salvato: "+base(r[0])) };
+$("bProfilo").onclick=async()=>{ const r=await scegli("apri",["json"],false,null,"Ricetta di importazione"); if(!r[0]) return;
+  W.ricetta={percorso:r[0]}; $("selRicetta").value=""; $("profInfo").textContent="Ricetta da file: "+base(r[0]) };
+$("selRicetta").onchange=e=>{ const k=e.target.value; W.ricetta=k?{pronta:k}:null; $("profInfo").textContent=k?(ricette[k]||{}).descrizione||"":"" };
+$("bSalvaProf").onclick=async()=>{ const r=await scegli("salva",["json"],false,"ricetta.json","Salva la ricetta"); if(!r[0]) return;
+  W.abb.nome=W.abb.nome||base(r[0]).replace(/\.json$/i,"");
+  await api("profilo_salva",{percorso:r[0],abbinamento:W.abb}); avviso("Ricetta salvata: "+base(r[0])) };
+api("ricette").then(r=>{ ricette=r.ricette; $("selRicetta").innerHTML=opzioni([["","nessuna: proposta automatica"],...Object.entries(ricette).map(([k,v])=>[k,v.nome])],"") }).catch(()=>{});
 document.querySelectorAll("[data-annulla]").forEach(b=>b.onclick=()=>{ W=null; S.aperto&&S.ha_modello?vaiModello():mostra("vHome") });
 document.querySelectorAll("[data-vai]").forEach(b=>b.onclick=()=>passo(+b.dataset.vai));
 $("n1").onclick=()=>esamina().catch(()=>{});
 $("n2").onclick=()=>{ disegnaSchede(); passo(3) };
+$("bFiltro").onclick=()=>{ const S=sorgentiFiltro(); if(!S.length){ avviso("Scegli prima un layer di US",true); return }
+  W.abb.filtri=W.abb.filtri||[]; const s=S[0]; W.abb.filtri.push({dove:s.dove,layer:s.layer||null,colonna:null,valori:[]}); disegnaFiltri() };
+$("bPadre").onclick=()=>{ const a=W.abb; if(!a.foglio_us){ avviso("Scegli prima il foglio delle schede",true); return }
+  a.rapporti_extra=a.rapporti_extra||[]; a.rapporti_extra.push({foglio:a.foglio_us,colonna:null,rapporto:"riempie",colonna_unita:a.colonne_us.US}); disegnaPadri() };
 $("n3").onclick=()=>importaOra().catch(()=>{});
 $("n4").onclick=()=>ricostruisciOra($("n4").dataset.forza==="1");
 addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){ e.preventDefault(); salva(e.shiftKey) } });

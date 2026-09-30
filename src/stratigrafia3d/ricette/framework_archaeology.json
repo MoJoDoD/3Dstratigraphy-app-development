@@ -1,0 +1,48 @@
+{
+ "nome": "Framework Archaeology (Stansted, Heathrow T5)",
+ "descrizione": "Archivi digitali di Framework Archaeology così come si scaricano: pianta degli interventi (Stansted.shp o «T5 Volume 2.shp»), ContextData.csv e le altre tabelle CSV, il modello del terreno. Le quote non ci sono: i tagli scendono della profondità registrata dal terreno abbassato di 30 cm (arativo); i riempimenti prendono il poligono del loro intervento. Conviene filtrare per SITECODE.",
+ "layers": [
+  {"sorgente": "*", "layer": "stansted", "ruolo": "us", "campo_unita": "CONTEXT_ID",
+   "campi_scheda": {"Spessore/profondità max (m)": "DEPTH"}},
+  {"sorgente": "*", "layer": "t5 volume 2", "ruolo": "us", "campo_unita": "CONTEXT_ID",
+   "campi_scheda": {"Spessore/profondità max (m)": "DEPTH"}},
+  {"sorgente": "*", "layer": "excavations", "ruolo": "area"},
+  {"sorgente": "*", "layer": "sites", "ruolo": "area"},
+  {"sorgente": "*", "layer": "hachures", "ruolo": "fondi"},
+  {"sorgente": "*", "layer": "sectionlines", "ruolo": "sezioni", "campo_sezione": "SECTION_ID"},
+  {"sorgente": "*", "layer": "sections", "ruolo": "sezioni", "campo_sezione": "SECTION_ID"},
+  {"sorgente": "*", "layer": "*", "ruolo": "ignora"}
+ ],
+ "foglio_us": "ContextData",
+ "colonne_us": {
+  "US": "Context Number",
+  "Tipo": "Context Type",
+  "Definizione": "Interpretation",
+  "Descrizione": "Brief Description",
+  "Interpretazione": "Context Comments",
+  "Spessore medio stimato (m)": "Context Depth (m)",
+  "Spessore/profondità max (m)": "Context Depth (m)",
+  "Data scavo": "Date Recorded"
+ },
+ "rapporti": {"modo": "colonne", "foglio": "ContextData", "colonne": {"Fill of": "riempie"}},
+ "vocabolari": {
+  "tipo": {"Cut": "negativa", "Deposit": "positiva"}
+ },
+ "fogli_collegati": {
+  "Materiali": {"foglio": "FindsSummaries",
+                "colonne": {"US": "Deposit", "Classe": "Material", "Tipo / forma": "Object", "NR": "ObjectCount",
+                            "Peso (g)": "Weight"}},
+  "Campioni": {"foglio": "RegisteredSamples",
+               "colonne": {"US": "Context Number", "Campione": "Sample Number", "Tipo": "Sample Type",
+                           "Analisi": "Sample Collected for"}},
+  "Documentazione": {"foglio": "ContextsPhotos", "colonne": {"US/USM": "Intervention", "ID": "View Number"}}
+ },
+ "valori_nulli": [-9999.0, -999.0, -99.99, 999999.0],
+ "filtri": [
+  {"dove": "layer", "layer": "hachures", "colonna": "Layer1", "valori": ["Base of Slope"]}
+ ],
+ "poligoni_ereditati": true,
+ "solo_con_poligono": true,
+ "crs": "EPSG:27700",
+ "superficie": {"tipo": "raster", "abbassa": 0.30}
+}

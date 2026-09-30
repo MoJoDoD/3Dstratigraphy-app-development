@@ -12,6 +12,7 @@ import pandas as pd
 from . import schema as sc
 from . import stratigrafia as st
 from .mesh import mesh_chiusa
+from .progetto import nome_crs
 
 
 def _json_val(v, nd=3):
@@ -181,7 +182,7 @@ def dati_visualizzatore(scavo):
         demo = any("IMMAGINARI" in str(v).upper() for v in info.astype(str).values.ravel()) or \
             "immaginario" in str(info.columns[0]).lower()
     return dict(
-        sito=sito, demo=bool(demo), quant=quant, estensione=estensione, origine=dict(E0=o["E0"], N0=o["N0"], Z0=Z0, crs=scavo.crs or ""),
+        sito=sito, demo=bool(demo), quant=quant, estensione=estensione, origine=dict(E0=o["E0"], N0=o["N0"], Z0=Z0, crs=nome_crs(scavo.crs) if scavo.crs else ""),
         meshes=meshes, livello_max=int(max(livello.values()) if livello else 0),
         fasi=fasi, schede=recs,
         rapporti=[[int(a), d["t"], int(b)] for a, b, d in rap.grafo.edges(data=True)] +
