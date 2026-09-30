@@ -29,10 +29,11 @@ from . import schema as sc
 
 EST_GIS = {".gpkg", ".shp", ".geojson", ".json", ".dxf"}
 EST_TAB = {".xlsx", ".xlsm", ".xls", ".ods"}
-RUOLI = ["us", "usm", "quote", "profili", "area", "sezioni", "sezioni_disegno", "reperti", "campioni", "ignora"]
+RUOLI = ["us", "usm", "quote", "profili", "fondi", "area", "sezioni", "sezioni_disegno", "reperti", "campioni",
+         "ignora"]
 NOME_LAYER = {"us": sc.L_US, "usm": sc.L_USM, "quote": sc.L_QUOTE, "profili": sc.L_PROFILI, "area": sc.L_AREA,
               "sezioni": sc.L_SEZIONI, "sezioni_disegno": sc.L_SEZ_DISEGNO, "reperti": sc.L_RS,
-              "campioni": sc.L_CAMPIONI}
+              "campioni": sc.L_CAMPIONI, "fondi": sc.L_FONDI}
 
 SINONIMI_TIPO = {
     "sup": ["sup", "superiore", "superficie", "top", "tetto", "s", "q.sup", "quota superiore", "q sup", "upper"],
@@ -44,6 +45,8 @@ SINONIMI_TIPO = {
 }
 _SIN = {s: k for k, v in SINONIMI_TIPO.items() for s in v}
 PAROLE_RUOLO = [
+    ("fondi", ["base of slope", "base_of_slope", "linee fondo", "linea di fondo", "linee di fondo", "fondo taglio",
+               "fondo_taglio", "break of slope"]),
     ("ignora", ["griglia", "grid", "quadrett", "layer_styles", "hachure", "tratteggi"]),
     ("usm", ["usm", "mur", "wall", "muratur", "struttur"]),
     ("area", ["area_scavo", "limite", "limit", "saggio", "trincea", "trench", "perimetr", "area"]),
@@ -234,11 +237,27 @@ def _coords(g):
     return out
 
 
+def esamina_raster(files):
+    """Descrizione dei raster (modelli del terreno) tra i file: percorso -> dict o errore."""
+    from .superficie import Raster, EST_RASTER
+    out = {}
+    for f in files:
+        if os.path.splitext(f)[1].lower() in EST_RASTER:
+            try:
+                out[f] = Raster.leggi(f).descrizione()
+            except Exception as e:
+                out[f] = dict(errore=str(e))
+    return out
+
+
 def esamina(files):
     """Elenco dei layer (InfoLayer) e dei fogli trovati nei file."""
+    from .superficie import EST_RASTER
     layers, tabelle = [], {}
     for f in files:
         ext = os.path.splitext(f)[1].lower()
+        if ext in EST_RASTER:
+            continue
         if ext == ".dxf":
             df = _dxf_gruppi(f)
             for k in sorted(df["_chiave"].unique()):
@@ -288,6 +307,8 @@ class Abbinamento:
     rapporti: dict = field(default_factory=lambda: {"modo": "nessuno"})
     crs: str = None
     note: list = field(default_factory=list)
+    # superficie di riferimento per le unità senza quote (vedi superficie.py)
+    superficie: dict = field(default_factory=lambda: {"tipo": "nessuna"})
 
     def a_json(self):
         return json.dumps(asdict(self), ensure_ascii=False, indent=1)
@@ -513,7 +534,7 @@ def proponi(files):
             else:
                 motivo.append(f"nome «{parola}»")
         elif li.geometria == "linea":
-            if ruolo not in ("profili", "sezioni", "ignora"):
+            if ruolo not in ("profili", "sezioni", "fondi", "ignora"):
                 ruolo = "profili" if li.ha_z else "sezioni"
                 motivo.append("linee 3D" if li.ha_z else "linee 2D")
             else:
@@ -568,6 +589,17 @@ def proponi(files):
         abb.layers.append(r)
     crs = [li.crs for li in layers_info if li.crs]
     abb.crs = crs[0] if crs else None
+    # superficie di riferimento: serve quando mancano le quote o quando ci sono profondità da usare
+    raster = [f for f, d in esamina_raster(files).items() if "errore" not in d]
+    ha_quote = any(r.ruolo == "quote" for r in abb.layers)
+    if raster:
+        abb.superficie = {"tipo": "raster", "sorgente": raster[0], "abbassa": 0.0}
+        abb.note.append(f"Modello del terreno «{os.path.basename(raster[0])}» usato come superficie di riferimento "
+                        "per le unità senza quote")
+    elif not ha_quote:
+        abb.superficie = {"tipo": "costante", "quota": 0.0, "abbassa": 0.0}
+        abb.note.append("Nessuna quota: le unità partono da una superficie piana a quota 0. "
+                        "Puoi indicare una quota o un modello del terreno")
     return abb
 
 
@@ -672,6 +704,9 @@ def applica(abb, log=None):
             out = gpd.GeoDataFrame({sc.F_SEZIONE: g[r.campo_sezione].astype(str).values if r.campo_sezione else "—",
                                     sc.F_US: g._u.values, sc.F_INTERFACCIA: tipi}, geometry=g.geometry.values, crs=g.crs)
             out = out[out[sc.F_US].notna()]
+        elif r.ruolo == "fondi":
+            out = gpd.GeoDataFrame({"tipo": ["linea di fondo"] * len(g)}, geometry=g.geometry.values, crs=g.crs)
+            out = out[out.geometry.notna()]
         elif r.ruolo in ("sezioni", "sezioni_disegno"):
             out = g.drop(columns=["_u"])
             if r.campo_sezione and r.campo_sezione != sc.F_SEZIONE:
@@ -807,10 +842,28 @@ def applica(abb, log=None):
         q[sc.F_TIPO_QUOTA] = t
         s.layers[sc.L_QUOTE] = q
 
+    # ------------------------------------------------ superficie di riferimento
+    sup = dict(abb.superficie or {"tipo": "nessuna"})
+    raster_fonte = None
+    if sup.get("tipo") == "raster":
+        raster_fonte = sup.get("sorgente")
+        if not raster_fonte or not os.path.exists(raster_fonte):
+            note.append("Modello del terreno non trovato: superficie di riferimento non impostata")
+            sup = {"tipo": "nessuna"}
+            raster_fonte = None
+    try:
+        s.imposta_superficie(sup)
+    except Exception as e:
+        note.append(f"Superficie di riferimento non impostata: {e}")
+        s.imposta_superficie({"tipo": "nessuna"})
+        raster_fonte = None
+
     now = _dt.datetime.now().isoformat(timespec="seconds")
-    fonti = sorted({x.sorgente for x in abb.layers if x.ruolo != "ignora"} | ({abb.tabella} if abb.tabella else set()))
+    fonti = sorted({x.sorgente for x in abb.layers if x.ruolo != "ignora"} | ({abb.tabella} if abb.tabella else set())
+                   | ({raster_fonte} if raster_fonte else set()))
     for p in fonti:
-        s.sorgenti.append(dict(percorso=os.path.abspath(p), tipo="excel" if p == abb.tabella else "gis",
+        s.sorgenti.append(dict(percorso=os.path.abspath(p),
+                               tipo="excel" if p == abb.tabella else ("raster" if p == raster_fonte else "gis"),
                                sha256=_sha256(p), dimensione=os.path.getsize(p), importato=now))
     base = next((x.sorgente for x in abb.layers if x.ruolo == "us"), fonti[0] if fonti else "scavo")
     s.meta = dict(creato=now, modificato=now, nome=os.path.splitext(os.path.basename(base))[0])

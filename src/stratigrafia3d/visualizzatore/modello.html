@@ -217,7 +217,7 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
       </div>
       <div class="tools bottom">
         <div class="tool"><label for="colMode">Colore</label>
-          <select id="colMode"><option value="mun">sedimento (Munsell)</option><option value="fase">fase</option><option value="cat">categoria</option></select></div>
+          <select id="colMode"><option value="mun">sedimento (Munsell)</option><option value="fase">fase</option><option value="cat">categoria</option><option value="aff">affidabilità</option></select></div>
         <div class="tool"><label>Mostra</label>
           <div class="seg" role="group" aria-label="Sovrapposizioni">
             <button id="oLbl" aria-pressed="true" title="Numeri di US">N.</button><button id="oEdge" aria-pressed="true" title="Spigoli">Spigoli</button><button id="oQ" aria-pressed="false" title="Quote rilevate">Quote</button><button id="oP" aria-pressed="false" title="Profili rilevati in sezione">Profili</button><button id="oRS" aria-pressed="true" title="Reperti speciali e campioni">RS</button><button id="oCut" aria-pressed="true" title="Superfici di taglio">Tagli</button>
@@ -259,6 +259,16 @@ $("titolo").textContent=D.sito||"Scavo"; document.title=(D.sito||"Scavo")+" – 
 const FASI={}; D.fasi.forEach(f=>FASI[f.Fase]=f);
 const PH_COL=["#8e8a7c","#5c7196","#6f8f45","#b88a2c","#a8573a","#7b4b86","#cf6e4f","#2f8580","#6d6659"];
 const CAT_COL={"strato":"#a88b62","crollo":"#c0694d","riempimento":"#4f4237","taglio":"#222222","piano pavimentale":"#c58f7e","preparazione":"#bdb2a0","focolare":"#d0622f","struttura":"#a2553a","muro":"#c9c2b4","canaletta":"#8f9aa3","soglia":"#9aa29b"};
+// fasi e categorie oltre quelle previste: colori generati (angolo aureo), stabili tra un'apertura e l'altra
+{const hsl=(h,sa,l)=>{const f=n=>{const k=(n+h/30)%12,a=sa*Math.min(l,1-l);return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,"0")};return "#"+f(0)+f(8)+f(4)};
+ const fasi=new Set([...D.fasi.map(f=>+f.Fase),...Object.values(S).map(r=>+r.Fase||0)]);
+ const maxF=Math.max(0,...[...fasi].filter(Number.isFinite));
+ for(let i=PH_COL.length;i<=maxF;i++) PH_COL.push(hsl((i*137.5+20)%360,.42,.47));
+ const cats=[...new Set(Object.values(S).map(r=>r.Categoria).filter(c=>c!=null&&c!==""))].sort();
+ let k=0; cats.forEach(c=>{ if(!CAT_COL[c]) CAT_COL[c]=hsl((k++*137.5+200)%360,.38,.5) });}
+const AFF_COL={misurata:"#2f7d5b",profondita:"#5f8f3f",impilata:"#c09a2c",schematica:"#c0573a",nessuna:"#8a8a8a"};
+const AFF_TXT={misurata:"misurata: quote o profili rilevati",profondita:"da superficie e profondità",impilata:"impilata nella sequenza, spessore in scheda",schematica:"schematica: valori tipici",nessuna:"non ricostruita"};
+const affOf=u=>(S[u]?._qualita?.strategia)||"misurata";
 const REL_ORDER=["copre","coperto da","taglia","tagliato da","riempie","riempito da","si appoggia a","gli si appoggia","si lega a"];
 const INV={"copre":"coperto da","taglia":"tagliato da","riempie":"riempito da","si appoggia a":"gli si appoggia","si lega a":"si lega a"};
 const fmtY=v=>v==null?"—":(v<0?(-v)+" a.C.":v+" d.C.");
@@ -304,6 +314,7 @@ function colorFor(u){
   const mode=$("colMode").value;
   if(mode==="fase") return PH_COL[faseOf(u)]||"#888";
   if(mode==="cat") return CAT_COL[catOf(u)]||"#999";
+  if(mode==="aff") return AFF_COL[affOf(u)]||"#999";
   const s=S[u]; if(s&&/^#[0-9a-f]{6}$/i.test(String(s["Colore HEX"]||""))) return s["Colore HEX"];
   if(s&&s._tipo==="USM") return "#c9c2b4";
   return CAT_COL[catOf(u)]||PH_COL[faseOf(u)]||"#9a8f80";   // nessun colore in scheda: per categoria o fase
@@ -481,6 +492,8 @@ $("btnAll").onclick=()=>{hidden.clear();isolated=false;EXC=0;$("exc").value=0;up
 function buildLegend(){
   const mode=$("colMode").value, L=$("legend");
   if(mode==="fase") L.innerHTML="<h4>Fasi</h4>"+D.fasi.slice().reverse().map(f=>`<div><i style="background:${PH_COL[f.Fase]}"></i>${f.Fase} · ${esc(f.Titolo)}</div>`).join("");
+  else if(mode==="aff"){const cs=Object.keys(AFF_COL).filter(k=>Object.keys(units).some(u=>affOf(+u)===k));
+    L.innerHTML="<h4>Affidabilità della forma</h4>"+cs.map(c=>`<div><i style="background:${AFF_COL[c]}"></i>${esc(AFF_TXT[c])}</div>`).join("")}
   else if(mode==="cat"){const cs=[...new Set(Object.keys(units).map(u=>catOf(+u)))].sort();L.innerHTML="<h4>Categorie</h4>"+cs.map(c=>`<div><i style="background:${CAT_COL[c]||"#999"}"></i>${esc(c)}</div>`).join("")}
   else L.innerHTML=`<h4>Colore del sedimento</h4><div class="muted" style="max-width:170px;display:block">Colore Munsell registrato nella scheda di ogni US. Le USM in grigio pietra; i tagli sono superfici semitrasparenti.</div>`+
      `<div style="margin-top:4px"><i style="background:#e0a800"></i>reperto speciale</div><div><i style="background:#13a37a"></i>campione</div>`;
@@ -509,6 +522,7 @@ function rsHTML(u){
 }
 function kvRighe(r){ return r.filter(([k,v])=>v!=null&&String(v).trim()!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("") }
 function qualTxt(s){ const q=s._qualita; if(!q) return "—";
+  if(q.strategia&&q.strategia!=="misurata") return AFF_TXT[q.strategia]+(q.quote_stimate?` (${q.quote_stimate} punti stimati)`:"");
   if(q.punti_taglio!=null) return `superficie da ${q.punti_taglio} quote e profili, ${q.punti_orlo} quote d'orlo`;
   const base={misurata:"base misurata",parziale:"base in parte misurata",stimata:"base stimata dalla scheda"}[q.base]||"";
   return `tetto da ${q.punti_tetto} punti · ${base} (${q.punti_base} punti)`; }

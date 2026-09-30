@@ -86,7 +86,8 @@ def _esamina(files):
                           esempio=json.loads(df.head(5).to_json(orient="values", date_format="iso", default_handler=str)))
                   for n, df in fogli.items()}
     abb = importa.proponi(files)
-    return dict(layers=[asdict(l) for l in layers], tabelle=tab, abbinamento=asdict(abb))
+    return dict(layers=[asdict(l) for l in layers], tabelle=tab, raster=importa.esamina_raster(files),
+                abbinamento=asdict(abb))
 
 
 class App:

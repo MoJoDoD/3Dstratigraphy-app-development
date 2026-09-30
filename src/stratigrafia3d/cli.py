@@ -13,9 +13,12 @@ def _stampa_problemi(problemi):
         print("Nessun problema trovato.")
         return 0
     for p in problemi:
-        print(" ", p)
+        u = list(p.unita)
+        elenco = (": " + ", ".join(map(str, u[:12])) + (f" … (+{len(u) - 12})" if len(u) > 12 else "")) if u else ""
+        print(f"  [{p.livello}] {p.messaggio}{elenco}")
     err = sum(p.livello == "errore" for p in problemi)
-    print(f"{err} errori, {len(problemi) - err} avvisi.")
+    avv = sum(p.livello == "avviso" for p in problemi)
+    print(f"{err} errori, {avv} avvisi, {len(problemi) - err - avv} informazioni.")
     return err
 
 
@@ -89,6 +92,10 @@ def cmd_importa(a):
             print("  ", n)
         for r in abb.layers:
             print(f"   {r.layer:30s} -> {r.ruolo:10s} {r.motivo}")
+    if a.quota_superficie is not None:
+        abb.superficie = {"tipo": "costante", "quota": a.quota_superficie, "abbassa": 0.0}
+    if a.abbassa is not None:
+        abb.superficie = dict(abb.superficie or {"tipo": "nessuna"}, abbassa=a.abbassa)
     if a.salva_profilo:
         abb.salva_profilo(a.salva_profilo)
         print("Profilo salvato in", a.salva_profilo)
@@ -148,6 +155,8 @@ def main(argv=None):
     im.add_argument("file", nargs="*"); im.add_argument("--profilo", help="usa un profilo di abbinamento salvato")
     im.add_argument("--salva-profilo"); im.add_argument("-o", "--output", help="crea il progetto .scavo")
     im.add_argument("--forza", action="store_true")
+    im.add_argument("--quota-superficie", type=float, help="superficie di riferimento piana a questa quota (m)")
+    im.add_argument("--abbassa", type=float, help="abbassa la superficie di riferimento (es. arativo asportato, m)")
     im.set_defaults(f=cmd_importa)
 
     a = p.parse_args(argv)

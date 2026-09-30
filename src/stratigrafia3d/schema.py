@@ -18,9 +18,10 @@ L_SEZ_DISEGNO = "sezioni_disegno"
 L_RS = "reperti_speciali"
 L_CAMPIONI = "campioni"
 L_GRIGLIA = "griglia_2m"
+L_FONDI = "linee_fondo"          # linee di base dei tagli (dove la parete diventa fondo)
 
-LAYER_OBBLIGATORI = [L_US, L_QUOTE]
-LAYER_FACOLTATIVI = [L_USM, L_PROFILI, L_AREA, L_SEZIONI, L_SEZ_DISEGNO, L_RS, L_CAMPIONI, L_GRIGLIA]
+LAYER_OBBLIGATORI = [L_US]
+LAYER_FACOLTATIVI = [L_QUOTE, L_USM, L_PROFILI, L_AREA, L_SEZIONI, L_SEZ_DISEGNO, L_RS, L_CAMPIONI, L_GRIGLIA, L_FONDI]
 
 # campi nei layer
 F_US = "us"
@@ -46,6 +47,7 @@ C_CATEGORIA = "Categoria"
 C_FASE = "Fase"
 C_MARGINI = "Margini"                 # netti / rastremati / sfumati
 C_SPESSORE = "Spessore medio stimato (m)"
+C_PROFONDITA = "Spessore/profondità max (m)"   # per i tagli: profondità dalla superficie
 C_BASE_USM = "Quota base usata (rilevata o stimata)"
 C_COLORE = "Colore HEX"
 

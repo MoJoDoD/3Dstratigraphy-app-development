@@ -5,6 +5,7 @@ poligoni in pianta, quote, profili di sezione (GeoPackage) e schede (Excel).
 
 Tappe completate: **1** (motore, riga di comando, formato `.scavo`) e **2** (app desktop con import
 guidato: si apre un rilievo reale, si abbinano i campi, si ricostruisce il 3D e si salva, senza codice).
+In corso la tappa **2.5** (import flessibile): la ricostruzione adattiva è pronta.
 
 ## App su Windows
 
@@ -29,8 +30,27 @@ CSV di punti, Excel o CSV delle schede. Riconoscono da soli:
 - archivi in inglese: context register (Context, Type, Thickness…), rapporti "fills", "covers",
   "cut by"…, livelli "top/bottom/cut/rim", fogli Phases, Finds, Samples, Documentation.
 
+## Ricostruzione adattiva
+
+Le quote non sono obbligatorie. Ogni unità viene ricostruita con quello che c'è, e la strategia
+usata resta scritta nel progetto (nel visualizzatore: Colore → affidabilità):
+
+| Dati dell'unità | Ricostruzione | Strategia |
+| --- | --- | --- |
+| quote o profili | kriging del tetto e dello spessore | misurata |
+| taglio con profondità in scheda | superficie di riferimento meno la profondità; pareti dalle linee di fondo, se ci sono | profondita |
+| riempimento o strato con spessore | sotto la superficie o l'orlo del taglio, nell'ordine della sequenza | impilata |
+| profondità o spessore mancanti | valori tipici (0,20 m per i tagli, 0,10 m per gli strati) | schematica |
+
+La **superficie di riferimento** può essere un modello del terreno (GeoTIFF), una quota costante o
+l'interpolazione delle quote rilevate, abbassata se serve (per esempio dell'arativo asportato). Il
+modello del terreno viene copiato nel `.scavo`. Quando i rapporti non dicono l'ordine dei riempimenti
+di un taglio, lo si deduce dal tipo (primario in basso) e dal numero; se gli spessori registrati
+superano la profondità, si riducono in proporzione. Tutto viene segnalato nella verifica.
+
 Aree grandi (oltre 65 m) e centinaia di unità sono gestite; `strumenti/caso_studio_stansted.py`
-ricava un caso studio in inglese dall'archivio aperto di Framework Archaeology (Stansted).
+ricava un caso studio in inglese dall'archivio aperto di Framework Archaeology (Stansted): senza
+quote, con profondità, spessori e un modello del terreno.
 
 Ogni scelta è modificabile e si salva come profilo riutilizzabile per lo stesso cantiere.
 

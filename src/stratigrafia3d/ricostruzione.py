@@ -25,6 +25,15 @@ from . import schema as sc
 from .interpolazione import Krig, smoothstep
 from .mesh import triangola
 from .progetto import Modello, UnitaModello
+from .stima import stima_quote
+
+
+def _numero_o_none(v):
+    try:
+        x = float(v)
+        return None if np.isnan(x) else x
+    except (TypeError, ValueError):
+        return None
 
 
 def _qualita_base(n_inf):
@@ -47,7 +56,13 @@ def ricostruisci(scavo, unita=None, log=None):
     Ritorna un Modello e lo assegna a ``scavo.modello``."""
     log = log or (lambda *a: None)
     P = scavo.parametri
+    # quote rilevate + quote stimate per le unità che non ne hanno (ricostruzione adattiva)
+    stima = stima_quote(scavo)
+    stimate, strategia, spessori_stimati = stima.quote, stima.strategia, stima.spessori
     q = scavo.quote_locali()
+    if len(stimate):
+        q = pd.concat([q, stimate], ignore_index=True) if len(q) else stimate
+    n_stimate = stimate.groupby("us").size().to_dict() if len(stimate) else {}
     poly_us, poly_usm = scavo.poligoni_us(), scavo.poligoni_usm()
     schede_us, schede_usm = scavo.schede_us(), scavo.schede_usm()
     limiti = scavo.limiti()
@@ -56,6 +71,13 @@ def ricostruisci(scavo, unita=None, log=None):
     G = rap.grafo
     if not nx.is_directed_acyclic_graph(G):
         raise ValueError("i rapporti stratigrafici contengono un ciclo: esegui la verifica")
+    if stima.copre_dedotto:           # ordine dei riempimenti dedotto: vale per l'aggancio, non per l'archivio
+        G = G.copy()
+        for a_, b_ in stima.copre_dedotto:
+            if not G.has_edge(a_, b_):
+                G.add_edge(a_, b_, t=sc.R_COPRE, dedotto=True)
+        if not nx.is_directed_acyclic_graph(G):
+            G = rap.grafo
 
     precedente = scavo.modello.unita if (scavo.modello and unita is not None) else {}
     modello = Modello(unita=dict(precedente))
@@ -153,10 +175,10 @@ def ricostruisci(scavo, unita=None, log=None):
         ktop = Krig(S)
         top = ktop(V2)
         B = np.vstack([qpts(u, [sc.Q_INF]), scavo.punti_profilo(u, "inf", P.passo_profili)])
-        sp = info.get(sc.C_SPESSORE, np.nan)
-        sp = float(sp) if pd.notna(sp) else P.spessore_predefinito
+        sp = pd.to_numeric(pd.Series([info.get(sc.C_SPESSORE, np.nan)]), errors="coerce").iloc[0]
+        sp = spessori_stimati.get(u, float(sp) if pd.notna(sp) and sp > 0 else P.spessore_predefinito)
         fase = info.get(sc.C_FASE, np.nan)
-        if pd.notna(fase) and int(fase) == 0:
+        if _numero_o_none(fase) == 0:
             sp = min(sp, P.substrato_spessore_max)
         th_pts = np.zeros((0, 3))
         if len(B):
@@ -192,6 +214,11 @@ def ricostruisci(scavo, unita=None, log=None):
                     lente=bool(lente))
         modello.unita[u] = UnitaModello(u, "us", V2, F, top, bot, qual)
 
+    for u, m in modello.unita.items():
+        if da_fare is None or u in da_fare:
+            m.qualita["strategia"] = strategia.get(u, "misurata")
+            if n_stimate.get(u):
+                m.qualita["quote_stimate"] = int(n_stimate[u])
     modello.rapporto = [dict(unita=int(u), tipo=m.tipo, **m.qualita) for u, m in sorted(modello.unita.items())]
     scavo.modello = modello
     scavo.registra("ricostruzione", dict(unita=len(modello.unita),

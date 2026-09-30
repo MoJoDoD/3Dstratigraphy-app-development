@@ -104,7 +104,7 @@ table.t td.mot{min-width:230px}
 .box h3{margin:0;font-size:15px}
 .kv{display:grid;grid-template-columns:minmax(120px,40%) 1fr;gap:6px 10px;align-items:center;font-size:13px}
 .kv label{color:var(--muted)}
-.kv select{border:1px solid var(--line);background:var(--paper);border-radius:4px;padding:4px 6px;width:100%;min-width:0}
+.kv select,.kv input{border:1px solid var(--line);background:var(--paper);border-radius:4px;padding:4px 6px;width:100%;min-width:0;font:inherit;color:inherit}
 .note{display:grid;gap:6px;margin:0 0 14px;padding:0;list-style:none}
 .note li{font-family:var(--f-read);font-size:14px;line-height:1.45;padding-left:16px;position:relative}
 .note li::before{content:"";position:absolute;left:2px;top:.6em;width:6px;height:6px;border-radius:50%;background:var(--muted)}
@@ -114,6 +114,7 @@ table.t td.mot{min-width:230px}
 .pill.errore{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
 .pill.avviso{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
 .pill.ok{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.pill.info{background:color-mix(in srgb,var(--muted) 16%,transparent);color:var(--muted)}
 .pr p{margin:0}
 .pr code{font-family:var(--f-num);font-size:12px;color:var(--muted)}
 .somm{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 14px;align-items:center}
@@ -202,7 +203,7 @@ dialog .row{justify-content:flex-end;margin-top:12px}
         </div>
 
         <div id="s1">
-          <p class="lead">Aggiungi i file del rilievo (GeoPackage, shapefile, DXF, GeoJSON, CSV di punti) e il file delle schede (Excel o CSV). Puoi anche caricare un profilo di abbinamento salvato da un progetto precedente dello stesso cantiere.</p>
+          <p class="lead">Aggiungi i file del rilievo (GeoPackage, shapefile, DXF, GeoJSON, CSV di punti), il file delle schede (Excel o CSV) e, se non hai quote per tutte le unità, un modello del terreno (GeoTIFF). Puoi anche caricare un profilo di abbinamento salvato da un progetto precedente dello stesso cantiere.</p>
           <div class="flist" id="flist"></div>
           <div class="row">
             <button class="btn pri" id="bAggiungi">Aggiungi file…</button>
@@ -224,6 +225,8 @@ dialog .row{justify-content:flex-end;margin-top:12px}
             <div class="box"><h3>Schede US</h3><div class="kv" id="kvUS"></div></div>
             <div class="box"><h3>Rapporti stratigrafici</h3><div class="kv" id="kvRap"></div></div>
             <div class="box"><h3>Schede USM</h3><div class="kv" id="kvUSM"></div></div>
+            <div class="box"><h3>Superficie di riferimento</h3><div class="kv" id="kvSup"></div>
+              <p class="mot" style="margin:8px 0 0">Da qui partono le unità senza quote proprie: i tagli scendono della loro profondità, gli strati e i riempimenti si impilano con il loro spessore. Le unità con quote rilevate non cambiano.</p></div>
           </div>
           <h2 class="sez">Anteprima del foglio delle US</h2>
           <div class="tw"><table class="t" id="tPrev"></table></div>
@@ -352,7 +355,7 @@ async function esporta(tipo){
 }
 
 // ------------------------------------------------------------------ procedura
-const RUOLI=[["us","Limiti delle US"],["usm","Murature (USM)"],["quote","Quote"],["profili","Profili di sezione (3D)"],["area","Limite di scavo o saggio"],["sezioni","Tracce delle sezioni"],["sezioni_disegno","Disegni di sezione"],["reperti","Reperti speciali"],["campioni","Campioni"],["ignora","Non usare"]];
+const RUOLI=[["us","Limiti delle US"],["usm","Murature (USM)"],["quote","Quote"],["profili","Profili di sezione (3D)"],["fondi","Linee di fondo dei tagli"],["area","Limite di scavo o saggio"],["sezioni","Tracce delle sezioni"],["sezioni_disegno","Disegni di sezione"],["reperti","Reperti speciali"],["campioni","Campioni"],["ignora","Non usare"]];
 const TIPI=["sup","inf","taglio","orlo","rasatura","fondazione"];
 const GEO={poligono:"poligoni",linea:"linee",punto:"punti",testo:"testi",misto:"misto",nessuna:"—"};
 
@@ -385,6 +388,9 @@ function applicaProfilo(){
   W.abb.layers.forEach(l=>{ const p=profilo.layers.find(x=>base(x.sorgente)===base(l.sorgente)&&x.layer===l.layer);
     if(p){ Object.assign(l,{...p,sorgente:l.sorgente}); n++ } });
   ["foglio_us","colonne_us","foglio_usm","colonne_usm","rapporti","crs"].forEach(k=>{ if(profilo[k]!=null) W.abb[k]=profilo[k] });
+  if(profilo.superficie){ const sp={...profilo.superficie};
+    if(sp.tipo==="raster"){ const f=W.files.find(x=>base(x)===base(sp.sorgente||"")); if(f) sp.sorgente=f; else delete sp.sorgente }
+    if(sp.tipo!=="raster"||sp.sorgente) W.abb.superficie=sp }
   avviso(`Profilo applicato a ${n} layer`);
 }
 function infoLayer(l){ return W.esame.layers.find(x=>x.sorgente===l.sorgente&&x.layer===l.layer) }
@@ -423,7 +429,28 @@ function disegnaLayer(){
   });
 }
 
-const CANON_US=[["US","Numero di US"],["Tipo","Positiva / negativa"],["Categoria","Categoria"],["Definizione","Definizione"],["Spessore medio stimato (m)","Spessore"],["Margini","Margini (netti / rastremati)"],["Fase","Fase"],["Colore HEX","Colore (#rrggbb)"]];
+const CANON_US=[["US","Numero di US"],["Tipo","Positiva / negativa"],["Categoria","Categoria"],["Definizione","Definizione"],["Spessore medio stimato (m)","Spessore"],["Spessore/profondità max (m)","Profondità (tagli)"],["Margini","Margini (netti / rastremati)"],["Fase","Fase"],["Colore HEX","Colore (#rrggbb)"]];
+const TIPI_SUP=[["nessuna","nessuna: solo le quote rilevate"],["costante","piano a quota costante"],["raster","modello del terreno (GeoTIFF)"],["quote","interpolata dalle quote rilevate"]];
+function disegnaSuperficie(){
+  const a=W.abb; a.superficie=a.superficie||{tipo:"nessuna"}; const s=a.superficie;
+  const rs=Object.entries(W.esame.raster||{});
+  let h=`<label for="supTipo">Tipo</label><select id="supTipo">${opzioni(TIPI_SUP,s.tipo)}</select>`;
+  if(s.tipo==="costante") h+=`<label for="supQ">Quota (m)</label><input id="supQ" type="number" step="0.01" value="${esc(s.quota??0)}">`;
+  if(s.tipo==="raster"){
+    h+=rs.length?`<label for="supR">File</label><select id="supR">${opzioni(rs.map(([f,d])=>[f,base(f)+(d.errore?" (non leggibile)":"")]),s.sorgente||"")}</select>`:
+      `<label>File</label><span class="mot">Nessun GeoTIFF tra i file: aggiungilo al passo 1.</span>`;
+    const d=(W.esame.raster||{})[s.sorgente];
+    if(d) h+=d.errore?`<label>Stato</label><span class="mot">${esc(d.errore)}</span>`:`<label>Contenuto</label><span class="mot">${d.colonne}×${d.righe} celle da ${d.passo} m, quote ${d.quota_min}–${d.quota_max} m</span>`;
+  }
+  if(s.tipo!=="nessuna") h+=`<label for="supAbb">Abbassa di (m)</label><input id="supAbb" type="number" step="0.01" min="0" value="${esc(s.abbassa??0)}" title="Per esempio lo spessore dell'arativo asportato prima dello scavo">`;
+  $("kvSup").innerHTML=h;
+  const on=(id,fn)=>{const e=$(id); if(e) e.onchange=fn};
+  on("supTipo",e=>{ const t=e.target.value; a.superficie={tipo:t,abbassa:s.abbassa||0};
+    if(t==="raster"&&rs.length) a.superficie.sorgente=s.sorgente||rs[0][0]; if(t==="costante") a.superficie.quota=0; disegnaSuperficie() });
+  on("supQ",e=>{a.superficie.quota=parseFloat(e.target.value)||0});
+  on("supR",e=>{a.superficie.sorgente=e.target.value; disegnaSuperficie()});
+  on("supAbb",e=>{a.superficie.abbassa=parseFloat(e.target.value)||0});
+}
 function fogli(){ return W.abb.tabella?(W.esame.tabelle[W.abb.tabella]||{}):{} }
 function colonne(f){ return (fogli()[f]||{}).colonne||[] }
 function disegnaSchede(){
@@ -454,6 +481,7 @@ function disegnaSchede(){
     rp+=cols.filter(c=>REL.includes(c.toLowerCase().trim())||(r.colonne||{})[c]).map(c=>`<label>${esc(c)}</label><span>${esc((r.colonne||{})[c]||"")}</span>`).join("")||"<span class='mot'>Nessuna colonna riconosciuta</span>";
   }
   $("kvRap").innerHTML=rp;
+  disegnaSuperficie();
   // anteprima
   const f=fogli()[a.foglio_us];
   $("tPrev").innerHTML=f?`<thead><tr>${f.colonne.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${f.esempio.map(r=>`<tr>${r.map(v=>`<td>${esc(v==null?"":String(v).slice(0,60))}</td>`).join("")}</tr>`).join("")}</tbody>`:`<tbody><tr><td class="mot">Nessun foglio scelto.</td></tr></tbody>`;
@@ -475,14 +503,16 @@ function disegnaSchede(){
 async function importaOra(){
   const a=W.abb;
   if(!a.layers.some(l=>l.ruolo==="us")){ avviso("Indica almeno un layer con i limiti delle US",true); return }
-  if(!a.layers.some(l=>l.ruolo==="quote")){ avviso("Indica almeno un layer di quote",true); return }
+  if(!a.layers.some(l=>l.ruolo==="quote")&&(!a.superficie||a.superficie.tipo==="nessuna")){ avviso("Senza quote serve una superficie di riferimento (riquadro in basso)",true); return }
   if(a.tabella&&(!a.foglio_us||!a.colonne_us.US)){ avviso("Scegli il foglio e la colonna con il numero di US",true); return }
   const r=await lavoro("Importazione e verifica…",()=>api("importa",{abbinamento:a}));
   aggiornaStato(r.stato);
-  const err=r.problemi.filter(p=>p.livello==="errore"), avv=r.problemi.filter(p=>p.livello!=="errore");
+  const err=r.problemi.filter(p=>p.livello==="errore"), avv=r.problemi.filter(p=>p.livello==="avviso");
+  const ord={errore:0,avviso:1,info:2}; r.problemi.sort((a,b)=>ord[a.livello]-ord[b.livello]);
   $("somm").innerHTML=`<span class="pill ${err.length?"errore":"ok"}">${err.length} errori</span><span class="pill ${avv.length?"avviso":"ok"}">${avv.length} avvisi</span><span class="mot">${r.stato.n_us} US e ${r.stato.n_usm} USM importate</span>`;
   $("noteImp").innerHTML=(r.note||[]).map(n=>`<li>${esc(n)}</li>`).join("");
-  $("prob").innerHTML=r.problemi.length?r.problemi.map(p=>`<div class="pr"><span class="pill ${p.livello}">${p.livello}</span><div><p>${esc(p.messaggio)}</p>${p.unita.length?`<code>${esc(p.unita.join(", "))}</code>`:""}</div></div>`).join(""):
+  const elenco=u=>u.length>40?`<details><summary class="mot">${u.length} unità</summary><code>${esc(u.join(", "))}</code></details>`:`<code>${esc(u.join(", "))}</code>`;
+  $("prob").innerHTML=r.problemi.length?r.problemi.map(p=>`<div class="pr"><span class="pill ${p.livello}">${p.livello}</span><div><p>${esc(p.messaggio)}</p>${p.unita.length?elenco(p.unita):""}</div></div>`).join(""):
     `<div class="pr"><span class="pill ok">ok</span><p>Nessun problema: i dati sono pronti per la ricostruzione.</p></div>`;
   $("n4").textContent=err.length?"Ricostruisci comunque →":"Ricostruisci il 3D →";
   $("n4").dataset.forza=err.length?"1":"";

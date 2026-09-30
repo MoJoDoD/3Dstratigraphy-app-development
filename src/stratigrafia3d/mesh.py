@@ -39,17 +39,30 @@ def densify_ring(ring, step):
 
 
 def _anelli(p, passo):
-    verts, segs, holes = [], [], []
+    """Vertici e segmenti di tutti gli anelli. Un vertice condiviso da due anelli (un buco che tocca
+    il bordo o un altro buco) compare una volta sola: vertici doppi mandano in crash triangle."""
+    verts, segs, holes, indice = [], [], [], {}
+
+    def id_(pt):
+        k = (round(pt[0], 6), round(pt[1], 6))
+        if k not in indice:
+            indice[k] = len(verts)
+            verts.append([pt[0], pt[1]])
+        return indice[k]
+
     for k, ring in enumerate([p.exterior, *p.interiors]):
         c = densify_ring(ring, passo)
         if len(c) < 3:
             continue
-        s0 = len(verts)
-        verts.extend(c.tolist())
-        segs.extend([(s0 + i, s0 + (i + 1) % len(c)) for i in range(len(c))])
+        ids = [id_(pt) for pt in c]
+        for i in range(len(ids)):
+            a, b = ids[i], ids[(i + 1) % len(ids)]
+            if a != b:
+                segs.append((a, b))
         if k > 0:
             hp = Polygon(ring).representative_point()
             holes.append([hp.x, hp.y])
+    segs = list(dict.fromkeys(tuple(sorted(x)) for x in segs))
     return verts, segs, holes
 
 

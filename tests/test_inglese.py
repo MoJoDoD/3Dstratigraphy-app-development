@@ -63,7 +63,7 @@ def archivio(tmp_path_factory):
 def test_proposta_in_inglese(archivio):
     abb = importa.proponi(archivio)
     ruoli = {r.layer: r.ruolo for r in abb.layers}
-    assert ruoli == {"contexts": "us", "levels": "quote", "excavation_area": "area", "hachures_base_of_slope": "ignora"}
+    assert ruoli == {"contexts": "us", "levels": "quote", "excavation_area": "area", "hachures_base_of_slope": "fondi"}
     lv = next(r for r in abb.layers if r.layer == "levels")
     assert lv.campo_unita == "context" and lv.campo_tipo == "level_type"
     c = abb.colonne_us

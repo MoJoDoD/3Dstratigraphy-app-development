@@ -9,6 +9,7 @@ Un file ``.scavo`` è un GeoPackage valido (lo apre anche QGIS) che contiene:
   - ``s3d_sorgenti``  file di origine con impronta SHA-256 (per la sincronizzazione futura)
   - ``s3d_modelli``   geometrie ricostruite di ogni unità (array compressi)
   - ``s3d_storico``   registro delle operazioni
+  - ``s3d_raster``    modello del terreno usato come superficie di riferimento (se c'è)
 """
 import datetime as _dt
 import hashlib
@@ -48,6 +49,9 @@ class Parametri:
     passo_profili: float = 0.20           # m, densificazione dei profili di sezione
     lenti_rastremate: bool = True
     aggancio_stratigrafico: bool = True
+    profondita_predefinita: float = 0.20  # m, tagli senza quote né profondità in scheda
+    # superficie da cui partono le unità senza quote proprie (vedi superficie.py)
+    superficie: dict = field(default_factory=lambda: {"tipo": "nessuna"})
 
 
 @dataclass
@@ -112,6 +116,7 @@ class Scavo:
         self._origine = None
         self.abbinamento = None           # importa.Abbinamento usato per l'import
         self.note_importazione = []
+        self.raster_superficie = None     # superficie.Raster (modello del terreno), se usato
 
     # ------------------------------------------------------------------ lettura
     @classmethod
@@ -160,10 +165,29 @@ class Scavo:
             if src is None or src.empty:
                 src = self.layers[sc.L_US]
             b = src.total_bounds
-            zs = self.layers[sc.L_QUOTE].geometry.z
+            if sc.L_QUOTE in self.layers and len(self.layers[sc.L_QUOTE]):
+                z0 = float(self.layers[sc.L_QUOTE].geometry.z.min())
+            else:
+                z0 = self._quota_minima_superficie(b)
             self._origine = dict(E0=float(math.floor(b[0])), N0=float(math.floor(b[1])),
-                                 Z0=float(math.floor(zs.min() - 0.5)))
+                                 Z0=float(math.floor(z0 - 0.5)))
         return self._origine
+
+    def _quota_minima_superficie(self, b):
+        """Senza quote rilevate: la superficie di riferimento meno la profondità massima prevista."""
+        from .superficie import normalizza
+        s = normalizza(self.parametri.superficie)
+        prof = [self.parametri.profondita_predefinita, 1.0]
+        df = self.tabelle.get(sc.S_US)
+        if df is not None and sc.C_PROFONDITA in df.columns:
+            prof.append(float(pd.to_numeric(df[sc.C_PROFONDITA], errors="coerce").max() or 0))
+        if s["tipo"] == "costante":
+            return s["quota"] - s["abbassa"] - max(prof)
+        if s["tipo"] == "raster" and self.raster_superficie is not None:
+            xs, ys = np.linspace(b[0], b[2], 12), np.linspace(b[1], b[3], 12)
+            X, Y = np.meshgrid(xs, ys)
+            return float(np.nanmin(self.raster_superficie(X.ravel(), Y.ravel()))) - s["abbassa"] - max(prof)
+        return 0.0
 
     def locale(self, g):
         o = self.origine
@@ -185,7 +209,39 @@ class Scavo:
         g = self.layers.get(sc.L_USM)
         return {} if g is None else {int(r[sc.F_USM]): self.locale(r.geometry) for _, r in g.iterrows()}
 
+    def imposta_superficie(self, spec, raster=None):
+        """Imposta la superficie di riferimento. ``raster``: percorso di un GeoTIFF o un Raster."""
+        from .superficie import Raster, normalizza
+        spec = normalizza(spec)
+        if spec["tipo"] == "raster":
+            r = raster if raster is not None else spec.get("sorgente")
+            if isinstance(r, str):
+                r = Raster.leggi(r)
+            if r is None:
+                raise ValueError("manca il file del modello del terreno")
+            g = self.layers.get(sc.L_AREA)
+            g = g if g is not None and not g.empty else self.layers.get(sc.L_US)
+            if g is not None and len(g):
+                r = r.ritaglia(*g.total_bounds)
+            self.raster_superficie = r
+            spec["nome"] = r.nome
+        else:
+            self.raster_superficie = None
+        self.parametri.superficie = spec
+        if sc.L_QUOTE not in self.layers:
+            self._origine = None          # senza quote la quota di base dipende dalla superficie
+
+    def linee_fondo(self):
+        """Linee di base dei tagli (coordinate locali), unite; None se il layer manca."""
+        g = self.layers.get(sc.L_FONDI)
+        if g is None or g.empty:
+            return None
+        return unary_union([self.locale(x) for x in g.geometry if x is not None])
+
     def quote_locali(self):
+        if sc.L_QUOTE not in self.layers or not len(self.layers[sc.L_QUOTE]):
+            return pd.DataFrame(dict(us=pd.Series(dtype=int), tipo=pd.Series(dtype=str),
+                                     x=pd.Series(dtype=float), y=pd.Series(dtype=float), z=pd.Series(dtype=float)))
         q = self.layers[sc.L_QUOTE]
         o = self.origine
         return pd.DataFrame(dict(us=q[sc.F_US].astype(int).values, tipo=q[sc.F_TIPO_QUOTA].astype(str).values,
@@ -252,18 +308,41 @@ class Scavo:
         tipi_ignoti = sorted(set(q.tipo) - sc.TIPI_QUOTA)
         if tipi_ignoti:
             out.append(Problema("avviso", "tipo-quota-ignoto", f"tipi di quota non riconosciuti: {tipi_ignoti}"))
+        # prontezza: come verrà ricostruita ogni unità
+        from .stima import stima_quote, DESCRIZIONE
+        stima = stima_quote(self)
+        strategia, note = stima.strategia, list(stima.note)
+        if stima.copre_dedotto:
+            note.append(dict(messaggio=f"{len(stima.copre_dedotto)} rapporti «copre» tra riempimenti dello stesso "
+                                       "taglio dedotti dal tipo di riempimento (primario in basso) e dal numero",
+                             unita=sorted({u for c in stima.copre_dedotto for u in c})))
+        self.strategie = strategia
+        gruppi = {}
+        for u, st_ in strategia.items():
+            gruppi.setdefault(st_, []).append(u)
+        if gruppi.get("nessuna"):
+            out.append(Problema("errore", "senza-quote",
+                                "unità senza quote e senza superficie di riferimento: impossibile ricostruirle "
+                                "(indica una superficie di riferimento o aggiungi le quote)", tuple(sorted(gruppi["nessuna"]))))
+        for st_ in ("profondita", "impilata", "schematica"):
+            if gruppi.get(st_):
+                out.append(Problema("info" if st_ != "schematica" else "avviso", "stima-" + st_,
+                                    f"{len(gruppi[st_])} unità ricostruite da {DESCRIZIONE[st_]}",
+                                    tuple(sorted(gruppi[st_]))))
+        for n in note:
+            out.append(Problema("info", "stima-nota", n["messaggio"], tuple(n.get("unita", ()))))
         schede_us = self.schede_us()
+        senza_base = []
         for u in sorted(set(self.poligoni_us())):
-            sq = q[q.us == u]
+            if strategia.get(u) != "misurata":
+                continue
             neg = str(schede_us.get(u, {}).get(sc.C_TIPO, "")).lower() == "negativa" if u in schede_us else False
-            kinds = {sc.Q_TAGLIO, sc.Q_ORLO} if neg else {sc.Q_SUP}
-            has_prof = len(self.punti_profilo(u, "taglio" if neg else "sup")) > 0
-            if not sq.tipo.isin(kinds).any() and not has_prof:
-                out.append(Problema("errore", "senza-quote",
-                                    "unità senza quote della superficie: impossibile ricostruirla", (u,)))
-            elif not neg and not sq.tipo.eq(sc.Q_INF).any() and not len(self.punti_profilo(u, "inf")):
-                out.append(Problema("avviso", "base-stimata",
-                                    "nessuna quota inferiore: base ricavata dallo spessore della scheda", (u,)))
+            if not neg and not (q[q.us == u].tipo == sc.Q_INF).any() and not len(self.punti_profilo(u, "inf")):
+                senza_base.append(u)
+        if senza_base:
+            out.append(Problema("info", "base-stimata",
+                                f"{len(senza_base)} unità senza quote inferiori: la base viene dall'unità sottostante "
+                                "o dallo spessore della scheda", tuple(senza_base)))
         # quote lontane dal poligono della propria unità
         polys = {**self.poligoni_us(), **self.poligoni_usm()}
         from shapely import points, distance
@@ -303,6 +382,7 @@ class Scavo:
             "s3d_sorgenti": "id INTEGER PRIMARY KEY AUTOINCREMENT, percorso TEXT, tipo TEXT, sha256 TEXT, dimensione INTEGER, importato TEXT",
             "s3d_modelli": "id INTEGER PRIMARY KEY AUTOINCREMENT, unita INTEGER, tipo TEXT, qualita TEXT, dati BLOB",
             "s3d_storico": "id INTEGER PRIMARY KEY AUTOINCREMENT, quando TEXT, azione TEXT, dettagli TEXT",
+            "s3d_raster": "nome TEXT PRIMARY KEY, dati BLOB",
         }
         for t, cols in tabelle_s3d.items():
             cur.execute(f"CREATE TABLE {t} ({cols})")
@@ -323,6 +403,8 @@ class Scavo:
                                     top=m.top.astype("<f8"), bot=m.bot.astype("<f8"))
                 cur.execute("INSERT INTO s3d_modelli (unita, tipo, qualita, dati) VALUES (?,?,?,?)",
                             (int(u), m.tipo, json.dumps(m.qualita, ensure_ascii=False), buf.getvalue()))
+        if self.raster_superficie is not None:
+            cur.execute("INSERT INTO s3d_raster VALUES (?, ?)", ("superficie", self.raster_superficie.a_bytes()))
         self.registra("salvataggio", dict(file=os.path.basename(path)))
         cur.executemany("INSERT INTO s3d_storico (quando, azione, dettagli) VALUES (?,?,?)",
                         [(h["quando"], h["azione"], json.dumps(h["dettagli"], ensure_ascii=False)) for h in self.storico])
@@ -355,6 +437,13 @@ class Scavo:
         s.storico = [dict(quando=a, azione=b, dettagli=json.loads(c)) for a, b, c in
                      cur.execute("SELECT quando, azione, dettagli FROM s3d_storico ORDER BY id")]
         righe = list(cur.execute("SELECT unita, tipo, qualita, dati FROM s3d_modelli ORDER BY id"))
+        try:
+            r = cur.execute("SELECT dati FROM s3d_raster WHERE nome = 'superficie'").fetchone()
+        except sqlite3.OperationalError:       # progetti salvati prima della versione 0.3
+            r = None
+        if r:
+            from .superficie import Raster
+            s.raster_superficie = Raster.da_bytes(r[0])
         con.close()
         if righe:
             s.modello = Modello(rapporto=kv.get("modello_rapporto", []))
