@@ -108,10 +108,22 @@ def dati_visualizzatore(scavo):
                     if base is not None:
                         recs[u].setdefault("Altezza conservata media (m)", round(float(ra.mean() - base), 2))
 
+    # fase mancante o non numerica: gruppo 0; fasi senza foglio: generate dai valori delle schede
+    for u, r in recs.items():
+        f = r.get(sc.C_FASE)
+        try:
+            r[sc.C_FASE] = int(float(f)) if f is not None else 0
+        except (TypeError, ValueError):
+            r[sc.C_FASE] = 0
+
     def tabella(nome):
         df = tab.get(nome)
         return [] if df is None else [_rec(r) for _, r in df.iterrows()]
 
+    fasi = tabella(sc.S_FASI)
+    note = {int(float(f["Fase"])) for f in fasi if f.get("Fase") is not None}
+    for f in sorted({r[sc.C_FASE] for r in recs.values()} - note):
+        fasi.append({"Fase": f, "Titolo": "Senza fase" if f == 0 else f"Fase {f}", "Periodo": ""})
     rs, camp = tabella(sc.S_RS), tabella(sc.S_CAMPIONI)
     for r in rs + camp:
         if all(k in r for k in ("E (m)", "N (m)", "Quota (m)")):
@@ -152,10 +164,14 @@ def dati_visualizzatore(scavo):
     sito = scavo.meta.get("nome", "Scavo")
     if info is not None and len(info.columns):
         sito = str(info.columns[0]).replace("Database di scavo – ", "")
+    demo = False
+    if info is not None:
+        demo = any("IMMAGINARI" in str(v).upper() for v in info.astype(str).values.ravel()) or \
+            "immaginario" in str(info.columns[0]).lower()
     return dict(
-        sito=sito, origine=dict(E0=o["E0"], N0=o["N0"], Z0=Z0, crs=scavo.crs or ""),
+        sito=sito, demo=bool(demo), origine=dict(E0=o["E0"], N0=o["N0"], Z0=Z0, crs=scavo.crs or ""),
         meshes=meshes, livello_max=int(max(livello.values()) if livello else 0),
-        fasi=tabella(sc.S_FASI), schede=recs,
+        fasi=fasi, schede=recs,
         rapporti=[[int(a), d["t"], int(b)] for a, b, d in rap.grafo.edges(data=True)] +
                  [[int(a), "si lega a", int(b)] for a, b in rap.contemporanei],
         materiali=tabella(sc.S_MATERIALI), rs=rs, campioni=camp, documentazione=tabella(sc.S_DOC),
@@ -164,13 +180,19 @@ def dati_visualizzatore(scavo):
     )
 
 
-def visualizzatore(scavo, percorso_html):
-    """Scrive la pagina web autonoma del visualizzatore 3D."""
+def pagina_visualizzatore(scavo, modo="offline"):
+    """HTML del visualizzatore con i dati dello scavo. ``modo``: "offline" | "app" | "web"."""
+    from .risorse import adatta_pagina
     data = json.dumps(dati_visualizzatore(scavo), ensure_ascii=False, separators=(",", ":"), default=_json_val)
     tpl = resources.files("stratigrafia3d.visualizzatore").joinpath("modello.html").read_text(encoding="utf-8")
+    return adatta_pagina(tpl, modo).replace("/*__DATA__*/", data.replace("</", "<\\/"))
+
+
+def visualizzatore(scavo, percorso_html, modo="offline"):
+    """Scrive la pagina web autonoma del visualizzatore 3D (di norma utilizzabile senza internet)."""
     os.makedirs(os.path.dirname(os.path.abspath(percorso_html)), exist_ok=True)
     with open(percorso_html, "w", encoding="utf-8") as f:
-        f.write(tpl.replace("/*__DATA__*/", data.replace("</", "<\\/")))
+        f.write(pagina_visualizzatore(scavo, modo))
     return percorso_html
 
 

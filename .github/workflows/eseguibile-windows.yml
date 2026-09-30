@@ -1,0 +1,26 @@
+name: Eseguibile Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Librerie
+        run: pip install -e ".[app,test]" pyinstaller
+      - name: Test
+        run: pytest -q
+      - name: Eseguibile
+        working-directory: pacchetto
+        run: pyinstaller stratigrafia3d.spec --noconfirm --distpath ../dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stratigrafia3D-windows
+          path: dist/Stratigrafia3D

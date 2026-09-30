@@ -1,4 +1,4 @@
-<title>Stratigrafia 3D – Podere Roveto</title>
+<title>Stratigrafia 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
@@ -187,8 +187,8 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
 <div class="app">
   <header>
     <button class="hbtn mobile-only" id="btnList" aria-label="Elenco delle US">US</button>
-    <div class="brand"><h1>Podere Roveto · Area 1000</h1><span>Visualizzatore stratigrafico 3D</span></div>
-    <span class="tag" title="Scavo e dati inventati per dimostrazione">Dati immaginari</span>
+    <div class="brand"><h1 id="titolo">Scavo</h1><span>Visualizzatore stratigrafico 3D</span></div>
+    <span class="tag" id="tagDemo" title="Scavo e dati inventati per dimostrazione" hidden>Dati immaginari</span>
     <div class="hsp"></div>
     <div class="seg" role="group" aria-label="Vista">
       <button id="v3d" aria-pressed="true">3D</button><button id="vtop" aria-pressed="false">Pianta</button>
@@ -252,6 +252,7 @@ const D=JSON.parse($("modello").textContent);
 const CX=10, CY=8;                 // centro locale della scena (m)
 const ORIG=D.origine;
 const S=D.schede;                  // schede per numero
+$("titolo").textContent=D.sito||"Scavo"; document.title=(D.sito||"Scavo")+" – Stratigrafia 3D"; $("tagDemo").hidden=!D.demo;
 const FASI={}; D.fasi.forEach(f=>FASI[f.Fase]=f);
 const PH_COL=["#8e8a7c","#5c7196","#6f8f45","#b88a2c","#a8573a","#7b4b86","#cf6e4f","#2f8580","#6d6659"];
 const CAT_COL={"strato":"#a88b62","crollo":"#c0694d","riempimento":"#4f4237","taglio":"#222222","piano pavimentale":"#c58f7e","preparazione":"#bdb2a0","focolare":"#d0622f","struttura":"#a2553a","muro":"#c9c2b4","canaletta":"#8f9aa3","soglia":"#9aa29b"};
@@ -300,7 +301,9 @@ function colorFor(u){
   const mode=$("colMode").value;
   if(mode==="fase") return PH_COL[faseOf(u)]||"#888";
   if(mode==="cat") return CAT_COL[catOf(u)]||"#999";
-  const s=S[u]; return (s&&(s["Colore HEX"]))|| (s&&s._tipo==="USM"?"#c9c2b4":"#999");
+  const s=S[u]; if(s&&/^#[0-9a-f]{6}$/i.test(String(s["Colore HEX"]||""))) return s["Colore HEX"];
+  if(s&&s._tipo==="USM") return "#c9c2b4";
+  return CAT_COL[catOf(u)]||PH_COL[faseOf(u)]||"#9a8f80";   // nessun colore in scheda: per categoria o fase
 }
 
 D.meshes.forEach(m=>{
@@ -443,7 +446,7 @@ function buildTree(){
   Object.keys(S).map(Number).forEach(u=>{if(units[u]) (byF[faseOf(u)]??=[]).push(u)});
   const t=$("tree"); t.innerHTML="";
   Object.keys(byF).map(Number).sort((a,b)=>b-a).forEach(f=>{
-    const F=FASI[f]; const list=byF[f].sort((a,b)=>a-b);
+    const F=FASI[f]||{Titolo:"Fase "+f}; const list=byF[f].sort((a,b)=>a-b);
     const d=document.createElement("div"); d.className="phase";
     d.innerHTML=`<div class="phase-h"><input type="checkbox" checked aria-label="Mostra fase ${f}" data-f="${f}"><i class="sw" style="background:${PH_COL[f]}"></i><b>${f} · ${esc(F.Titolo)}</b><small>${F["Da (anno)"]!=null?esc(fmtY(F["Da (anno)"]))+"–"+esc(fmtY(F["A (anno)"])):""}</small></div>`+
       list.map(u=>`<div class="unit" data-u="${u}"><input type="checkbox" checked aria-label="Mostra ${u}" data-u="${u}"><i class="c${S[u].Tipo==="negativa"?" neg":""}" data-c="${u}"></i><span class="n">${S[u]._tipo==="USM"?"USM ":""}${u}</span><span class="d">${esc(defOf(u))}</span></div>`).join("");
@@ -498,6 +501,7 @@ function rsHTML(u){
   return R.map(r=>`<div class="rs" data-rs="${esc(r.RS)}" tabindex="0" role="button"><b>${esc(r.RS)} · ${esc(r.Oggetto)} <span class="muted">(${esc(r.Materiale)})</span></b><p>${esc(r.Descrizione)}</p><small>${esc(r.Dimensioni)} · ${esc(fmtY(r["Datazione da"]))} – ${esc(fmtY(r["Datazione a"]))} · quota ${num(r["Quota (m)"],3)} m</small></div>`).join("")+
     C.map(c=>`<div class="rs" style="cursor:default"><b>${esc(c.Campione)} · ${esc(c.Tipo)}</b><p>${esc(c.Analisi)}: ${esc(c["Risultato (fittizio)"])}</p><small>quota ${num(c["Quota (m)"],3)} m</small></div>`).join("");
 }
+function kvRighe(r){ return r.filter(([k,v])=>v!=null&&String(v).trim()!=="").map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("") }
 function qualTxt(s){ const q=s._qualita; if(!q) return "—";
   if(q.punti_taglio!=null) return `superficie da ${q.punti_taglio} quote e profili, ${q.punti_orlo} quote d'orlo`;
   const base={misurata:"base misurata",parziale:"base in parte misurata",stimata:"base stimata dalla scheda"}[q.base]||"";
@@ -506,7 +510,7 @@ function renderScheda(){
   const P=$("pScheda");
   if(selected==null){
     const nU=Object.keys(S).length, nm=D.materiali.reduce((s,m)=>s+(m.NR||0),0);
-    P.innerHTML=`<div class="empty"><p style="font-family:var(--f-ui);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px">Scavo immaginario · ${esc(ORIG.crs)}</p>
+    P.innerHTML=`<div class="empty"><p style="font-family:var(--f-ui);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px">${D.demo?"Scavo immaginario · ":""}${esc(ORIG.crs||"coordinate locali")}</p>
       <p><b>${nU}</b> unità stratigrafiche ricostruite in 3D a partire da poligoni, quote e profili del GIS, con <b>${nm.toLocaleString("it-IT")}</b> frammenti inventariati, ${D.rs.length} reperti speciali e ${D.campioni.length} campioni.</p>
       <p>Seleziona un'unità nella scena, nell'elenco o nel diagramma di Harris per aprirne la scheda.</p>
       <ul><li><b>Esploso</b> separa le unità secondo la sequenza stratigrafica.</li><li><b>Scavo virtuale</b> le asporta dall'alto verso il basso.</li><li><b>Sezione</b> taglia il modello con un piano: le campiture mostrano lo spessore irregolare degli strati.</li></ul></div>`;
@@ -514,7 +518,7 @@ function renderScheda(){
   }
   const u=selected, s=S[u], m=units[u]?.def, isM=s._tipo==="USM", F=FASI[s.Fase];
   const nr=(MAT[u]||[]).reduce((a,b)=>a+(b.NR||0),0);
-  const dat=!isM?`${fmtY(s["Datazione da"])} – ${fmtY(s["Datazione a"])}`:(F?`${fmtY(F["Da (anno)"])} – ${fmtY(F["A (anno)"])}`:"—");
+  const dat=!isM?(s["Datazione da"]==null&&s["Datazione a"]==null?"—":`${fmtY(s["Datazione da"])} – ${fmtY(s["Datazione a"])}`):(F?`${fmtY(F["Da (anno)"])} – ${fmtY(F["A (anno)"])}`:"—");
   const metr=isM?[
       ["Lunghezza",num(s["Lunghezza (m)"])+" m"],["Larghezza",num(s["Larghezza (m)"])+" m"],["Rasatura",num(s["Quota rasatura min"],3)+" – "+num(s["Quota rasatura max"],3)+" m"],
       ["Base",num(s["Quota base usata (rilevata o stimata)"],3)+" m"+(s["Quota fondazione rilevata"]==null?" (stimata)":" (rilevata)")],["Altezza conservata",num(s["Altezza conservata media (m)"])+" m"],
@@ -525,12 +529,12 @@ function renderScheda(){
       ["Data di scavo",esc(s["Data scavo"]||"—")],["Responsabile",esc(s.Responsabile||"—")]];
   const docs=(DOCU[u]||[]);
   P.innerHTML=`<div class="sh"><div class="num">${isM?"<small style='font-size:14px'>USM</small> ":""}${u}</div><div class="kind">${isM?"Unità muraria":("US "+esc(s.Tipo))} · ${esc(s.Categoria)}</div><h2>${esc(s.Definizione)}</h2></div>
-    <div class="chips"><span class="chip"><i style="background:${PH_COL[s.Fase]}"></i>Fase ${s.Fase} · ${esc(F?.Titolo)}</span><span class="chip">${esc(F?.Periodo)}</span><span class="chip">${esc(dat)}</span>${!isM&&s["Colore Munsell"]?`<span class="chip"><i style="background:${esc(s["Colore HEX"])};border-radius:2px"></i>${esc(s["Colore Munsell"])}</span>`:""}</div>
+    <div class="chips"><span class="chip"><i style="background:${PH_COL[s.Fase]}"></i>Fase ${s.Fase} · ${esc(F?.Titolo)}</span>${F?.Periodo?`<span class="chip">${esc(F.Periodo)}</span>`:""}${dat&&!dat.startsWith("—")?`<span class="chip">${esc(dat)}</span>`:""}${!isM&&s["Colore Munsell"]?`<span class="chip"><i style="background:${esc(s["Colore HEX"])};border-radius:2px"></i>${esc(s["Colore Munsell"])}</span>`:""}</div>
     <div class="acts"><button id="aFocus">Centra</button><button id="aGhost" aria-pressed="${GHOST}" title="Rende semitrasparenti le altre unità">Trasparenza</button><button id="aIso" aria-pressed="${isolated}">Isola</button><button id="aHide">Nascondi</button><button id="aClip">Sezione qui</button><button id="aClose">Chiudi</button></div>
     <details class="sec" open><summary>Descrizione</summary><div class="sec-b">
       <p class="read">${esc(s.Descrizione)}</p>
-      <p class="read"><i>Interpretazione.</i> ${esc(s.Interpretazione)}</p>
-      <dl class="kv">${!isM?`<dt>Ambiente</dt><dd>${esc(s.Ambiente)}</dd><dt>Consistenza</dt><dd>${esc(s.Consistenza||"—")}</dd><dt>Componenti</dt><dd>${esc(s.Componenti||"—")}</dd><dt>Morfologia</dt><dd>${esc(s.Morfologia)} · margini ${esc(s.Margini)}</dd><dt>Criteri</dt><dd>${esc(s["Criteri di distinzione"])}</dd>`
+      ${s.Interpretazione?`<p class="read"><i>Interpretazione.</i> ${esc(s.Interpretazione)}</p>`:""}
+      <dl class="kv">${!isM?kvRighe([["Ambiente",s.Ambiente],["Consistenza",s.Consistenza],["Componenti",s.Componenti],["Morfologia",[s.Morfologia,s.Margini?"margini "+s.Margini:""].filter(Boolean).join(" · ")],["Criteri",s["Criteri di distinzione"]]])
         :`<dt>Tecnica</dt><dd>${esc(s["Tecnica costruttiva"])}</dd><dt>Materiali</dt><dd>${esc(s.Materiali)}</dd><dt>Orientamento</dt><dd>${esc(s.Orientamento)}</dd>`}</dl></div></details>
     <details class="sec" open><summary>Rapporti stratigrafici <small>livello ${s._livello}</small></summary><div class="sec-b">${relHTML(u)}</div></details>
     <details class="sec" ${nr?"open":""}><summary>Materiali <small>${nr} fr · ${(MAT[u]||[]).length} righe</small></summary><div class="sec-b">${matHTML(u)}</div></details>
@@ -728,7 +732,7 @@ $("v3d").onclick=()=>{$("v3d").setAttribute("aria-pressed","true");$("vtop").set
 $("vtop").onclick=()=>{$("vtop").setAttribute("aria-pressed","true");$("v3d").setAttribute("aria-pressed","false");home()};
 addEventListener("keydown",e=>{if(e.key==="Escape") select(null)});
 
-function resize(){ const w=stage.clientWidth,h=stage.clientHeight; if(!w||!h) return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix() }
+function resize(){ const w=stage.clientWidth,h=stage.clientHeight; if(!w||!h) return; $("legend").style.visibility=w<720?"hidden":""; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix() }
 new ResizeObserver(resize).observe(stage);
 const needle=$("needle");
 function loop(t){ requestAnimationFrame(loop); if(anim) anim(t); controls.update(); renderer.render(scene,camera); drawLabels();

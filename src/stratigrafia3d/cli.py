@@ -75,6 +75,35 @@ def cmd_glb(a):
     print("Scritto", esporta.glb(s, a.output, esploso=a.esploso))
 
 
+def cmd_app(a):
+    from .app.avvio import avvia
+    avvia(a.progetto, finestra=not a.browser, porta=a.porta, browser=not a.senza_browser)
+
+
+def cmd_importa(a):
+    from . import importa
+    from .ricostruzione import ricostruisci
+    abb = importa.Abbinamento.carica_profilo(a.profilo) if a.profilo else importa.proponi(a.file)
+    if not a.profilo:
+        for n in abb.note:
+            print("  ", n)
+        for r in abb.layers:
+            print(f"   {r.layer:30s} -> {r.ruolo:10s} {r.motivo}")
+    if a.salva_profilo:
+        abb.salva_profilo(a.salva_profilo)
+        print("Profilo salvato in", a.salva_profilo)
+    s = importa.applica(abb, log=lambda m: print("  ", m))
+    err = _stampa_problemi(s.verifica())
+    if a.output:
+        if err and not a.forza:
+            print("Correggi gli errori o usa --forza.")
+            return 1
+        ricostruisci(s)
+        s.salva(a.output)
+        print("Progetto salvato in", a.output)
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="strat3d", description="Ricostruzione 3D delle unità stratigrafiche.")
     p.add_argument("--version", action="version", version=f"stratigrafia3d {__version__}")
@@ -108,6 +137,18 @@ def main(argv=None):
     g.add_argument("progetto"); g.add_argument("-o", "--output", required=True)
     g.add_argument("--esploso", type=float, default=0.0, help="distanza verticale tra livelli (m)")
     g.set_defaults(f=cmd_glb)
+
+    ap = sub.add_parser("app", help="apre l'applicazione (finestra o browser)")
+    ap.add_argument("progetto", nargs="?"); ap.add_argument("--porta", type=int, default=0)
+    ap.add_argument("--browser", action="store_true", help="usa il browser invece della finestra")
+    ap.add_argument("--senza-browser", action="store_true", help="non apre nulla, avvia solo il server")
+    ap.set_defaults(f=cmd_app)
+
+    im = sub.add_parser("importa", help="import flessibile di file qualsiasi (GIS, DXF, Excel) con abbinamento automatico")
+    im.add_argument("file", nargs="*"); im.add_argument("--profilo", help="usa un profilo di abbinamento salvato")
+    im.add_argument("--salva-profilo"); im.add_argument("-o", "--output", help="crea il progetto .scavo")
+    im.add_argument("--forza", action="store_true")
+    im.set_defaults(f=cmd_importa)
 
     a = p.parse_args(argv)
     if a.cmd == "verifica" and not a.sorgente.endswith(".scavo") and not a.excel:

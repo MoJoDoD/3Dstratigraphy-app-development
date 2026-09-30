@@ -3,8 +3,31 @@
 Ricostruzione 3D delle unità stratigrafiche (US) a partire dalla documentazione di scavo 2D:
 poligoni in pianta, quote, profili di sezione (GeoPackage) e schede (Excel).
 
-Questa è la **tappa 1** del progetto: il motore Python, la riga di comando e il formato di progetto `.scavo`.
-L'app desktop (tappa 2) userà questo stesso motore.
+Tappe completate: **1** (motore, riga di comando, formato `.scavo`) e **2** (app desktop con import
+guidato: si apre un rilievo reale, si abbinano i campi, si ricostruisce il 3D e si salva, senza codice).
+
+## App su Windows
+
+1. Installa Python 3.12 da python.org (spunta "Add python.exe to PATH").
+2. Doppio clic su **Installa (Windows).bat** (solo la prima volta, qualche minuto).
+3. Doppio clic su **Avvia Stratigrafia 3D.bat**. Si può trascinare un file `.scavo` sull'icona per aprirlo.
+
+L'app funziona senza internet: gira sul tuo PC e usa una finestra propria (o il browser, se la
+finestra non è disponibile). Per creare un eseguibile unico c'è il workflow
+`.github/workflows/eseguibile-windows.yml` (PyInstaller), che parte appena il progetto è su GitHub.
+
+## Import flessibile
+
+L'app e il comando `strat3d importa` accettano file "come arrivano": GeoPackage, shapefile, GeoJSON,
+DXF da stazione totale (polilinee chiuse per layer `US_1005`, punti 3D, testi come etichette o quote),
+CSV di punti, Excel o CSV delle schede. Riconoscono da soli:
+- il ruolo di ogni layer (limiti US, murature, quote, profili, limite di scavo…) da nome e geometria;
+- il campo con il numero di US (anche scritto "US 1005") confrontandolo con le schede;
+- la quota dalla Z o da un campo, e il tipo di quota da un campo o dal nome del file;
+- i rapporti in un foglio a sé o nelle colonne della scheda ("Copre", "Tagliato da"…);
+- US negative dalla parola "taglio", spessori in centimetri, USM nello stesso foglio delle US.
+
+Ogni scelta è modificabile e si salva come profilo riutilizzabile per lo stesso cantiere.
 
 ## Installazione
 
@@ -15,6 +38,8 @@ pip install -e .[demo,test]
 ## Uso dalla riga di comando
 
 ```
+strat3d app                                        # apre l'applicazione
+strat3d importa rilievo.dxf schede.xlsx -o scavo.scavo   # import automatico senza interfaccia
 strat3d demo cartella_demo                         # genera lo scavo dimostrativo "Podere Roveto"
 strat3d verifica scavo.gpkg schede.xlsx            # controlla dati e rapporti stratigrafici
 strat3d crea-progetto scavo.gpkg schede.xlsx -o scavo.scavo

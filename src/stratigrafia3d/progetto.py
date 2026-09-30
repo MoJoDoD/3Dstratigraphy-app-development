@@ -110,6 +110,8 @@ class Scavo:
         self.meta = {}
         self.storico = []
         self._origine = None
+        self.abbinamento = None           # importa.Abbinamento usato per l'import
+        self.note_importazione = []
 
     # ------------------------------------------------------------------ lettura
     @classmethod
@@ -308,7 +310,9 @@ class Scavo:
                         "VALUES (?, 'attributes', ?, 'stratigrafia3d', ?)", (t, t, now))
         kv = dict(formato="stratigrafia3d", versione_formato=VERSIONE_FORMATO, crs=self.crs,
                   origine=self.origine, parametri=asdict(self.parametri), meta=self.meta,
-                  modello_rapporto=self.modello.rapporto if self.modello else [])
+                  modello_rapporto=self.modello.rapporto if self.modello else [],
+                  abbinamento=asdict(self.abbinamento) if self.abbinamento is not None else None,
+                  note_importazione=self.note_importazione)
         cur.executemany("INSERT INTO s3d_progetto VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in kv.items()])
         cur.executemany("INSERT INTO s3d_sorgenti (percorso, tipo, sha256, dimensione, importato) VALUES (?,?,?,?,?)",
                         [(s["percorso"], s["tipo"], s["sha256"], s["dimensione"], s["importato"]) for s in self.sorgenti])
@@ -342,6 +346,10 @@ class Scavo:
         s._origine = kv.get("origine")
         s.parametri = Parametri(**{k: v for k, v in kv.get("parametri", {}).items() if k in Parametri.__dataclass_fields__})
         s.meta = kv.get("meta", {})
+        if kv.get("abbinamento"):
+            from .importa import Abbinamento
+            s.abbinamento = Abbinamento.da_json(kv["abbinamento"])
+        s.note_importazione = kv.get("note_importazione", [])
         s.sorgenti = [dict(percorso=a, tipo=b, sha256=c, dimensione=d, importato=e) for a, b, c, d, e in
                       cur.execute("SELECT percorso, tipo, sha256, dimensione, importato FROM s3d_sorgenti")]
         s.storico = [dict(quando=a, azione=b, dettagli=json.loads(c)) for a, b, c in

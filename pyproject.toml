@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stratigrafia3d"
-version = "0.1.0"
+version = "0.2.0"
 description = "Ricostruzione 3D delle unità stratigrafiche da documentazione di scavo 2D (GIS + Excel)"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -17,7 +17,8 @@ dependencies = [
 
 [project.optional-dependencies]
 demo = ["scikit-image>=0.22", "matplotlib>=3.8"]
-test = ["pytest>=8", "scikit-image>=0.22", "matplotlib>=3.8"]
+app = ["pywebview>=5", "scikit-image>=0.22", "matplotlib>=3.8"]
+test = ["pytest>=8", "scikit-image>=0.22", "matplotlib>=3.8", "ezdxf>=1.1"]
 
 [project.scripts]
 strat3d = "stratigrafia3d.cli:main"
@@ -27,6 +28,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "stratigrafia3d.visualizzatore" = ["*.html"]
+"stratigrafia3d.app" = ["statici/*.html", "statici/vendor/*", "statici/fonts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

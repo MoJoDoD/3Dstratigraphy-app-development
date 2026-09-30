@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stratigrafia 3D</title>
+<style>
+/*__FONT__*/
+/* Layout: applicazione a schermo pieno — barra dei comandi in alto, sotto una sola vista alla volta
+   (inizio, procedura di importazione, modello 3D). Stesso linguaggio del visualizzatore:
+   carta da rilievo, inchiostro, rosso delle linee di sezione. */
+:root{
+  --paper:#e9ece8; --panel:#f7f8f5; --panel-2:#eef1ed; --ink:#1c2226; --muted:#5a656a; --line:#cdd4cf;
+  --accent:#c4321c; --accent-soft:#c4321c1f; --on-accent:#ffffff; --good:#2f7d5b; --warn:#a86a00; --bad:#b3261e;
+  --f-ui:"IBM Plex Sans Condensed","Arial Narrow",Arial,sans-serif;
+  --f-read:"IBM Plex Serif",Georgia,serif; --f-num:"IBM Plex Mono",Consolas,monospace; --r:6px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#121618; --panel:#191e21; --panel-2:#20262a; --ink:#e3e7e4; --muted:#96a1a4; --line:#2d353a;
+  --accent:#ff6a4f; --accent-soft:#ff6a4f24; --on-accent:#1a0d09; --good:#5fc193; --warn:#e5a93a; --bad:#ff7a70; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#121618; --panel:#191e21; --panel-2:#20262a; --ink:#e3e7e4; --muted:#96a1a4; --line:#2d353a;
+  --accent:#ff6a4f; --accent-soft:#ff6a4f24; --on-accent:#1a0d09; --good:#5fc193; --warn:#e5a93a; --bad:#ff7a70; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-ui);font-size:14px;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+.app{display:grid;grid-template-rows:auto 1fr;height:100%}
+
+header{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(--panel);border-bottom:1px solid var(--line);min-width:0;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;white-space:nowrap}
+.mark{width:20px;height:20px;border-radius:3px;background:linear-gradient(var(--ink) 0 0) 0 30%/100% 2px no-repeat,linear-gradient(var(--accent) 0 0) 0 64%/100% 2px no-repeat;border:1.5px solid var(--ink)}
+.prj{display:flex;align-items:center;gap:7px;color:var(--muted);min-width:0;font-size:13.5px}
+.prj b{color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:32ch}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.sp{flex:1}
+.grp{display:flex;gap:6px;align-items:center}
+.sep{width:1px;height:22px;background:var(--line)}
+.btn{border:1px solid var(--line);background:var(--panel-2);border-radius:var(--r);padding:5px 11px;cursor:pointer;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.pri{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.btn.acc{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.menu{position:relative}
+.menu-l{position:absolute;right:0;top:calc(100% + 4px);background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 24px #0003;min-width:230px;z-index:30;padding:4px}
+.menu-l button{display:block;width:100%;text-align:left;border:0;background:none;padding:7px 10px;border-radius:4px;cursor:pointer}
+.menu-l button:hover{background:var(--panel-2)}
+.menu-l small{display:block;color:var(--muted);font-size:12px}
+
+main{min-height:0;position:relative}
+.view{position:absolute;inset:0;overflow:auto}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 20px 48px}
+
+/* inizio */
+.hero{display:grid;gap:6px;margin:10px 0 26px}
+.hero h1{font-size:30px;margin:0;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+.hero p{margin:0;color:var(--muted);font-family:var(--f-read);font-size:15.5px;max-width:64ch;line-height:1.5}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:18px;display:grid;gap:8px;align-content:start;text-align:left;cursor:pointer}
+.card:hover{border-color:var(--ink)}
+.card h3{margin:0;font-size:17px}
+.card p{margin:0;color:var(--muted);line-height:1.45}
+.card .k{font-family:var(--f-num);font-size:11.5px;color:var(--accent);letter-spacing:.04em}
+h2.sez{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:30px 0 8px}
+.rec{display:grid;gap:4px}
+.rec button{display:flex;gap:12px;justify-content:space-between;border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:8px 12px;cursor:pointer;text-align:left}
+.rec button:hover{border-color:var(--muted)}
+.rec code{font-family:var(--f-num);font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* procedura */
+.steps{display:flex;gap:0;margin:0 0 22px;border-bottom:1px solid var(--line);overflow-x:auto}
+.steps div{padding:10px 16px;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;display:flex;gap:8px;align-items:center}
+.steps div i{font-style:normal;font-family:var(--f-num);font-size:12px;border:1px solid var(--line);border-radius:50%;width:20px;height:20px;display:inline-grid;place-items:center}
+.steps div.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.steps div.fatto i{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.lead{font-family:var(--f-read);font-size:15px;line-height:1.5;color:var(--muted);max-width:70ch;margin:0 0 16px}
+.flist{display:grid;gap:6px;margin:0 0 14px}
+.fitem{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:8px 12px}
+.fitem .ext{font-family:var(--f-num);font-size:11px;border:1px solid var(--line);border-radius:3px;padding:1px 5px;color:var(--muted);text-transform:uppercase}
+.fitem code{font-family:var(--f-num);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fitem button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row input[type=text]{flex:1;min-width:220px;border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:6px 9px;font-family:var(--f-num);font-size:12.5px}
+.nav{display:flex;gap:8px;justify-content:space-between;margin-top:22px;flex-wrap:wrap}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+table.t{border-collapse:collapse;width:100%;font-size:13px}
+table.t th{text-align:left;font-weight:500;color:var(--muted);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.t td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.t tr:last-child td{border-bottom:0}
+table.t td.n{font-family:var(--f-num);font-size:12px;text-align:right}
+table.t select{border:1px solid var(--line);background:var(--paper);border-radius:4px;padding:3px 5px;max-width:210px;font-size:12.5px}
+table.t tr.off td{color:var(--muted)}
+table.t tr.off select{opacity:.7}
+.mot{color:var(--muted);font-size:12px;line-height:1.35;max-width:36ch}
+table.t td.mot{min-width:230px}
+.lay b{display:block;font-weight:600}
+.lay small{color:var(--muted);font-family:var(--f-num);font-size:11.5px}
+.geo{font-size:11.5px;border-radius:999px;padding:1px 8px;border:1px solid var(--line);white-space:nowrap}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.box{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:14px 16px;display:grid;gap:10px;align-content:start;min-width:0}
+.box h3{margin:0;font-size:15px}
+.kv{display:grid;grid-template-columns:minmax(120px,40%) 1fr;gap:6px 10px;align-items:center;font-size:13px}
+.kv label{color:var(--muted)}
+.kv select{border:1px solid var(--line);background:var(--paper);border-radius:4px;padding:4px 6px;width:100%;min-width:0}
+.note{display:grid;gap:6px;margin:0 0 14px;padding:0;list-style:none}
+.note li{font-family:var(--f-read);font-size:14px;line-height:1.45;padding-left:16px;position:relative}
+.note li::before{content:"";position:absolute;left:2px;top:.6em;width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.prob{display:grid;gap:6px}
+.pr{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:8px 12px}
+.pill{font-size:11px;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:2px 8px;font-weight:600;white-space:nowrap}
+.pill.errore{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.pill.avviso{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.pill.ok{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.pr p{margin:0}
+.pr code{font-family:var(--f-num);font-size:12px;color:var(--muted)}
+.somm{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 14px;align-items:center}
+
+/* modello */
+#vModello{display:grid;grid-template-columns:minmax(0,1fr) auto;overflow:hidden}
+#frame{width:100%;height:100%;border:0;display:block;background:var(--paper)}
+.side{width:380px;border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:14px 16px}
+.side h3{margin:0 0 4px;font-size:15px}
+.side p{margin:0 0 10px;color:var(--muted);font-size:13px}
+.q{font-size:11px;border-radius:999px;padding:1px 7px;white-space:nowrap}
+.q.misurata{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.q.parziale{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.q.stimata{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+
+/* sovrapposizioni */
+.busy{position:fixed;inset:0;background:color-mix(in srgb,var(--paper) 70%,transparent);display:grid;place-items:center;z-index:50}
+.busy div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 22px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 30px #0002}
+.spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:g 0.8s linear infinite}
+@keyframes g{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:9px 14px;border-radius:var(--r);z-index:60;display:flex;gap:12px;align-items:center;max-width:min(680px,calc(100% - 32px));box-shadow:0 8px 30px #0003}
+.toast.err{background:var(--bad);color:#fff}
+.toast button{border:1px solid currentColor;background:none;color:inherit;border-radius:4px;padding:2px 9px;cursor:pointer}
+dialog{border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);padding:18px;max-width:min(560px,calc(100% - 32px));width:100%}
+dialog::backdrop{background:#0006}
+dialog h3{margin:0 0 6px}
+dialog p{margin:0 0 12px;color:var(--muted);font-size:13.5px}
+dialog input{width:100%;border:1px solid var(--line);background:var(--paper);border-radius:var(--r);padding:7px 9px;font-family:var(--f-num);font-size:12.5px}
+dialog .row{justify-content:flex-end;margin-top:12px}
+@media (max-width:820px){.side{position:absolute;right:0;top:0;bottom:0;box-shadow:-6px 0 20px #0003}header .grp .t2{display:none}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span class="mark" aria-hidden="true"></span>Stratigrafia 3D</div>
+    <div class="prj" id="prj" hidden><span>·</span><b id="prjNome"></b><span class="dot" id="dirty" title="Modifiche non salvate" hidden></span></div>
+    <div class="sp"></div>
+    <div class="grp">
+      <button class="btn" id="bNuovo">Nuovo</button>
+      <button class="btn" id="bApri">Apri…</button>
+      <button class="btn" id="bSalva" disabled title="Ctrl+S">Salva</button>
+      <button class="btn t2" id="bSalvaCome" disabled>Salva come…</button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp">
+      <button class="btn t2" id="bVerifica" disabled>Verifica</button>
+      <button class="btn" id="bRicostruisci" disabled>Ricostruisci</button>
+      <div class="menu">
+        <button class="btn" id="bEsporta" disabled aria-haspopup="true" aria-expanded="false">Esporta ▾</button>
+        <div class="menu-l" id="mEsporta" hidden>
+          <button data-esp="glb">Modello 3D (.glb)<small>Per Blender, MeshLab e visualizzatori glTF</small></button>
+          <button data-esp="glbx">Modello 3D esploso (.glb)<small>Unità separate in altezza di 30 cm per livello</small></button>
+          <button data-esp="html">Pagina web (.html)<small>Visualizzatore autonomo, funziona senza internet</small></button>
+        </div>
+      </div>
+      <button class="btn" id="bResoconto" aria-pressed="false" hidden>Resoconto</button>
+    </div>
+  </header>
+  <main>
+    <!-- INIZIO -->
+    <section class="view" id="vHome">
+      <div class="wrap">
+        <div class="hero">
+          <h1>Dalla pianta di scavo al volume di ogni US</h1>
+          <p>Carica i limiti delle unità, le quote e le schede: l'app riconosce da sola i campi, controlla i rapporti stratigrafici e ricostruisce il modello 3D. Tutto resta sul tuo computer.</p>
+        </div>
+        <div class="cards">
+          <button class="card" id="cNuovo"><span class="k">GPKG · SHP · DXF · GEOJSON · XLSX · CSV</span><h3>Nuovo progetto dai file di scavo</h3><p>Scegli i file del rilievo e delle schede; la procedura guidata propone come usarli.</p></button>
+          <button class="card" id="cApri"><span class="k">.SCAVO</span><h3>Apri un progetto</h3><p>Riprendi un progetto salvato, con il modello 3D già calcolato.</p></button>
+          <button class="card" id="cDemo"><span class="k">PODERE ROVETO · DATI IMMAGINARI</span><h3>Prova con lo scavo dimostrativo</h3><p>Genera un piccolo scavo di esempio e percorri la procedura con dati già pronti.</p></button>
+        </div>
+        <div id="recWrap" hidden>
+          <h2 class="sez">Progetti recenti</h2>
+          <div class="rec" id="rec"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROCEDURA DI IMPORTAZIONE -->
+    <section class="view" id="vWizard" hidden>
+      <div class="wrap">
+        <div class="steps" id="steps">
+          <div data-s="1"><i>1</i>File</div><div data-s="2"><i>2</i>Layer</div><div data-s="3"><i>3</i>Schede e rapporti</div><div data-s="4"><i>4</i>Verifica</div>
+        </div>
+
+        <div id="s1">
+          <p class="lead">Aggiungi i file del rilievo (GeoPackage, shapefile, DXF, GeoJSON, CSV di punti) e il file delle schede (Excel o CSV). Puoi anche caricare un profilo di abbinamento salvato da un progetto precedente dello stesso cantiere.</p>
+          <div class="flist" id="flist"></div>
+          <div class="row">
+            <button class="btn pri" id="bAggiungi">Aggiungi file…</button>
+            <input type="text" id="percorsoFile" placeholder="…oppure incolla qui il percorso di un file e premi Invio" aria-label="Percorso di un file">
+          </div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="bProfilo">Carica profilo di abbinamento…</button><span class="mot" id="profInfo"></span></div>
+          <div class="nav"><button class="btn" data-annulla>Annulla</button><button class="btn acc" id="n1">Esamina i file →</button></div>
+        </div>
+
+        <div id="s2" hidden>
+          <p class="lead">Per ogni layer trovato indica a cosa serve. Le scelte sono già proposte in base a nomi, geometrie e valori; il motivo è scritto accanto. Correggi solo ciò che non torna.</p>
+          <div class="tw"><table class="t" id="tLayer"></table></div>
+          <div class="nav"><button class="btn" data-vai="1">← File</button><button class="btn acc" id="n2">Schede e rapporti →</button></div>
+        </div>
+
+        <div id="s3" hidden>
+          <p class="lead">Indica dove stanno le schede delle US e i rapporti stratigrafici. I rapporti possono stare in un foglio a sé (US · rapporto · US) oppure in colonne della scheda come «Copre», «Tagliato da».</p>
+          <div class="grid2">
+            <div class="box"><h3>Schede US</h3><div class="kv" id="kvUS"></div></div>
+            <div class="box"><h3>Rapporti stratigrafici</h3><div class="kv" id="kvRap"></div></div>
+            <div class="box"><h3>Schede USM</h3><div class="kv" id="kvUSM"></div></div>
+          </div>
+          <h2 class="sez">Anteprima del foglio delle US</h2>
+          <div class="tw"><table class="t" id="tPrev"></table></div>
+          <div class="nav"><button class="btn" data-vai="2">← Layer</button><button class="btn acc" id="n3">Importa e verifica →</button></div>
+        </div>
+
+        <div id="s4" hidden>
+          <div class="somm" id="somm"></div>
+          <ul class="note" id="noteImp"></ul>
+          <div class="prob" id="prob"></div>
+          <div class="nav">
+            <button class="btn" data-vai="3">← Schede e rapporti</button>
+            <div class="row"><button class="btn" id="bSalvaProf">Salva profilo di abbinamento…</button><button class="btn acc" id="n4">Ricostruisci il 3D →</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MODELLO -->
+    <section class="view" id="vModello" hidden>
+      <iframe id="frame" title="Modello 3D delle unità stratigrafiche"></iframe>
+      <aside class="side" id="side" hidden>
+        <h3>Resoconto della ricostruzione</h3>
+        <p>Quante misure sostengono ogni volume. «Stimata» vuol dire che la base viene dallo spessore della scheda, non da quote.</p>
+        <ul class="note" id="sideNote"></ul>
+        <div class="tw"><table class="t" id="tRes"></table></div>
+      </aside>
+    </section>
+  </main>
+</div>
+
+<div class="busy" id="busy" hidden><div><span class="spin"></span><span id="busyMsg">Attendere…</span></div></div>
+<div class="toast" id="toast" hidden></div>
+<dialog id="dlg"><h3 id="dlgT"></h3><p id="dlgP"></p><input id="dlgI" type="text"><div class="row"><button class="btn" id="dlgNo">Annulla</button><button class="btn pri" id="dlgSi">OK</button></div></dialog>
+
+<script>
+(function(){
+"use strict";
+const GETTONE="__GETTONE__";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const base=p=>String(p||"").split(/[\\/]/).pop();
+let S={aperto:false};          // stato dal server
+let W=null;                    // procedura: {files, esame, abb}
+let profilo=null;
+
+async function api(nome,dati){
+  const r=await fetch("/api/"+nome,{method:"POST",headers:{"Content-Type":"application/json","X-Gettone":GETTONE},body:JSON.stringify(dati||{})});
+  const j=await r.json(); if(!j.ok) throw new Error(j.errore||"Errore"); return j;
+}
+async function lavoro(msg,fn){ $("busyMsg").textContent=msg; $("busy").hidden=false;
+  try{ return await fn() } catch(e){ avviso(e.message,true); throw e } finally{ $("busy").hidden=true } }
+let tT=null;
+function avviso(msg,err,azione){ const t=$("toast"); t.className="toast"+(err?" err":""); t.innerHTML=`<span>${esc(msg)}</span>`;
+  if(azione){const b=document.createElement("button");b.textContent=azione[0];b.onclick=()=>{t.hidden=true;azione[1]()};t.appendChild(b)}
+  t.hidden=false; clearTimeout(tT); tT=setTimeout(()=>t.hidden=true, err?9000:(azione?12000:4500)) }
+function chiedi(titolo,testo,valore){ return new Promise(res=>{ const d=$("dlg"); $("dlgT").textContent=titolo; $("dlgP").textContent=testo; $("dlgI").value=valore||"";
+  $("dlgSi").onclick=()=>{d.close();res($("dlgI").value.trim()||null)}; $("dlgNo").onclick=()=>{d.close();res(null)};
+  $("dlgI").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();$("dlgSi").click()}}; d.showModal(); $("dlgI").focus() }) }
+
+async function scegli(tipo,filtri,multiplo,nome,titolo){
+  const r=await api("dialogo",{tipo,filtri,multiplo,nome});
+  if(r.disponibile) return r.percorsi||[];
+  const p=await chiedi(titolo||(tipo==="apri"?"Percorso del file":"Salva come"),"Scrivi il percorso completo del file.",nome||"");
+  return p?[p]:[];
+}
+
+// ------------------------------------------------------------------ viste
+function mostra(v){ ["vHome","vWizard","vModello"].forEach(id=>$(id).hidden=id!==v); $("bResoconto").hidden=v!=="vModello" }
+function aggiornaStato(s){
+  S=s; $("prj").hidden=!s.aperto; $("prjNome").textContent=s.aperto?(s.percorso?base(s.percorso):(s.nome||"nuovo progetto")+" (non salvato)"):"";
+  $("dirty").hidden=!(s.aperto&&s.modificato);
+  $("bSalva").disabled=$("bSalvaCome").disabled=$("bVerifica").disabled=$("bRicostruisci").disabled=!s.aperto;
+  $("bEsporta").disabled=!(s.aperto&&s.ha_modello);
+  const r=s.recenti||[]; $("recWrap").hidden=!r.length;
+  $("rec").innerHTML=r.map(p=>`<button data-p="${esc(p)}"><span>${esc(base(p))}</span><code>${esc(p)}</code></button>`).join("");
+  $("rec").querySelectorAll("button").forEach(b=>b.onclick=()=>apri(b.dataset.p));
+  document.title=s.aperto?`${base(s.percorso)||s.nome} – Stratigrafia 3D`:"Stratigrafia 3D";
+}
+function vaiModello(){
+  mostra("vModello"); $("frame").src="/visualizzatore?v="+S.versione_modello+"&t="+Date.now(); resoconto();
+}
+function resoconto(){
+  const r=S.rapporto||[];
+  $("sideNote").innerHTML=(S.note||[]).map(n=>`<li>${esc(n)}</li>`).join("");
+  $("tRes").innerHTML=`<thead><tr><th>Unità</th><th>Tipo</th><th>Punti</th><th>Base</th></tr></thead><tbody>`+
+    r.map(x=>`<tr><td class="n" style="text-align:left">${x.unita}</td><td>${esc(x.tipo)}</td><td class="n">${x.punti_tetto??x.punti_taglio??""}${x.punti_base!=null?" / "+x.punti_base:""}</td><td>${x.base?`<span class="q ${esc(x.base)}">${esc(x.base)}</span>`:"superficie"}</td></tr>`).join("")+`</tbody>`;
+}
+
+// ------------------------------------------------------------------ comandi principali
+async function apri(p){
+  if(!p){ const r=await scegli("apri",["scavo"],false,null,"Apri progetto"); p=r[0]; if(!p) return }
+  if(!await perdite()) return;
+  const s=await lavoro("Apertura del progetto…",()=>api("apri",{percorso:p}));
+  aggiornaStato(s); if(s.ha_modello) vaiModello(); else ricostruisciOra();
+}
+async function salva(come){
+  if(!S.aperto) return;
+  let p=S.percorso;
+  if(!p||come){ const r=await scegli("salva",["scavo"],false,(S.nome||"scavo")+".scavo","Salva progetto"); p=r[0]; if(!p) return }
+  const s=await lavoro("Salvataggio…",()=>api("salva",{percorso:p})); aggiornaStato(s); avviso("Progetto salvato: "+base(s.percorso));
+}
+async function perdite(){
+  if(!(S.aperto&&S.modificato)) return true;
+  const r=await chiedi("Modifiche non salvate","Il progetto aperto ha modifiche non salvate. Scrivi «sì» per continuare senza salvarle.","");
+  return r&&r.toLowerCase().startsWith("s");
+}
+async function ricostruisciOra(forza){
+  try{
+    const r=await lavoro("Ricostruzione dei volumi 3D…",()=>api("ricostruisci",{forza:!!forza}));
+    aggiornaStato(r.stato); vaiModello();
+    avviso(`Modello ricostruito in ${r.secondi} s.`+(S.percorso?"":" Salvalo per conservarlo."),false,S.percorso?null:["Salva",()=>salva()]);
+  }catch(e){}
+}
+async function verifica(){
+  const r=await lavoro("Verifica…",()=>api("verifica"));
+  const e=r.problemi.filter(p=>p.livello==="errore").length;
+  avviso(e?`${e} errori e ${r.problemi.length-e} avvisi: apri la procedura per i dettagli`:(r.problemi.length?`Nessun errore, ${r.problemi.length} avvisi`:"Nessun problema trovato"),!!e);
+}
+async function esporta(tipo){
+  $("mEsporta").hidden=true; $("bEsporta").setAttribute("aria-expanded","false");
+  const est=tipo==="html"?"html":"glb"; const nome=(S.nome||"scavo")+(tipo==="glbx"?"_esploso":"")+"."+est;
+  const r=await scegli("salva",[est],false,nome,"Esporta"); if(!r[0]) return;
+  await lavoro("Esportazione…",()=>api("esporta",{tipo:est,percorso:r[0],esploso:tipo==="glbx"?0.3:0}));
+  avviso("Esportato: "+base(r[0]));
+}
+
+// ------------------------------------------------------------------ procedura
+const RUOLI=[["us","Limiti delle US"],["usm","Murature (USM)"],["quote","Quote"],["profili","Profili di sezione (3D)"],["area","Limite di scavo o saggio"],["sezioni","Tracce delle sezioni"],["sezioni_disegno","Disegni di sezione"],["reperti","Reperti speciali"],["campioni","Campioni"],["ignora","Non usare"]];
+const TIPI=["sup","inf","taglio","orlo","rasatura","fondazione"];
+const GEO={poligono:"poligoni",linea:"linee",punto:"punti",testo:"testi",misto:"misto",nessuna:"—"};
+
+function nuovo(files){
+  W={files:files||[],esame:null,abb:null,passo:1}; profilo=null; $("profInfo").textContent="";
+  mostra("vWizard"); passo(1); disegnaFile();
+}
+function passo(n){
+  W.passo=n; [1,2,3,4].forEach(i=>$("s"+i).hidden=i!==n);
+  document.querySelectorAll("#steps div").forEach(d=>{const s=+d.dataset.s; d.classList.toggle("on",s===n); d.classList.toggle("fatto",s<n)});
+  $("vWizard").scrollTop=0;
+}
+function disegnaFile(){
+  $("flist").innerHTML=W.files.length?W.files.map((f,i)=>`<div class="fitem"><span class="ext">${esc((f.split(".").pop()||"").slice(0,5))}</span><code title="${esc(f)}">${esc(f)}</code><button data-rm="${i}" aria-label="Togli ${esc(base(f))}">×</button></div>`).join(""):
+    `<div class="fitem" style="grid-template-columns:1fr"><span class="mot">Nessun file ancora.</span></div>`;
+  $("flist").querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{W.files.splice(+b.dataset.rm,1);disegnaFile()});
+  $("n1").disabled=!W.files.length;
+}
+function aggiungiFile(ps){ ps.forEach(p=>{ if(p&&!W.files.includes(p)) W.files.push(p) }); disegnaFile() }
+
+async function esamina(){
+  const r=await lavoro("Lettura dei file…",()=>api("esamina",{files:W.files}));
+  W.esame=r; W.abb=r.abbinamento;
+  if(profilo) applicaProfilo();
+  disegnaLayer(); passo(2);
+}
+function applicaProfilo(){
+  // stesso nome di file e di layer: si riprendono ruolo e campi scelti la volta precedente
+  let n=0;
+  W.abb.layers.forEach(l=>{ const p=profilo.layers.find(x=>base(x.sorgente)===base(l.sorgente)&&x.layer===l.layer);
+    if(p){ Object.assign(l,{...p,sorgente:l.sorgente}); n++ } });
+  ["foglio_us","colonne_us","foglio_usm","colonne_usm","rapporti","crs"].forEach(k=>{ if(profilo[k]!=null) W.abb[k]=profilo[k] });
+  avviso(`Profilo applicato a ${n} layer`);
+}
+function infoLayer(l){ return W.esame.layers.find(x=>x.sorgente===l.sorgente&&x.layer===l.layer) }
+function opzioni(lista,sel){ return lista.map(([v,t])=>`<option value="${esc(v)}" ${v===sel?"selected":""}>${esc(t)}</option>`).join("") }
+
+function disegnaLayer(){
+  const testi=W.esame.layers.filter(x=>x.geometria==="testo");
+  let h=`<thead><tr><th>Layer</th><th>Contenuto</th><th>Uso</th><th>Numero di US</th><th>Quota</th><th>Tipo di quota</th><th>Perché</th></tr></thead><tbody>`;
+  W.abb.layers.forEach((l,i)=>{
+    const li=infoLayer(l)||{campi:[],n:0,geometria:"?"};
+    const campi=li.campi.filter(c=>!["SubClasses","Linetype","EntityHandle","PaperSpace","Text"].includes(c));
+    const usOpt=[["","—"],...campi.map(c=>["c:"+c,"campo «"+c+"»"]),...(["us","usm"].includes(l.ruolo)?testi.map(t=>["t:"+t.layer,"etichette «"+t.layer+"»"]):[])];
+    const usSel=l.campo_unita?"c:"+l.campo_unita:(l.testi_unita?"t:"+l.testi_unita:"");
+    const isQ=l.ruolo==="quote", isP=l.ruolo==="profili";
+    const qOpt=[["z","coordinata Z"],...campi.map(c=>["campo:"+c,"campo «"+c+"»"]),...(li.geometria==="testo"?[["testo","valore del testo"]]:[])];
+    const tOpt=[...TIPI.map(t=>["f:"+t,"sempre «"+t+"»"]),...campi.map(c=>["c:"+c,"dal campo «"+c+"»"])];
+    const tSel=l.campo_tipo?"c:"+l.campo_tipo:"f:"+(l.tipo_predefinito||"sup");
+    h+=`<tr class="${l.ruolo==="ignora"?"off":""}" data-i="${i}">
+      <td class="lay"><b>${esc(l.layer)}</b><small>${esc(base(l.sorgente))}</small></td>
+      <td><span class="geo">${li.n} ${GEO[li.geometria]||li.geometria}${li.ha_z?" 3D":""}</span></td>
+      <td><select data-k="ruolo" aria-label="Uso del layer">${opzioni(RUOLI,l.ruolo)}</select></td>
+      <td>${["us","usm","quote","profili","reperti","campioni","sezioni_disegno"].includes(l.ruolo)?`<select data-k="unita" aria-label="Numero di US">${opzioni(usOpt,usSel)}</select>`:"—"}</td>
+      <td>${isQ?`<select data-k="quota" aria-label="Quota">${opzioni(qOpt,l.quota_da)}</select>`:"—"}</td>
+      <td>${isQ||isP?`<select data-k="tipo" aria-label="Tipo di quota">${opzioni(tOpt,tSel)}</select>`:"—"}</td>
+      <td class="mot">${esc(l.motivo)}</td></tr>`;
+  });
+  $("tLayer").innerHTML=h+"</tbody>";
+  $("tLayer").querySelectorAll("select").forEach(s=>s.onchange=()=>{
+    const l=W.abb.layers[+s.closest("tr").dataset.i], v=s.value;
+    if(s.dataset.k==="ruolo"){ l.ruolo=v; if(v==="quote"&&!l.tipo_predefinito&&!l.campo_tipo) l.tipo_predefinito="sup"; disegnaLayer(); return }
+    if(s.dataset.k==="unita"){ l.campo_unita=v.startsWith("c:")?v.slice(2):null; l.testi_unita=v.startsWith("t:")?v.slice(2):null }
+    if(s.dataset.k==="quota") l.quota_da=v;
+    if(s.dataset.k==="tipo"){ l.campo_tipo=v.startsWith("c:")?v.slice(2):null; l.tipo_predefinito=v.startsWith("f:")?v.slice(2):null }
+    l.motivo="scelto a mano";
+    s.closest("tr").querySelector(".mot").textContent=l.motivo;
+  });
+}
+
+const CANON_US=[["US","Numero di US"],["Tipo","Positiva / negativa"],["Categoria","Categoria"],["Definizione","Definizione"],["Spessore medio stimato (m)","Spessore"],["Margini","Margini (netti / rastremati)"],["Fase","Fase"],["Colore HEX","Colore (#rrggbb)"]];
+function fogli(){ return W.abb.tabella?(W.esame.tabelle[W.abb.tabella]||{}):{} }
+function colonne(f){ return (fogli()[f]||{}).colonne||[] }
+function disegnaSchede(){
+  const a=W.abb, tabFiles=Object.keys(W.esame.tabelle);
+  const fo=Object.keys(fogli());
+  let h=`<label for="selTab">File</label><select id="selTab">${opzioni([["","nessuno: schede dai poligoni"],...tabFiles.map(f=>[f,base(f)])],a.tabella||"")}</select>`;
+  if(a.tabella){
+    h+=`<label for="selFUS">Foglio</label><select id="selFUS">${opzioni([["","—"],...fo.map(f=>[f,f])],a.foglio_us||"")}</select>`;
+    const cols=[["","—"],...colonne(a.foglio_us).map(c=>[c,c])];
+    CANON_US.forEach(([k,t])=>h+=`<label for="cu_${k}">${esc(t)}</label><select id="cu_${k}" data-cu="${esc(k)}">${opzioni(cols,a.colonne_us[k]||"")}</select>`);
+  }
+  $("kvUS").innerHTML=h;
+  // USM
+  let u=a.tabella?`<label for="selFUSM">Foglio</label><select id="selFUSM">${opzioni([["","nessuno o nello stesso foglio delle US"],...fo.map(f=>[f,f])],a.foglio_usm||"")}</select>`:"<span class='mot'>Nessun file di schede.</span>";
+  if(a.tabella&&a.foglio_usm){ const cols=[["","—"],...colonne(a.foglio_usm).map(c=>[c,c])];
+    u+=`<label for="cm_USM">Numero di USM</label><select id="cm_USM">${opzioni(cols,a.colonne_usm.USM||"")}</select>` }
+  $("kvUSM").innerHTML=u;
+  // rapporti
+  const r=a.rapporti||{modo:"nessuno"};
+  let rp=`<label for="selRM">Dove sono</label><select id="selRM">${opzioni([["foglio","in un foglio a sé"],["colonne","nelle colonne della scheda US"],["nessuno","nessun rapporto"]],r.modo)}</select>`;
+  if(r.modo==="foglio"){
+    rp+=`<label for="selRF">Foglio</label><select id="selRF">${opzioni([["","—"],...fo.map(f=>[f,f])],r.foglio||"")}</select>`;
+    const cols=[["","—"],...colonne(r.foglio).map(c=>[c,c])];
+    ["Prima US","Rapporto","Seconda US"].forEach((t,i)=>rp+=`<label for="rc${i}">${t}</label><select id="rc${i}" data-rc="${i}">${opzioni(cols,(r.colonne||[])[i]||"")}</select>`);
+  } else if(r.modo==="colonne"){
+    const REL=["copre","coperto da","taglia","tagliato da","riempie","riempito da","si appoggia a","gli si appoggia","si lega a","uguale a"];
+    const cols=colonne(a.foglio_us);
+    rp+=cols.filter(c=>REL.includes(c.toLowerCase().trim())||(r.colonne||{})[c]).map(c=>`<label>${esc(c)}</label><span>${esc((r.colonne||{})[c]||"")}</span>`).join("")||"<span class='mot'>Nessuna colonna riconosciuta</span>";
+  }
+  $("kvRap").innerHTML=rp;
+  // anteprima
+  const f=fogli()[a.foglio_us];
+  $("tPrev").innerHTML=f?`<thead><tr>${f.colonne.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${f.esempio.map(r=>`<tr>${r.map(v=>`<td>${esc(v==null?"":String(v).slice(0,60))}</td>`).join("")}</tr>`).join("")}</tbody>`:`<tbody><tr><td class="mot">Nessun foglio scelto.</td></tr></tbody>`;
+  // eventi
+  const on=(id,fn)=>{const e=$(id); if(e) e.onchange=fn};
+  on("selTab",e=>{a.tabella=e.target.value||null; a.foglio_us=null; a.colonne_us={}; a.foglio_usm=null; a.colonne_usm={}; a.rapporti={modo:"nessuno"}; disegnaSchede()});
+  on("selFUS",e=>{a.foglio_us=e.target.value||null; a.colonne_us={}; disegnaSchede()});
+  $("kvUS").querySelectorAll("[data-cu]").forEach(s=>s.onchange=()=>{ if(s.value) a.colonne_us[s.dataset.cu]=s.value; else delete a.colonne_us[s.dataset.cu] });
+  on("selFUSM",e=>{a.foglio_usm=e.target.value||null; a.colonne_usm={}; disegnaSchede()});
+  on("cm_USM",e=>{a.colonne_usm.USM=e.target.value});
+  on("selRM",e=>{ const m=e.target.value;
+    if(m==="colonne"){ const REL=["copre","coperto da","taglia","tagliato da","riempie","riempito da","si appoggia a","gli si appoggia","si lega a","uguale a"];
+      const c={}; colonne(a.foglio_us).forEach(x=>{const k=x.toLowerCase().trim(); if(REL.includes(k)) c[x]=k}); a.rapporti={modo:m,foglio:a.foglio_us,colonne:c} }
+    else a.rapporti={modo:m,foglio:null,colonne:[]}; disegnaSchede() });
+  on("selRF",e=>{a.rapporti.foglio=e.target.value; a.rapporti.colonne=[]; disegnaSchede()});
+  $("kvRap").querySelectorAll("[data-rc]").forEach(s=>s.onchange=()=>{a.rapporti.colonne=a.rapporti.colonne||[];a.rapporti.colonne[+s.dataset.rc]=s.value});
+}
+
+async function importaOra(){
+  const a=W.abb;
+  if(!a.layers.some(l=>l.ruolo==="us")){ avviso("Indica almeno un layer con i limiti delle US",true); return }
+  if(!a.layers.some(l=>l.ruolo==="quote")){ avviso("Indica almeno un layer di quote",true); return }
+  if(a.tabella&&(!a.foglio_us||!a.colonne_us.US)){ avviso("Scegli il foglio e la colonna con il numero di US",true); return }
+  const r=await lavoro("Importazione e verifica…",()=>api("importa",{abbinamento:a}));
+  aggiornaStato(r.stato);
+  const err=r.problemi.filter(p=>p.livello==="errore"), avv=r.problemi.filter(p=>p.livello!=="errore");
+  $("somm").innerHTML=`<span class="pill ${err.length?"errore":"ok"}">${err.length} errori</span><span class="pill ${avv.length?"avviso":"ok"}">${avv.length} avvisi</span><span class="mot">${r.stato.n_us} US e ${r.stato.n_usm} USM importate</span>`;
+  $("noteImp").innerHTML=(r.note||[]).map(n=>`<li>${esc(n)}</li>`).join("");
+  $("prob").innerHTML=r.problemi.length?r.problemi.map(p=>`<div class="pr"><span class="pill ${p.livello}">${p.livello}</span><div><p>${esc(p.messaggio)}</p>${p.unita.length?`<code>${esc(p.unita.join(", "))}</code>`:""}</div></div>`).join(""):
+    `<div class="pr"><span class="pill ok">ok</span><p>Nessun problema: i dati sono pronti per la ricostruzione.</p></div>`;
+  $("n4").textContent=err.length?"Ricostruisci comunque →":"Ricostruisci il 3D →";
+  $("n4").dataset.forza=err.length?"1":"";
+  passo(4);
+}
+
+// ------------------------------------------------------------------ eventi
+$("bNuovo").onclick=$("cNuovo").onclick=async()=>{ if(await perdite()) nuovo([]) };
+$("bApri").onclick=$("cApri").onclick=()=>apri();
+$("bSalva").onclick=()=>salva(false); $("bSalvaCome").onclick=()=>salva(true);
+$("bVerifica").onclick=verifica;
+$("bRicostruisci").onclick=()=>ricostruisciOra();
+$("bEsporta").onclick=()=>{const m=$("mEsporta");m.hidden=!m.hidden;$("bEsporta").setAttribute("aria-expanded",String(!m.hidden))};
+document.querySelectorAll("[data-esp]").forEach(b=>b.onclick=()=>esporta(b.dataset.esp));
+document.addEventListener("click",e=>{if(!e.target.closest(".menu")) $("mEsporta").hidden=true});
+$("bResoconto").onclick=()=>{const on=$("side").hidden; $("side").hidden=!on; $("bResoconto").setAttribute("aria-pressed",String(on))};
+$("cDemo").onclick=async()=>{ if(!await perdite()) return;
+  const r=await lavoro("Creazione dello scavo dimostrativo…",()=>api("demo")); nuovo(r.files) };
+$("bAggiungi").onclick=async()=>aggiungiFile(await scegli("apri",["dati"],true,null,"Aggiungi file"));
+$("percorsoFile").onkeydown=e=>{ if(e.key==="Enter"){ aggiungiFile([e.target.value.trim()]); e.target.value="" } };
+$("bProfilo").onclick=async()=>{ const r=await scegli("apri",["json"],false,null,"Profilo di abbinamento"); if(!r[0]) return;
+  profilo=(await api("profilo_carica",{percorso:r[0]})).abbinamento; $("profInfo").textContent="Profilo: "+base(r[0]) };
+$("bSalvaProf").onclick=async()=>{ const r=await scegli("salva",["json"],false,"abbinamento.json","Salva profilo"); if(!r[0]) return;
+  await api("profilo_salva",{percorso:r[0],abbinamento:W.abb}); avviso("Profilo salvato: "+base(r[0])) };
+document.querySelectorAll("[data-annulla]").forEach(b=>b.onclick=()=>{ W=null; S.aperto&&S.ha_modello?vaiModello():mostra("vHome") });
+document.querySelectorAll("[data-vai]").forEach(b=>b.onclick=()=>passo(+b.dataset.vai));
+$("n1").onclick=()=>esamina().catch(()=>{});
+$("n2").onclick=()=>{ disegnaSchede(); passo(3) };
+$("n3").onclick=()=>importaOra().catch(()=>{});
+$("n4").onclick=()=>ricostruisciOra($("n4").dataset.forza==="1");
+addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){ e.preventDefault(); salva(e.shiftKey) } });
+
+api("stato").then(s=>{ aggiornaStato(s); if(s.aperto&&s.ha_modello) vaiModello(); else mostra("vHome") }).catch(e=>avviso(e.message,true));
+})();
+</script>
+</body>
+</html>
