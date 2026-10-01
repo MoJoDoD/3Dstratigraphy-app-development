@@ -1,215 +1,145 @@
-# stratigrafia3d
+# Stratigrafia 3D
 
-Ricostruzione 3D delle unità stratigrafiche (US) a partire dalla documentazione di scavo 2D:
-poligoni in pianta, quote, profili di sezione (GeoPackage) e schede (Excel).
+**3D reconstruction of archaeological stratigraphic units from ordinary 2D excavation records.**
 
-Tappe completate: **1** (motore, riga di comando, formato `.scavo`) e **2** (app desktop con import
-guidato: si apre un rilievo reale, si abbinano i campi, si ricostruisce il 3D e si salva, senza codice).
-In corso la tappa **2.5** (import flessibile): pronte la ricostruzione adattiva e le ricette.
+Stratigrafia 3D turns what an excavation already produces into an interactive 3D model of its
+stratigraphic units (contexts):
+- plans of each unit, levels and section drawings, from a GIS or CAD;
+- the context register and the stratigraphic relationships, from Excel, CSV or a database.
 
-## App su Windows
+It runs offline on your own computer, as a desktop app or from the command line.
 
-1. Installa Python 3.12 da python.org (spunta "Add python.exe to PATH").
-2. Doppio clic su **Installa (Windows).bat** (solo la prima volta, qualche minuto).
-3. Doppio clic su **Avvia Stratigrafia 3D.bat**. Si può trascinare un file `.scavo` sull'icona per aprirlo.
+*[Leggi in italiano](README.it.md)*
 
-L'app funziona senza internet: gira sul tuo PC e usa una finestra propria (o il browser, se la
-finestra non è disponibile). Per creare un eseguibile unico c'è il workflow
-`.github/workflows/eseguibile-windows.yml` (PyInstaller), che parte appena il progetto è su GitHub.
+![The 3D viewer on the demo excavation](docs/immagini/visualizzatore.png)
 
-## Import flessibile
+## What it does
 
-L'app e il comando `strat3d importa` accettano file "come arrivano": GeoPackage, shapefile, GeoJSON,
-DXF da stazione totale (polilinee chiuse per layer `US_1005`, punti 3D, testi come etichette o quote),
-CSV di punti, Excel o CSV delle schede. Riconoscono da soli:
-- il ruolo di ogni layer (limiti US, murature, quote, profili, limite di scavo…) da nome e geometria;
-- il campo con il numero di US (anche scritto "US 1005") confrontandolo con le schede;
-- la quota dalla Z o da un campo, e il tipo di quota da un campo o dal nome del file;
-- i rapporti in un foglio a sé o nelle colonne della scheda ("Copre", "Tagliato da"…);
-- US negative dalla parola "taglio", spessori in centimetri, USM nello stesso foglio delle US;
-- archivi in inglese: context register (Context, Type, Thickness…), rapporti "fills", "covers",
-  "cut by"…, livelli "top/bottom/cut/rim", fogli Phases, Finds, Samples, Documentation.
+- **Imports archives as they come.** It reads:
+  - GeoPackage, shapefile, GeoJSON, DXF from a total station, SpatiaLite and CSV with WKT geometries;
+  - Excel or linked CSV tables, and `.zip` archives.
 
-## Ricette di importazione
+  A guided import recognises layers, unit numbers, levels and relationships, in Italian or English
+  ("fills", "cut by", "Context Number"...). Import **recipes** save every choice, so the same kind of
+  archive can be imported again in one step. Recipes for **Framework Archaeology** (Stansted,
+  Heathrow T5) and **pyArchInit** are included.
+- **Reconstructs with whatever data exist.** Units with surveyed levels are interpolated by kriging.
+  Where only depths and thicknesses were recorded, units are built down from a reference surface (a
+  terrain model, a constant level or the surveyed levels) and stacked in stratigraphic order. Every
+  unit records how it was built, so the viewer can colour units by reliability.
+- **Lets you explore the sequence.** The viewer offers:
+  - exploded views by phase or sequence, and a virtual excavation that removes units in order;
+  - free or surveyed sections;
+  - an interactive Harris matrix;
+  - the full context record for each unit, with finds, samples, photographs and drawings;
+  - colours by any field of the record, and a draped orthophoto;
+  - photogrammetric models (OBJ, PLY) shown alongside the units.
+- **Stays in sync with the archive.** Records and relationships can be edited in the app and written
+  back to the source files (Excel, CSV, GeoPackage, SQLite) through the same recipe. Changes made to
+  the source files are read back, and only the affected units are rebuilt.
+- **Exports**:
+  - a GLB model, with one object per unit, grouped by phase, that opens in Blender and MeshLab;
+  - a self-contained web page;
+  - a table of volumes;
+  - plans by phase (SVG, DXF);
+  - **sections cut through the model** (SVG, DXF).
 
-Una **ricetta** raccoglie tutte le scelte dell'importazione e si salva in un file `.json`, da riusare
-per un altro scavo dello stesso tipo o da condividere. Oltre a quale layer e quale colonna usare, dice
-come trasformare i dati:
+![Harris matrix and colours by any field](docs/immagini/harris_e_colori.png)
 
-- **tabelle collegate**: più CSV o fogli insieme (un archivio relazionale esportato), con materiali,
-  campioni, fasi e documentazione agganciati al numero dell'unità;
-- **vocabolari**: come leggere i valori dell'archivio («Cut» = negativa, «fills» = riempie…);
-- **rapporti** da un foglio, da colonne («Copre», «Tagliato da»), da una colonna di testo
-  («copre 12, 15; taglia 20», anche il formato di pyArchInit) o da una colonna «padre» («Fill of»);
-- **unità di misura** di spessori e profondità, **valori nulli** (-9999, -99,99…);
-- **filtri**: un sito, un settore, un tipo di elemento di un archivio più grande;
-- **poligoni ereditati**: i riempimenti senza pianta propria usano il poligono del taglio;
-- **campi dai poligoni**: valori della scheda presi dagli attributi del layer (es. la profondità);
-- **quote dai vertici 3D** di poligoni rilevati con la stazione totale.
+![Sections cut through the 3D model](docs/immagini/sezioni.png)
 
-Ricette pronte: **Framework Archaeology** (archivi di Stansted e Heathrow T5 così come si scaricano) e
-**pyArchInit** (database SpatiaLite; preparata sullo schema documentato, da verificare su un database
-reale). Si leggono anche archivi `.zip`, database SpatiaLite, CSV con geometrie in WKT e CSV in codifica
-Windows; per Access l'app indica come esportare le tabelle in CSV.
+## Installing on Windows
 
-## Ricostruzione adattiva
+**Ready-made app.** Download the latest zip from
+[Releases](https://github.com/MoJoDoD/3Dstratigraphy-app-development/releases), unzip it and run
+`Stratigrafia3D.exe`. No Python is needed.
 
-Le quote non sono obbligatorie. Ogni unità viene ricostruita con quello che c'è, e la strategia
-usata resta scritta nel progetto (nel visualizzatore: Colore → affidabilità):
+**From the source code:**
+1. Install Python 3.12 from python.org, ticking "Add python.exe to PATH".
+2. Double-click **Installa (Windows).bat**. This is needed only the first time and takes a few minutes.
+3. Double-click **Avvia Stratigrafia 3D.bat**. You can drop a `.scavo` project file on it to open it.
 
-| Dati dell'unità | Ricostruzione | Strategia |
-| --- | --- | --- |
-| quote o profili | kriging del tetto e dello spessore | misurata |
-| taglio con profondità in scheda | superficie di riferimento meno la profondità; pareti dalle linee di fondo, se ci sono | profondita |
-| riempimento o strato con spessore | sotto la superficie o l'orlo del taglio, nell'ordine della sequenza | impilata |
-| profondità o spessore mancanti | valori tipici (0,20 m per i tagli, 0,10 m per gli strati) | schematica |
+On other systems:
 
-La **superficie di riferimento** può essere un modello del terreno (GeoTIFF), una quota costante o
-l'interpolazione delle quote rilevate, abbassata se serve (per esempio dell'arativo asportato). Il
-modello del terreno viene copiato nel `.scavo`. Quando i rapporti non dicono l'ordine dei riempimenti
-di un taglio, lo si deduce dal tipo (primario in basso) e dal numero; se gli spessori registrati
-superano la profondità, si riducono in proporzione. Tutto viene segnalato nella verifica.
+```
+pip install -e .[app]
+strat3d app
+```
 
-La **verifica** (pulsante Verifica, o l'ultimo passo dell'importazione) permette correzioni in blocco:
-cambiare la profondità e lo spessore tipici, usare la mediana delle unità dello stesso tipo
-(«Posthole», «Pit»…) registrate nello scavo, dare una quota costante alla superficie, oppure escludere
-dal 3D un gruppo di unità. Le unità escluse restano nelle schede e si reincludono con un clic.
+The interface is available in Italian and English.
 
-## Modifiche e file d'origine
+## Try it
 
-Nell'app, la scheda di ogni unità ha il pulsante **Modifica**: si cambiano i campi (tipo, definizione,
-fase, descrizione, spessori, datazione e gli altri campi dell'archivio) e i rapporti. Un rapporto
-che creerebbe un ciclo nella sequenza viene rifiutato. Se la modifica cambia la forma di un'unità,
-l'app propone di ricostruire solo quella e le unità che vi stanno sopra.
+The app can generate **Podere Roveto**, an imaginary excavation with:
+- 46 units, walls and pits;
+- 8 phases from Hellenistic to modern;
+- finds, samples and sections.
 
-Le modifiche restano nel progetto finché non si sceglie **Scrivi nei file**. La scrittura usa la
-ricetta al contrario: colonna d'origine, vocabolario (negativa → «Cut»), unità di misura e forma dei
-rapporti (foglio a parte, colonne come «Copre» o «Fill of», testo di pyArchInit). Si possono scrivere:
-- file Excel, conservando formattazione e formule (le celle con una formula non si toccano);
-- file CSV, con la stessa codifica e lo stesso separatore;
-- tabelle di GeoPackage e di SQLite/SpatiaLite.
+Choose *Prova con lo scavo dimostrativo* (*Try the demo excavation*) on the home screen, or from the command line:
 
-Prima di scrivere, una copia di ogni file va in `~/.stratigrafia3d/copie`.
+```
+strat3d demo demo_folder
+strat3d importa demo_folder/01_GIS/*.gpkg demo_folder/02_Database/*.xlsx -o roveto.scavo
+strat3d app roveto.scavo
+```
 
-Il verso opposto funziona allo stesso modo. Quando i file d'origine cambiano (per esempio l'Excel
-aggiornato in cantiere), all'apertura del progetto l'app propone **Aggiorna dai file**: rilegge tutto
-con la stessa ricetta e ricostruisce solo le unità toccate. Dalla riga di comando:
-`strat3d riscrivi progetto.scavo` e `strat3d aggiorna progetto.scavo`.
+To try it on a real archive, the open digital archive of the Stansted Framework Project
+(Framework Archaeology, available from the Archaeology Data Service) imports as downloaded with the
+*Framework Archaeology* recipe.
 
-## Foto, disegni, ortofoto e modelli 3D
+## Command line
 
-- **Documentazione.** Se il foglio della documentazione ha una colonna con il file (per esempio
-  `photographs/9248.jpg`), l'app trova le immagini accanto al file delle schede o, per nome, nelle
-  sue sottocartelle. Nella scheda di ogni unità compaiono le miniature; un clic apre l'immagine
-  grande, e le frecce passano alle altre. TIFF e immagini pesanti vengono ridotti al volo; i PDF e gli
-  altri file si aprono con il programma del computer.
-- **Ortofoto.** Un GeoTIFF a colori (anche compresso JPEG) aggiunto tra i file viene riconosciuto da
-  solo. Si ritaglia sull'area dello scavo e si conserva nel progetto. Nel visualizzatore, con
-  Colore → ortofoto, è proiettata dall'alto sulle unità.
-- **Modelli 3D rilevati.** OBJ (con colori o texture dal file .mtl) e PLY (ASCII o binario) nelle
-  coordinate del GIS; uno spostamento si indica nel wizard. Sopra i 300 000 triangoli il modello
-  viene semplificato. Si accende e si spegne con «Rilievo 3D», e diventa trasparente quando si
-  sceglie un'unità.
+```
+strat3d app [project.scavo]                       # desktop app
+strat3d importa files... -o project.scavo         # automatic import, optionally with --profilo recipe.json
+strat3d verifica project.scavo                    # check data and stratigraphic relationships
+strat3d ricostruisci project.scavo [--unita 1016] # rebuild (only some units and those above them)
+strat3d visualizzatore project.scavo -o index.html
+strat3d esporta-glb project.scavo -o model.glb [--esploso 0.3]
+strat3d elaborati project.scavo --volumi v.xlsx --piante plans.svg --sezioni sections.svg sections.dxf
+strat3d riscrivi project.scavo                    # write edits back to the source files
+strat3d aggiorna project.scavo                    # re-read changed source files
+```
 
-## Esportazioni
+## The `.scavo` project file
 
-Dal menu **Esporta** (o con `strat3d elaborati`):
+A project is a GeoPackage. QGIS opens it directly. It contains:
+- the imported layers and the record tables;
+- the reconstructed meshes;
+- the reference surface and the orthophoto;
+- the import recipe and the source files' fingerprints;
+- the history of operations.
 
-| Elaborato | Formato | Contenuto |
-| --- | --- | --- |
-| Modello 3D | `.glb` | Un oggetto per unità con la sua scheda, raggruppati per fase; ortofoto e rilievi 3D se ci sono. Si apre in Blender e MeshLab |
-| Pagina web | `.html` | Il visualizzatore completo in un solo file, da aprire senza internet o da condividere |
-| Tabella dei volumi | `.xlsx` | Area, volume, quote, spessore e affidabilità di ogni unità, più i totali per fase |
-| Piante per fase | `.svg` | Un riquadro per fase, scala 1:200, con il limite di scavo e i numeri |
-| Pianta | `.dxf` | Poligoni in coordinate reali, un layer per fase, per CAD e GIS |
-| Sezioni dal modello | `.svg`, `.dxf` | Il modello tagliato lungo le tracce delle sezioni del GIS (o due sezioni centrali), scala 1:50 |
+## Method in brief
 
-Le sezioni sono calcolate tagliando le mesh chiuse delle unità: servono come base per il disegno
-e per confrontare il modello con le sezioni rilevate.
+For each positive unit:
+1. A constrained triangulation of the plan.
+2. The top surface, from a planar trend plus kriging of the residuals.
+3. The thickness, kriged around the recorded mean and tapering to zero at the free edges of lenses.
+4. The base, snapped to the top of the underlying units according to the relationships.
 
-## Visualizzatore
+Cuts are surfaces built from rim and base levels and an estimated side width. Walls are volumes
+between the top of the wall and its foundation. On the demo excavation the median error of the
+reconstructed tops against the ground truth is under 3 cm for 90% of the units
+(`tests/test_scavo_demo.py`).
 
-- **Colore**: sedimento, fase, categoria, affidabilità, oppure qualsiasi campo a categorie della scheda
-  (per Stansted: Feature type, Side shape, Excavation stage…), con legenda e conteggi.
-- **Harris**: ogni gruppo di unità collegate (una buca con i suoi riempimenti, un settore) è
-  impaginato a parte. Oltre 150 unità il pannello mostra la sequenza dell'unità selezionata, e a
-  richiesta tutto il diagramma. L'ordine dei riempimenti dedotto dal programma è tratteggiato a
-  puntini, e nella scheda compare come «copre (dedotto)».
-
-Aree grandi (oltre 65 m) e centinaia di unità sono gestite; `strumenti/caso_studio_stansted.py`
-ricava un caso studio in inglese dall'archivio aperto di Framework Archaeology (Stansted): senza
-quote, con profondità, spessori e un modello del terreno.
-
-Ogni scelta è modificabile e si salva come profilo riutilizzabile per lo stesso cantiere.
-
-## Installazione
+## Development
 
 ```
 pip install -e .[demo,test]
-```
-
-## Uso dalla riga di comando
-
-```
-strat3d app                                        # apre l'applicazione
-strat3d importa rilievo.dxf schede.xlsx -o scavo.scavo   # import automatico senza interfaccia
-strat3d demo cartella_demo                         # genera lo scavo dimostrativo "Podere Roveto"
-strat3d verifica scavo.gpkg schede.xlsx            # controlla dati e rapporti stratigrafici
-strat3d crea-progetto scavo.gpkg schede.xlsx -o scavo.scavo
-strat3d info scavo.scavo
-strat3d ricostruisci scavo.scavo --unita 1016      # ricalcola 1016 e le unità che le stanno sopra
-strat3d visualizzatore scavo.scavo -o web/index.html
-strat3d esporta-glb scavo.scavo -o scavo.glb --esploso 0.3   # si apre in Blender
-```
-
-## Uso da Python
-
-```python
-from stratigrafia3d import Scavo, ricostruisci, esporta
-s = Scavo.da_sorgenti("scavo.gpkg", "schede.xlsx")
-for p in s.verifica():
-    print(p)
-ricostruisci(s)
-s.salva("scavo.scavo")
-esporta.visualizzatore(s, "index.html")
-```
-
-## Dati in ingresso
-
-**GeoPackage** (nomi in `schema.py`):
-- `us_poligoni` (campo `us`) e `usm_poligoni` (campo `usm`)
-- `quote` (PointZ, campi `us`, `tipo_quota`: sup, inf, taglio, orlo, rasatura, fondazione)
-- facoltativi: `profili_us` (LineStringZ, campi `sezione`, `us`, `interfaccia`: sup, inf, taglio),
-  `area_scavo`, `sezioni`, `sezioni_disegno`, `reperti_speciali`, `campioni`
-
-**Excel**: fogli `US` e `Rapporti` obbligatori; `USM`, `Fasi`, `Materiali`, `Reperti_speciali`,
-`Campioni`, `Documentazione` facoltativi. Nel foglio Rapporti sono accettate anche le forme inverse
-(“coperto da”, “tagliato da”…).
-
-## Il formato `.scavo`
-
-È un GeoPackage: contiene i layer, i fogli Excel come tabelle `tab_<foglio>`, le geometrie ricostruite
-(`s3d_modelli`), i parametri (`s3d_progetto`), l'impronta dei file di origine (`s3d_sorgenti`) e il
-registro delle operazioni (`s3d_storico`). QGIS lo apre come GeoPackage (scegliendo "Tutti i file" o
-rinominandolo in `.gpkg`).
-
-## Metodo
-
-Per ogni US positiva: triangolazione vincolata del poligono; tetto per trend planare + kriging dei
-residui; spessore krigato attorno allo spessore medio (a zero sui bordi liberi delle lenti); base
-agganciata al tetto delle unità coperte secondo i rapporti. I tagli sono superfici (orlo, fondo e
-larghezza della parete stimata dai dati); le USM volumi tra rasatura e fondazione.
-Ogni unità riporta quanto è misurata e quanto stimata (`qualita`).
-
-Sullo scavo dimostrativo lo scarto mediano del tetto rispetto al modello di verità è sotto 3 cm per
-il 90% delle unità (verificato da `tests/test_scavo_demo.py`).
-
-## Test
-
-```
 pytest -q
 ```
 
-## Licenza
+The code and the interface are written in Italian; the interface also has an English translation
+(`src/stratigrafia3d/lingue/en.json`). Every push runs the tests on Windows and Linux. A tag `v*`
+builds the Windows app and publishes it as a release.
 
-GPL-3.0-or-later (vedi `LICENSE`). Dati dello scavo dimostrativo interamente immaginari.
+## Licence
+
+The code is released under the [GNU General Public License v3.0 or later](LICENSE). The data of the
+demo excavation are imaginary.
+
+The optional `triangle` package (Shewchuk's Triangle) is free for research but not for commercial
+use. The program works without it (it falls back to scipy), and the Windows app does not include it.
+
+If you use Stratigrafia 3D in your research, please cite it: see [`CITATION.cff`](CITATION.cff).

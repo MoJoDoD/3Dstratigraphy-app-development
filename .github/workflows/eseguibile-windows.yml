@@ -1,9 +1,14 @@
-name: Eseguibile Windows
+name: Windows app
 
+# Builds the Windows app (no Python needed). On a "v*" tag the zip is published as a release;
+# from the Actions tab ("Run workflow") it is kept as a downloadable artifact.
 on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+
+permissions:
+  contents: write
 
 jobs:
   windows:
@@ -13,14 +18,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Librerie
-        run: pip install -e ".[app,test]" pyinstaller
-      - name: Test
-        run: pytest -q
-      - name: Eseguibile
+      - name: Install
+        run: |
+          pip install ".[app,test]" pyinstaller
+          pip uninstall -y triangle
+      - name: Test (without triangle, as in the app)
+        run: pytest -q -p no:cacheprovider
+      - name: Build
         working-directory: pacchetto
         run: pyinstaller stratigrafia3d.spec --noconfirm --distpath ../dist
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/Stratigrafia3D -DestinationPath Stratigrafia3D-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: Stratigrafia3D-windows
-          path: dist/Stratigrafia3D
+          path: Stratigrafia3D-windows.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Stratigrafia3D-windows.zip
+          generate_release_notes: true

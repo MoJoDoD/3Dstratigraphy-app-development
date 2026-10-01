@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Stratigrafia 3D: 3D reconstruction of archaeological stratigraphic units from 2D excavation records"
+authors:
+  - family-names: Trabucchi
+    given-names: Sebastiano
+type: software
+version: 0.8.0
+date-released: 2026-10-01
+license: GPL-3.0-or-later
+repository-code: "https://github.com/MoJoDoD/3Dstratigraphy-app-development"
+keywords:
+  - archaeology
+  - stratigraphy
+  - Harris matrix
+  - 3D reconstruction
+  - GIS
+  - excavation recording

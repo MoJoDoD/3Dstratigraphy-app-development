@@ -7,3 +7,9 @@ __pycache__/
 build/
 dist/
 .venv/
+.DS_Store
+Thumbs.db
+_da_eliminare/
+_vecchie_versioni/
+*.glb
+/dati_prova/
