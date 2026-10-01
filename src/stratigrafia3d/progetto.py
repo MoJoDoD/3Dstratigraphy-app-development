@@ -247,7 +247,16 @@ class Scavo:
                 raise ValueError("manca il file del modello del terreno")
             g = self.layers.get(sc.L_AREA)
             g = g if g is not None and not g.empty else self.layers.get(sc.L_US)
-            if g is not None and len(g):
+            corr = spec.get("correzione")
+            if corr:
+                from .superficie import combina
+                c = Raster.leggi(corr) if isinstance(corr, str) else corr
+                b = g.total_bounds if g is not None and len(g) else None
+                if b is None:
+                    raise ValueError("serve la pianta delle unità per sommare il raster di correzione")
+                r = combina(r, c, *b)
+                spec["copertura_correzione"] = round(r.copertura, 3)
+            elif g is not None and len(g):
                 r = r.ritaglia(*g.total_bounds)
             self.raster_superficie = r
             spec["nome"] = r.nome

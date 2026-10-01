@@ -295,7 +295,7 @@ def _coords(g):
 
 def esamina_raster(files):
     """Descrizione dei raster tra i file: percorso -> dict (con «tipo»: «dem» o «ortofoto») o errore."""
-    from .superficie import Raster, EST_RASTER, georef, e_ortofoto
+    from .superficie import Raster, EST_RASTER, georef, e_ortofoto, e_differenza
     out = {}
     for f in files:
         if os.path.splitext(f)[1].lower() in EST_RASTER:
@@ -305,7 +305,8 @@ def esamina_raster(files):
                     out[f] = dict(tipo="ortofoto", nome=os.path.basename(f), righe=g["righe"], colonne=g["colonne"],
                                   passo=round(g["passo"][0], 3), estensione=[round(v, 2) for v in g["estensione"]])
                 else:
-                    out[f] = dict(Raster.leggi(f).descrizione(), tipo="dem")
+                    d = Raster.leggi(f).descrizione()
+                    out[f] = dict(d, tipo="dem", differenza=e_differenza(d))
             except Exception as e:
                 out[f] = dict(errore=str(e))
     return out
@@ -878,7 +879,8 @@ def proponi(files):
                             "si tengono solo le unità con una pianta")
     # superficie di riferimento: serve quando mancano le quote o quando ci sono profondità da usare
     er = esamina_raster(files)
-    raster = [f for f, d in er.items() if "errore" not in d and d.get("tipo") == "dem"]
+    raster = [f for f, d in er.items() if "errore" not in d and d.get("tipo") == "dem" and not d.get("differenza")]
+    differenze = [f for f, d in er.items() if "errore" not in d and d.get("differenza")]
     orto = [f for f, d in er.items() if "errore" not in d and d.get("tipo") == "ortofoto"]
     from .modelli3d import EST_MODELLI
     for f in files:
@@ -893,6 +895,10 @@ def proponi(files):
         abb.superficie = {"tipo": "raster", "sorgente": raster[0], "abbassa": 0.0}
         abb.note.append(f"Modello del terreno «{os.path.basename(raster[0])}» usato come superficie di riferimento "
                         "per le unità senza quote")
+        if differenze:
+            abb.superficie["correzione"] = differenze[0]
+            abb.note.append(f"«{os.path.basename(differenze[0])}» contiene differenze di quota (valori negativi): "
+                            "sommato al modello del terreno come troncamento")
     elif not ha_quote:
         abb.superficie = {"tipo": "costante", "quota": 0.0, "abbassa": 0.0}
         abb.note.append("Nessuna quota: le unità partono da una superficie piana a quota 0. "
@@ -1272,7 +1278,9 @@ def applica_ricetta(abb, ricetta):
     sup = dict(r.superficie or {})
     if sup.get("tipo") == "raster":
         if (out.superficie or {}).get("tipo") == "raster":
-            out.superficie = dict(out.superficie, abbassa=sup.get("abbassa", 0.0))
+            # con un raster di troncamento l'abbassamento fisso della ricetta non serve più
+            out.superficie = dict(out.superficie, abbassa=0.0 if out.superficie.get("correzione")
+                                  else sup.get("abbassa", 0.0))
         else:
             note.append("La ricetta usa un modello del terreno: aggiungilo ai file")
     elif sup.get("tipo") not in (None, "nessuna"):
@@ -1719,12 +1727,20 @@ def applica(abb, log=None):
             note.append("Modello del terreno non trovato: superficie di riferimento non impostata")
             sup = {"tipo": "nessuna"}
             raster_fonte = None
+        elif sup.get("correzione") and not os.path.exists(sup["correzione"]):
+            note.append(f"Raster di correzione «{os.path.basename(sup['correzione'])}» non trovato: non usato")
+            sup.pop("correzione")
+    corr_fonte = sup.get("correzione") if sup.get("tipo") == "raster" else None
     try:
         s.imposta_superficie(sup)
+        cop = s.parametri.superficie.get("copertura_correzione")
+        if cop is not None and cop < 0.9:
+            note.append(f"Il raster di correzione copre solo il {cop:.0%} dell'area dello scavo: "
+                        "fuori si usa il valore del suo bordo più vicino")
     except Exception as e:
         note.append(f"Superficie di riferimento non impostata: {e}")
         s.imposta_superficie({"tipo": "nessuna"})
-        raster_fonte = None
+        raster_fonte = corr_fonte = None
 
     # ------------------------------------------------ ortofoto
     orto_fonte = None
@@ -1774,11 +1790,11 @@ def applica(abb, log=None):
     now = _dt.datetime.now().isoformat(timespec="seconds")
     fonti = sorted({x.sorgente for x in abb.layers if x.ruolo != "ignora"} | ({abb.tabella} if abb.tabella else set())
                    | ({raster_fonte} if raster_fonte else set()) | ({orto_fonte} if orto_fonte else set())
-                   | modelli_fonti)
+                   | ({corr_fonte} if corr_fonte else set()) | modelli_fonti)
     fonti = sorted(set(fonti) | {f for f in (abb.tabelle_extra or []) if f and os.path.exists(f)})
     for p in fonti:
         s.sorgenti.append(dict(percorso=os.path.abspath(p),
-                               tipo="excel" if p == abb.tabella else ("raster" if p in (raster_fonte, orto_fonte) else "modello 3d" if p in modelli_fonti else
+                               tipo="excel" if p == abb.tabella else ("raster" if p in (raster_fonte, orto_fonte, corr_fonte) else "modello 3d" if p in modelli_fonti else
                                                                      ("tabella" if p in (abb.tabelle_extra or []) else "gis")),
                                sha256=_sha256(p), dimensione=os.path.getsize(p), importato=now))
     base = next((x.sorgente for x in abb.layers if x.ruolo == "us"), fonti[0] if fonti else "scavo")

@@ -454,8 +454,8 @@ T.update({
     "i rapporti stratigrafici contengono un ciclo: esegui la verifica": "the stratigraphic relationships contain a cycle: run the check",
     # ricette
     "Framework Archaeology (Stansted, Heathrow T5)": "Framework Archaeology (Stansted, Heathrow T5)",
-    "Archivi digitali di Framework Archaeology così come si scaricano: pianta degli interventi (Stansted.shp o «T5 Volume 2.shp»), ContextData.csv e le altre tabelle CSV, il modello del terreno. Le quote non ci sono: i tagli scendono della profondità registrata dal terreno abbassato di 30 cm (arativo); i riempimenti prendono il poligono del loro intervento. Conviene filtrare per SITECODE.":
-        "Framework Archaeology digital archives as downloaded: plan of the interventions (Stansted.shp or «T5 Volume 2.shp»), ContextData.csv and the other CSV tables, the terrain model. There are no levels: cuts go down by the recorded depth from the terrain lowered by 30 cm (ploughsoil); fills take the polygon of their intervention. Filtering by SITECODE is advisable.",
+    "Archivi digitali di Framework Archaeology così come si scaricano: pianta degli interventi (Stansted.shp o «T5 Volume 2.shp»), ContextData.csv e le altre tabelle CSV, il modello del terreno. Le quote delle unità non ci sono: i tagli scendono della profondità registrata dal piano di scavo, ricavato dal terreno abbassato di 30 cm (arativo) oppure, per Heathrow, dalla topografia del 1943 più il modello di troncamento. I riempimenti prendono il poligono del loro intervento. Conviene filtrare per SITECODE.":
+        "Framework Archaeology digital archives as downloaded: plan of the interventions (Stansted.shp or «T5 Volume 2.shp»), ContextData.csv and the other CSV tables, the terrain model. The units have no levels: cuts go down by the recorded depth from the excavation surface, derived from the terrain lowered by 30 cm (ploughsoil) or, for Heathrow, from the 1943 topography plus the truncation model. Fills take the polygon of their intervention. Filtering by SITECODE is advisable.",
     "pyArchInit (database SpatiaLite o esportazioni)": "pyArchInit (SpatiaLite database or exports)",
     "Database di pyArchInit per QGIS (SpatiaLite): layer pyunitastratigrafiche (limiti delle US), pyunitastratigrafiche_usm e pyarchinit_quote, tabella us_table con le schede e i rapporti scritti nel formato di pyArchInit, periodizzazione_table per le fasi (periodo + fase, ordinate per anno). Provata sul database di esempio distribuito con pyArchInit. Le unità senza quote proprie partono dalla superficie interpolata tra le quote rilevate. Se il database contiene più siti, aggiungi un filtro sul campo «sito» della scheda e su «scavo_s» del layer.":
         "pyArchInit database for QGIS (SpatiaLite): layers pyunitastratigrafiche (SU outlines), pyunitastratigrafiche_usm and pyarchinit_quote, table us_table with the records and the relationships written in pyArchInit format, periodizzazione_table for the phases (period + phase, ordered by year). Tested on the sample database distributed with pyArchInit. Units without levels of their own start from the surface interpolated between the surveyed levels. If the database holds several sites, add a filter on the «sito» field of the record and on «scavo_s» of the layer.",
@@ -489,6 +489,17 @@ T.update({
     "Progetto stratigrafia3d": "stratigrafia3d project", "Dati di scavo": "Excavation data", "GIS e CAD": "GIS and CAD",
     "Schede": "Records", "glTF binario": "Binary glTF", "Pagina web": "Web page", "Foglio Excel": "Excel workbook",
     "Disegno SVG": "SVG drawing", "Disegno DXF": "DXF drawing", "Ricetta di importazione": "Import recipe", "Tutti i file": "All files",
+    "Correzione": "Correction",
+    "Il raster di correzione copre solo il {0} dell'area dello scavo: fuori si usa il valore del suo bordo più vicino":
+        "The correction raster covers only {0} of the excavation area: outside it, the value at its nearest edge is used", "{0} (differenze)": "{0} (differences)",
+    "Un raster di differenze da sommare al modello del terreno, per esempio il modello di troncamento (valori negativi)":
+        "A raster of differences to add to the terrain model, for example the truncation model (negative values)",
+    "«{0}» contiene differenze di quota (valori negativi): sommato al modello del terreno come troncamento":
+        "«{0}» holds level differences (negative values): added to the terrain model as truncation",
+    "Raster di correzione «{0}» non trovato: non usato": "Correction raster «{0}» not found: not used",
+    "serve la pianta delle unità per sommare il raster di correzione": "the unit plans are needed to add the correction raster",
+    "Impossibile aprire la finestra dell'app ({0}: {1}).": "Cannot open the app window ({0}: {1}).",
+    "Stratigrafia 3D viene aperta nel browser predefinito.": "Stratigrafia 3D is opening in the default browser.",
     "{0} ({1} punti stimati)": "{0} ({1} estimated points)", "schede US «{0}»": "SU records «{0}»",
 })
 

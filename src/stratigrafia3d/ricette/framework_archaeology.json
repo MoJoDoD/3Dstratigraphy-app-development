@@ -1,6 +1,6 @@
 {
  "nome": "Framework Archaeology (Stansted, Heathrow T5)",
- "descrizione": "Archivi digitali di Framework Archaeology così come si scaricano: pianta degli interventi (Stansted.shp o «T5 Volume 2.shp»), ContextData.csv e le altre tabelle CSV, il modello del terreno. Le quote non ci sono: i tagli scendono della profondità registrata dal terreno abbassato di 30 cm (arativo); i riempimenti prendono il poligono del loro intervento. Conviene filtrare per SITECODE.",
+ "descrizione": "Archivi digitali di Framework Archaeology così come si scaricano: pianta degli interventi (Stansted.shp o «T5 Volume 2.shp»), ContextData.csv e le altre tabelle CSV, il modello del terreno. Le quote delle unità non ci sono: i tagli scendono della profondità registrata dal piano di scavo, ricavato dal terreno abbassato di 30 cm (arativo) oppure, per Heathrow, dalla topografia del 1943 più il modello di troncamento. I riempimenti prendono il poligono del loro intervento. Conviene filtrare per SITECODE.",
  "layers": [
   {"sorgente": "*", "layer": "stansted", "ruolo": "us", "campo_unita": "CONTEXT_ID",
    "campi_scheda": {"Spessore/profondità max (m)": "DEPTH"}},
@@ -39,7 +39,8 @@
  },
  "valori_nulli": [-9999.0, -999.0, -99.99, 999999.0],
  "filtri": [
-  {"dove": "layer", "layer": "hachures", "colonna": "Layer1", "valori": ["Base of Slope"]}
+  {"dove": "layer", "layer": "hachures", "colonna": "Layer1", "valori": ["Base of Slope"]},
+  {"dove": "scheda", "colonna": "Context Number", "valori": ["0"], "escludi": true}
  ],
  "poligoni_ereditati": true,
  "solo_con_poligono": true,

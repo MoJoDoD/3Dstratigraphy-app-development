@@ -542,6 +542,8 @@ function disegnaSuperficie(){
       `<label>File</label><span class="mot">Nessun GeoTIFF tra i file: aggiungilo al passo 1.</span>`;
     const d=(W.esame.raster||{})[s.sorgente];
     if(d) h+=d.errore?`<label>Stato</label><span class="mot">${esc(d.errore)}</span>`:`<label>Contenuto</label><span class="mot">${d.colonne}×${d.righe} celle da ${d.passo} m, quote ${d.quota_min}–${d.quota_max} m</span>`;
+    const altri=rs.filter(([f,d])=>f!==s.sorgente&&!d.errore);
+    if(altri.length) h+=`<label for="supC">Correzione</label><select id="supC" title="Un raster di differenze da sommare al modello del terreno, per esempio il modello di troncamento (valori negativi)">${opzioni([["","nessuna"],...altri.map(([f,d])=>[f,base(f)+(d.differenza?" (differenze)":"")])],s.correzione||"")}</select>`;
   }
   if(s.tipo!=="nessuna") h+=`<label for="supAbb">Abbassa di (m)</label><input id="supAbb" type="number" step="0.01" min="0" value="${esc(s.abbassa??0)}" title="Per esempio lo spessore dell'arativo asportato prima dello scavo">`;
   // ortofoto: un GeoTIFF a colori da drappeggiare sul modello
@@ -552,7 +554,8 @@ function disegnaSuperficie(){
   on("supTipo",e=>{ const t=e.target.value; a.superficie={tipo:t,abbassa:s.abbassa||0};
     if(t==="raster"&&rs.length) a.superficie.sorgente=s.sorgente||rs[0][0]; if(t==="costante") a.superficie.quota=0; disegnaSuperficie() });
   on("supQ",e=>{a.superficie.quota=parseFloat(e.target.value)||0});
-  on("supR",e=>{a.superficie.sorgente=e.target.value; disegnaSuperficie()});
+  on("supR",e=>{a.superficie.sorgente=e.target.value; if(a.superficie.correzione===e.target.value) delete a.superficie.correzione; disegnaSuperficie()});
+  on("supC",e=>{ if(e.target.value) a.superficie.correzione=e.target.value; else delete a.superficie.correzione });
   on("supAbb",e=>{a.superficie.abbassa=parseFloat(e.target.value)||0});
   on("supO",e=>{a.ortofoto=e.target.value||null});
 }

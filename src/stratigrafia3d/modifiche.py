@@ -274,7 +274,8 @@ class Foglio:
             for f in filtri or ():
                 if f.get("colonna") in r and f.get("valori"):
                     dentro = _norm(r.get(f["colonna"])) in {_norm(v) for v in f["valori"]}
-                    ok &= dentro if f.get("modo", "tieni") == "tieni" else not dentro
+                    escludi = f.get("escludi") or f.get("modo") == "escludi"      # come importa._filtra
+                    ok &= not dentro if escludi else dentro
             if ok:
                 out.append(k)
         return out

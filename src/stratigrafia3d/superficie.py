@@ -6,9 +6,12 @@ Superficie di riferimento: la quota da cui partono le unità che non hanno quote
 Tre modi, descritti da un dizionario salvato nei parametri del progetto:
     {"tipo": "costante", "quota": 45.20, "abbassa": 0.0}
     {"tipo": "raster",   "sorgente": "dtm.tif", "abbassa": 0.30}      # modello del terreno
+    {"tipo": "raster",   "sorgente": "dtm.tif", "correzione": "troncamento.tif"}   # più un raster di differenze
     {"tipo": "quote",    "abbassa": 0.0}                              # interpolata dalle quote rilevate
     {"tipo": "nessuna"}
 "abbassa" sposta la superficie verso il basso (es. lo spessore dell'arativo asportato).
+"correzione" è un secondo raster di differenze (metri, di solito negativi) da sommare al primo: per esempio
+il modello di troncamento che dice di quanto il piano di scavo sta sotto il terreno storico.
 Il raster viene copiato nel progetto, così il file .scavo resta autosufficiente.
 """
 import io
@@ -105,6 +108,27 @@ class Raster:
         d = np.load(io.BytesIO(b))
         x0, y0, sx, sy = d["geo"]
         return cls(d["z"], x0, y0, sx, sy, None, str(d["nome"]))
+
+
+def e_differenza(descr):
+    """Un raster di differenze (troncamento, spessore asportato) e non di quote: valori tutti tra -20 e 0."""
+    return descr.get("quota_max") is not None and descr["quota_max"] <= 0 and descr["quota_min"] >= -20
+
+
+def combina(base, correzione, xmin, ymin, xmax, ymax, celle_max=4_000_000):
+    """Raster = base + correzione sull'area indicata (coordinate assolute), al passo del più fine dei due
+    ma con al massimo ``celle_max`` celle. Fuori dalla correzione vale il suo bordo più vicino."""
+    passo = min(base.sx, correzione.sx)
+    passo = max(passo, float(np.sqrt((xmax - xmin) * (ymax - ymin) / celle_max)))
+    m = 2 * passo
+    xs = np.arange(xmin - m, xmax + m + passo / 2, passo)
+    ys = np.arange(ymax + m, ymin - m - passo / 2, -passo)
+    X, Y = np.meshgrid(xs, ys)
+    z = base(X.ravel(), Y.ravel()) + correzione(X.ravel(), Y.ravel())
+    r = Raster(z.reshape(X.shape), xs[0], ys[0], passo, passo, None, f"{base.nome} + {correzione.nome}")
+    e = correzione.descrizione()["estensione"]
+    r.copertura = float(np.mean((X >= e[0]) & (X <= e[2]) & (Y >= e[1]) & (Y <= e[3])))
+    return r
 
 
 def georef(path):

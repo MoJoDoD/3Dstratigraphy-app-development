@@ -204,3 +204,31 @@ def test_ricette_pronte_elencate():
     assert {"framework_archaeology", "pyarchinit"} <= set(r)
     for k in r:
         importa.carica_ricetta_pronta(k)          # si leggono senza errori
+
+
+def test_troncamento_sommato_al_terreno(framework, tmp_path):
+    """Heathrow: piano di scavo = topografia storica + modello di troncamento (raster di valori negativi)."""
+    tifffile = pytest.importorskip("tifffile")
+
+    def tif(nome, z, passo):
+        p = str(tmp_path / nome)
+        tifffile.imwrite(p, np.asarray(z, "float32"), extratags=[
+            (33550, "d", 3, (passo, passo, 0.0), False), (33922, "d", 6, (0.0, 0.0, 0.0, -20.0, 20.0, 0.0), False)])
+        return p
+    terreno = tif("topografia_1943.tif", np.full((20, 20), 50.0), 5.0)          # 100 x 100 m a 5 m
+    tronc = np.full((160, 320), -0.6)
+    tronc[:, 120:] = -1.0                                                          # più troncato a est di x = 10
+    troncamento = tif("troncamento.tif", tronc, 0.25)
+    abb = importa.proponi(framework + [terreno, troncamento])
+    assert abb.superficie["sorgente"] == terreno and abb.superficie["correzione"] == troncamento
+    abb, _ = importa.applica_ricetta(abb, importa.carica_ricetta_pronta("framework_archaeology"))
+    assert abb.superficie["abbassa"] == 0.0                   # il troncamento sostituisce i 30 cm della ricetta
+    abb.filtri.append({"dove": "layer", "layer": "Stansted", "colonna": "SITECODE", "valori": ["A"]})
+    s = importa.applica(abb)
+    assert any("troncamento" in n for n in s.note_importazione)
+    m = ricostruisci(s)
+    assert m.unita[20].top.max() == pytest.approx(49.0, abs=0.05)                 # buca a x 14-15: -1 m
+    assert m.unita[20].top.min() == pytest.approx(49.0 - 0.35, abs=0.05)
+    s.salva(str(tmp_path / "t.scavo"))
+    r = Scavo.apri(str(tmp_path / "t.scavo"))
+    assert r.raster_superficie(np.array([2.0, 14.5]), np.array([1.0, 0.5])) == pytest.approx([49.4, 49.0], abs=0.01)
