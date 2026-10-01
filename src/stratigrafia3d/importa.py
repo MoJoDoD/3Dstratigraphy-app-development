@@ -514,6 +514,9 @@ class Abbinamento:
     # fase scritta in due colonne (periodo + fase, come in pyArchInit): {"scheda": [periodo, fase],
     # "fasi": [periodo, fase], "da": colonna anno iniziale, "a": anno finale, "titolo": colonna}
     fase_composta: dict = None
+    # colonne prese da altre tabelle con una chiave, anche a catena (Heathrow: scheda -> SGData):
+    # [{"foglio", "chiave": colonna del foglio, "colonna": colonna della scheda, "porta": [colonne]}]
+    colonne_collegate: list = field(default_factory=list)
     ortofoto: str = None                                # GeoTIFF a colori da drappeggiare sul modello
     modelli3d: list = field(default_factory=list)       # [{"percorso", "spostamento": [dx, dy, dz]}]
 
@@ -1269,7 +1272,7 @@ def applica_ricetta(abb, ricetta):
         out.note = [n for n in out.note if not isinstance(n, str) or not n.startswith(
             ("Schede US nel foglio", "Nessun rapporto", "Rapporti «", "Nessun foglio con i numeri"))]
     for k in ("vocabolari", "unita_misura", "valori_nulli", "filtri", "poligoni_ereditati", "solo_con_poligono", "nome",
-              "fase_composta"):
+              "fase_composta", "colonne_collegate"):
         setattr(out, k, copy.deepcopy(getattr(r, k)))
     if r.fogli_collegati is not None:
         out.fogli_collegati = {k: v for k, v in r.fogli_collegati.items() if v.get("foglio") in tabelle}
@@ -1329,22 +1332,48 @@ def _chiave_fase(p, f):
     return None if a is None and b is None else (a or "", b or "")
 
 
+def _collega_colonne(grezzo, tabs, collegamenti):
+    """Aggiunge alle schede colonne di altre tabelle, cercate con una chiave (anche a catena)."""
+    note = []
+    def k(v):
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            return None
+        n = _numero(v)
+        return str(int(n)) if n is not None and float(n).is_integer() else str(v).strip()
+    for c in collegamenti or []:
+        t, chiave, col = tabs.get(c.get("foglio")), c.get("chiave"), c.get("colonna")
+        if t is None or chiave not in t.columns or col not in grezzo.columns:
+            note.append(f"Collegamento a «{c.get('foglio')}» non applicato: tabella o colonne mancanti")
+            continue
+        t = t.drop_duplicates(subset=[chiave])
+        chiavi = t[chiave].map(k)
+        for porta in c.get("porta") or []:
+            if porta in t.columns:
+                grezzo[porta] = grezzo[col].map(k).map(dict(zip(chiavi, t[porta])))
+        trovate = grezzo[col].map(k).isin(set(chiavi)).sum()
+        note.append(f"«{c['foglio']}» collegato alle schede con «{col}»: {int(trovate)} schede su {len(grezzo)}")
+    return grezzo, note
+
+
 def _fasi_composte(spec, tabs, df_schede, grezzo):
     """Numera le fasi composte (periodo + fase) dalla più antica alla più recente.
 
     Ritorna (numero per ogni riga delle schede, tabella Fasi nel formato del programma, note)."""
     note = []
-    cp, cf = (spec.get("scheda") or [None, None])[:2]
-    if cp not in grezzo.columns or cf not in grezzo.columns:
+    cp, cf = (list(spec.get("scheda") or []) + [None, None])[:2]          # una sola colonna: la fase è un testo
+    if cp not in grezzo.columns or (cf is not None and cf not in grezzo.columns):
         return None, None, [f"Fase composta: colonne «{cp}» e «{cf}» non trovate nelle schede"]
-    chiavi_schede = [_chiave_fase(a, b) for a, b in zip(grezzo.loc[df_schede.index, cp], grezzo.loc[df_schede.index, cf])]
+    esclusi = {str(v).strip().lower() for v in spec.get("esclusi") or []}
+    vf = grezzo.loc[df_schede.index, cf] if cf else [None] * len(df_schede)
+    chiavi_schede = [None if str(a).strip().lower() in esclusi else _chiave_fase(a, b)
+                     for a, b in zip(grezzo.loc[df_schede.index, cp], vf)]
     righe = {}
     tf = tabs.get(spec.get("foglio")) if spec.get("foglio") else None
     if tf is not None:
-        fp, ff = (spec.get("fasi") or [None, None])[:2]
-        if fp in tf.columns and ff in tf.columns:
+        fp, ff = (list(spec.get("fasi") or []) + [None, None])[:2]
+        if fp in tf.columns and (ff is None or ff in tf.columns):
             for _, r in tf.iterrows():
-                k = _chiave_fase(r[fp], r[ff])
+                k = _chiave_fase(r[fp], r[ff] if ff else None)
                 if k is None or k in righe:
                     continue
                 righe[k] = dict(da=_numero(r.get(spec.get("da"))), a=_numero(r.get(spec.get("a"))),
@@ -1358,13 +1387,17 @@ def _fasi_composte(spec, tabs, df_schede, grezzo):
         r = righe.get(k)
         anno = r["da"] if r and r["da"] is not None else (r["a"] if r and r["a"] is not None else None)
         return (0 if anno is not None else 1, anno if anno is not None else 0, k)
-    tutte = sorted(set(righe) | usate, key=ordine)
+    # «solo_usate»: tralascia le fasi della periodizzazione che nessuna scheda del progetto usa
+    tutte = sorted(usate if spec.get("solo_usate") else set(righe) | usate, key=ordine)
     numero = {k: i + 1 for i, k in enumerate(tutte)}
-    fasi = pd.DataFrame([dict(Fase=numero[k], Titolo=(righe.get(k) or {}).get("titolo") or f"Periodo {k[0]}, fase {k[1]}",
-                              Periodo=f"Periodo {k[0]} · fase {k[1]}", **{"Da (anno)": (righe.get(k) or {}).get("da"),
+    def nome(k):
+        return k[0] if not k[1] else f"Periodo {k[0]}, fase {k[1]}"
+    fasi = pd.DataFrame([dict(Fase=numero[k], Titolo=(righe.get(k) or {}).get("titolo") or nome(k),
+                              Periodo=k[0] if not k[1] else f"Periodo {k[0]} · fase {k[1]}", **{"Da (anno)": (righe.get(k) or {}).get("da"),
                                                                           "A (anno)": (righe.get(k) or {}).get("a")})
                          for k in tutte])
-    note.append(f"Fasi composte da «{cp}» e «{cf}»: {len(tutte)} fasi numerate dalla più antica")
+    note.append(f"Fasi composte da «{cp}» e «{cf}»: {len(tutte)} fasi numerate dalla più antica" if cf else
+                f"Fasi dalla colonna «{cp}»: {len(tutte)} fasi numerate dalla più antica")
     return [numero.get(k) if k is not None else None for k in chiavi_schede], fasi, note
 
 
@@ -1550,6 +1583,9 @@ def applica(abb, log=None):
         grezzo, tolte = _filtra(tabs[abb.foglio_us], abb.filtri, "scheda")     # i filtri usano i nomi dell'archivio
         if tolte:
             note.append(f"Filtri: {tolte} schede escluse")
+        if abb.colonne_collegate:
+            grezzo, nc = _collega_colonne(grezzo.copy(), tabs, abb.colonne_collegate)
+            note.extend(nc)
         df = _rinomina(grezzo, abb.colonne_us)
         df[sc.C_US] = df[sc.C_US].map(_intero)
         df = df[df[sc.C_US].notna()].copy()

@@ -37,6 +37,12 @@
                            "Analisi": "Sample Collected for"}},
   "Documentazione": {"foglio": "ContextsPhotos", "colonne": {"US/USM": "Intervention", "ID": "View Number"}}
  },
+ "colonne_collegate": [
+  {"foglio": "SGData", "chiave": "SG Number", "colonna": "SG Number",
+   "porta": ["SGDeposit Date", "SG Type", "Formation Category", "Where date from"]}
+ ],
+ "fase_composta": {"scheda": ["SGDeposit Date"], "foglio": "PermittedDating", "fasi": ["Specific Date"],
+                   "da": "Lower Date Value", "a": "Upper Date Value", "esclusi": ["Unphased", "Undated"], "solo_usate": true},
  "valori_nulli": [-9999.0, -999.0, -99.99, 999999.0],
  "filtri": [
   {"dove": "layer", "layer": "hachures", "colonna": "Layer1", "valori": ["Base of Slope"]},

@@ -490,6 +490,9 @@ T.update({
     "Schede": "Records", "glTF binario": "Binary glTF", "Pagina web": "Web page", "Foglio Excel": "Excel workbook",
     "Disegno SVG": "SVG drawing", "Disegno DXF": "DXF drawing", "Ricetta di importazione": "Import recipe", "Tutti i file": "All files",
     "Correzione": "Correction",
+    "Collegamento a «{0}» non applicato: tabella o colonne mancanti": "Link to «{0}» not applied: table or columns missing",
+    "«{0}» collegato alle schede con «{1}»: {2} schede su {3}": "«{0}» linked to the records through «{1}»: {2} records out of {3}",
+    "Fasi dalla colonna «{0}»: {1} fasi numerate dalla più antica": "Phases from column «{0}»: {1} phases numbered from the oldest",
     "Il raster di correzione copre solo il {0} dell'area dello scavo: fuori si usa il valore del suo bordo più vicino":
         "The correction raster covers only {0} of the excavation area: outside it, the value at its nearest edge is used", "{0} (differenze)": "{0} (differences)",
     "Un raster di differenze da sommare al modello del terreno, per esempio il modello di troncamento (valori negativi)":

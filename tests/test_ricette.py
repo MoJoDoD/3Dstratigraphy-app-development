@@ -232,3 +232,28 @@ def test_troncamento_sommato_al_terreno(framework, tmp_path):
     s.salva(str(tmp_path / "t.scavo"))
     r = Scavo.apri(str(tmp_path / "t.scavo"))
     assert r.raster_superficie(np.array([2.0, 14.5]), np.array([1.0, 0.5])) == pytest.approx([49.4, 49.0], abs=0.01)
+
+
+def test_fasi_da_tabelle_collegate(framework, tmp_path):
+    """Framework: la fase sta nel gruppo stratigrafico (SGData), gli anni nella tabella delle datazioni."""
+    d = os.path.dirname(framework[0])
+    cd = importa.leggi_csv(os.path.join(d, "ContextData.csv"))
+    cd["SG Number"] = [1, 1, 1, 2, 2, 3, 3, 4]
+    p_cd = str(tmp_path / "ContextData.csv")
+    cd.to_csv(p_cd, index=False)
+    p_sg = str(tmp_path / "SGData.csv")
+    pd.DataFrame({"SG Number": [1, 2, 3, 4], "SGDeposit Date": ["Middle Bronze Age", "Medieval", "Unphased",
+                                                               "Medieval"]}).to_csv(p_sg, index=False)
+    p_pd = str(tmp_path / "PermittedDating.csv")
+    pd.DataFrame({"Specific Date": ["Medieval", "Middle Bronze Age", "Roman"], "Lower Date Value": [1066, -1500, 43],
+                  "Upper Date Value": [1499, -1100, 410]}).to_csv(p_pd, index=False)
+    files = [framework[0], p_cd, p_sg, p_pd]
+    abb, _ = importa.applica_ricetta(importa.proponi(files), importa.carica_ricetta_pronta("framework_archaeology"))
+    abb.filtri.append({"dove": "layer", "layer": "Stansted", "colonna": "SITECODE", "valori": ["A"]})
+    abb.superficie = {"tipo": "costante", "quota": 50.0}
+    s = importa.applica(abb)
+    fasi = s.tabelle["Fasi"]
+    assert list(fasi["Titolo"]) == ["Middle Bronze Age", "Medieval"]          # solo le usate, dalla più antica
+    assert list(fasi["Da (anno)"]) == [-1500, 1066]
+    schede = s.schede_us()
+    assert schede[10]["Fase"] == 1 and schede[11]["Fase"] == 1 and schede[20]["Fase"] == 2
