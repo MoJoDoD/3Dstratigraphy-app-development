@@ -21,7 +21,9 @@ Funziona senza internet, come app sul proprio computer o dalla riga di comando.
 3. Doppio clic su **Avvia Stratigrafia 3D.bat**. Si può trascinare un file `.scavo` sull'icona per aprirlo.
 
 L'app funziona senza internet: gira sul tuo PC e usa una finestra propria (o il browser, se la
-finestra non è disponibile). L'interfaccia è in italiano e in inglese.
+finestra non è disponibile). L'interfaccia è in italiano e in inglese: il pulsante in alto a destra
+cambia lingua, e gli elaborati esportati (tabelle, piante, sezioni, GLB) seguono la lingua scelta. Da
+riga di comando: `strat3d --lingua en elaborati ...`.
 
 ## Import flessibile
 

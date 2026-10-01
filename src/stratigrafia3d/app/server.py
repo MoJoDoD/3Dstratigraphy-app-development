@@ -126,6 +126,14 @@ class App:
         st = self.stato
         if nome == "stato":
             return st.descrizione()
+        if nome == "lingua":
+            from ..lingue import imposta_lingua, lingua_corrente, LINGUE
+            if a.get("lingua"):
+                try:
+                    imposta_lingua(a["lingua"])
+                except ValueError as e:
+                    raise Errore(str(e))
+            return dict(lingua=lingua_corrente(), lingue=LINGUE)
         if nome == "dialogo":
             r = dialoghi.scegli(a.get("tipo", "apri"), a.get("filtri", ["dati"]), a.get("multiplo", False), a.get("nome"))
             return dict(percorsi=r, disponibile=r is not None)
@@ -341,7 +349,10 @@ class App:
 
     # ------------------------------------------------------------------ pagine
     def pagina_app(self):
+        from ..lingue import inserisci, lingua_corrente
         html = resources.files("stratigrafia3d.app").joinpath("statici/app.html").read_text(encoding="utf-8")
+        lingua = lingua_corrente()
+        html = inserisci(html, lingua).replace('<html lang="it">', f'<html lang="{lingua}">', 1)
         return (html.replace("/*__FONT__*/", css_font(inline=False))
                     .replace("__GETTONE__", self.gettone).replace("__VERSIONE__", __version__))
 

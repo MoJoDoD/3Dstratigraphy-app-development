@@ -1,5 +1,8 @@
+import os
 import warnings
 import pytest
+
+os.environ["S3D_LINGUA"] = "it"          # i test controllano i testi italiani, qualunque sia la lingua del sistema
 
 warnings.filterwarnings("ignore", message=".*Axes3D.*")
 

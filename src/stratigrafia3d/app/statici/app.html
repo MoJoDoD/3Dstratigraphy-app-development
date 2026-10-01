@@ -204,6 +204,8 @@ dialog .row{justify-content:flex-end;margin-top:12px}
       <button class="btn acc" id="bScrivi" hidden title="Scrive le modifiche fatte nell'app nei file da cui viene il progetto">Scrivi nei file</button>
       <button class="btn" id="bAggiorna" hidden title="I file d'origine sono cambiati: rileggili">Aggiorna dai file</button>
     </div>
+    <span class="sep"></span>
+    <button class="btn t2" id="bLingua" data-nt title="Lingua dell'interfaccia / Interface language" aria-label="Interface language">English</button>
   </header>
   <main>
     <!-- INIZIO -->
@@ -764,6 +766,9 @@ $("bNuovo").onclick=$("cNuovo").onclick=async()=>{ if(await perdite()) nuovo([])
 $("bApri").onclick=$("cApri").onclick=()=>apri();
 $("bSalva").onclick=()=>salva(false); $("bSalvaCome").onclick=()=>salva(true);
 $("bVerifica").onclick=verifica;
+$("bLingua").textContent=(window.S3D_LINGUA||"it")==="it"?"English":"Italiano";
+$("bLingua").onclick=async()=>{ const l=(window.S3D_LINGUA||"it")==="it"?"en":"it";
+  try{ await api("lingua",{lingua:l}); location.reload() }catch(e){ avviso(e.message,true) } };
 $("bScrivi").onclick=()=>scriviNeiFile().catch(()=>{});
 $("bAggiorna").onclick=()=>aggiornaDaiFile().catch(()=>{});
 $("bRicostruisci").onclick=()=>ricostruisciOra();

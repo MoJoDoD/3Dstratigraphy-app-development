@@ -223,19 +223,24 @@ def _ortofoto(scavo):
                 nome=o.nome, passo_cm=round(o.passo * 100, 1))
 
 
-def pagina_visualizzatore(scavo, modo="offline"):
-    """HTML del visualizzatore con i dati dello scavo. ``modo``: "offline" | "app" | "web"."""
+def pagina_visualizzatore(scavo, modo="offline", lingua=None):
+    """HTML del visualizzatore con i dati dello scavo. ``modo``: "offline" | "app" | "web".
+    ``lingua``: lingua dell'interfaccia ("it", "en"); None = quella scelta nell'app."""
     from .risorse import adatta_pagina
+    from .lingue import inserisci, lingua_corrente
     data = json.dumps(dati_visualizzatore(scavo), ensure_ascii=False, separators=(",", ":"), default=_json_val)
     tpl = resources.files("stratigrafia3d.visualizzatore").joinpath("modello.html").read_text(encoding="utf-8")
-    return adatta_pagina(tpl, modo).replace("/*__DATA__*/", data.replace("</", "<\\/"))
+    html = inserisci(tpl, lingua or lingua_corrente())
+    if (lingua or lingua_corrente()) != "it":
+        html = html.replace('<html lang="it">', f'<html lang="{lingua or lingua_corrente()}">', 1)
+    return adatta_pagina(html, modo).replace("/*__DATA__*/", data.replace("</", "<\\/"))
 
 
-def visualizzatore(scavo, percorso_html, modo="offline"):
+def visualizzatore(scavo, percorso_html, modo="offline", lingua=None):
     """Scrive la pagina web autonoma del visualizzatore 3D (di norma utilizzabile senza internet)."""
     os.makedirs(os.path.dirname(os.path.abspath(percorso_html)), exist_ok=True)
     with open(percorso_html, "w", encoding="utf-8") as f:
-        f.write(pagina_visualizzatore(scavo, modo))
+        f.write(pagina_visualizzatore(scavo, modo, lingua))
     return percorso_html
 
 
@@ -264,9 +269,10 @@ def glb(scavo, percorso, esploso=0.0, ortofoto=True, rilievi=True):
 
     ``esploso``: distanza verticale tra livelli. ``ortofoto``: l'ortofoto del progetto come texture
     delle unità che copre. ``rilievi``: anche i modelli 3D rilevati (fotogrammetria, laser scanner)."""
-    from .elaborati import colore_unita, _fase
+    from .elaborati import colore_unita, _fase, _traduttore
     if scavo.modello is None:
         raise ValueError("modello 3D non calcolato")
+    _ = _traduttore()
     o = scavo.origine
     livello = st.livelli_dal_basso(scavo.rapporti())
     schede = {**{u: ("US", r) for u, r in scavo.schede_us().items()},
@@ -319,32 +325,33 @@ def glb(scavo, percorso, esploso=0.0, ortofoto=True, rilievi=True):
             if ((ex >= 0) & (ex <= 1)).all(1).mean() > 0.5:
                 attr["TEXCOORD_0"] = add_acc(ex, 5126, "VEC2")
                 pbr = dict(baseColorTexture=dict(index=tex_orto), metallicFactor=0.0, roughnessFactor=0.9)
-        mat = dict(name=f"{tipo} {u}", doubleSided=m.tipo == "taglio", pbrMetallicRoughness=pbr)
+        nome_u = _(tipo + " {0}", u)
+        mat = dict(name=nome_u, doubleSided=m.tipo == "taglio", pbrMetallicRoughness=pbr)
         if m.tipo == "taglio":
             mat["alphaMode"] = "BLEND"
         materials.append(mat)
-        meshes.append(dict(name=f"{tipo} {u}", primitives=[dict(attributes=attr, indices=add_acc(F.ravel(), 5125, "SCALAR",
+        meshes.append(dict(name=nome_u, primitives=[dict(attributes=attr, indices=add_acc(F.ravel(), 5125, "SCALAR",
                                                                                                  target=34963),
                                                                      material=len(materials) - 1)]))
         extras = {k: _json_val(v) for k, v in dict(r).items() if _json_val(v) is not None} if len(r) else {}
         extras.update(dict(unita=int(u), tipo_modello=m.tipo, livello=int(livello.get(u, 0)),
                            volume_m3=round(m.volume(), 3), qualita=m.qualita))
         definizione = r.get("Definizione") if len(r) else None
-        nome = f"{tipo} {u}" + (f" {definizione}" if isinstance(definizione, str) and definizione.strip() else "")
+        nome = nome_u + (f" {definizione}" if isinstance(definizione, str) and definizione.strip() else "")
         nodes.append(dict(name=nome, mesh=len(meshes) - 1, extras=extras))
         per_fase.setdefault(_fase(r) if len(r) else 0, []).append(len(nodes) - 1)
     # un nodo per fase, dalla più recente: comodo nell'elenco degli oggetti di Blender
     titoli = {}
     t = scavo.tabelle.get(sc.S_FASI)
     if t is not None and "Fase" in t.columns:
-        for _, rr in t.iterrows():
+        for _i, rr in t.iterrows():
             try:
                 titoli[int(float(rr["Fase"]))] = str(rr.get("Titolo") or "")
             except (TypeError, ValueError):
                 pass
     radici = []
     for f in sorted(per_fase, reverse=True):
-        nodes.append(dict(name=f"Fase {f}" + (f" {titoli[f]}" if titoli.get(f) else ""), children=per_fase[f]))
+        nodes.append(dict(name=_("Fase {0}", f) + (f" {titoli[f]}" if titoli.get(f) else ""), children=per_fase[f]))
         radici.append(len(nodes) - 1)
     # modelli 3D rilevati
     for mr in (getattr(scavo, "modelli3d", []) if rilievi else []):
@@ -360,10 +367,10 @@ def glb(scavo, percorso, esploso=0.0, ortofoto=True, rilievi=True):
             rgba = np.c_[mr.colori[:, :3], np.full(len(mr.colori), 255)].astype("u1")   # 4 byte: allineati
             attr["COLOR_0"] = add_acc(np.ascontiguousarray(rgba), 5121, "VEC4", normalized=True)
             pbr["baseColorFactor"] = [1, 1, 1, 1]
-        materials.append(dict(name=f"Rilievo {mr.nome}", doubleSided=True, pbrMetallicRoughness=pbr))
+        materials.append(dict(name=_("Rilievo {0}", mr.nome), doubleSided=True, pbrMetallicRoughness=pbr))
         meshes.append(dict(name=mr.nome, primitives=[dict(attributes=attr, indices=add_acc(F.ravel(), 5125, "SCALAR", target=34963),
                                                           material=len(materials) - 1)]))
-        nodes.append(dict(name=f"Rilievo {mr.nome}", mesh=len(meshes) - 1))
+        nodes.append(dict(name=_("Rilievo {0}", mr.nome), mesh=len(meshes) - 1))
         radici.append(len(nodes) - 1)
     gltf = dict(asset=dict(version="2.0", generator="stratigrafia3d"),
                 scene=0, scenes=[dict(name=scavo.meta.get("nome", "scavo"), nodes=radici,

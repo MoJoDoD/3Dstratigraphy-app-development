@@ -66,7 +66,9 @@ pip install -e .[app]
 strat3d app
 ```
 
-The interface is available in Italian and English.
+The interface is available in Italian and English: the button at the top right switches language,
+and exports (tables, plans, sections, GLB) follow the chosen language. On the command line, use
+`strat3d --lingua en elaborati ...`. The first time, the app follows the language of your system.
 
 ## Try it
 

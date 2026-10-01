@@ -324,9 +324,10 @@ const CAMPI_COL={};
 const campoOf=(u,k)=>{const v=S[u]?.[k]; return v==null||v===""?null:String(v)};
 const REL_ORDER=["copre","coperto da","taglia","tagliato da","riempie","riempito da","si appoggia a","gli si appoggia","si lega a"];
 const INV={"copre":"coperto da","taglia":"tagliato da","riempie":"riempito da","si appoggia a":"gli si appoggia","si lega a":"si lega a"};
-const fmtY=v=>v==null?"—":(v<0?(-v)+" a.C.":v+" d.C.");
+const T=window.T||((s,...a)=>s.replace(/\{(\d+)\}/g,(_,k)=>a[k]??"")), LOC=window.S3D_LOCALE||"it-IT";
+const fmtY=v=>v==null?"—":(v<0?T("{0} a.C.",-v):T("{0} d.C.",v));
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const num=(v,d=2)=>v==null||v===""?"—":Number(v).toLocaleString("it-IT",{minimumFractionDigits:d,maximumFractionDigits:d});
+const num=(v,d=2)=>v==null||v===""?"—":Number(v).toLocaleString(LOC,{minimumFractionDigits:d,maximumFractionDigits:d});
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 // ------------------------------------------------------------ relazioni
@@ -731,7 +732,7 @@ function renderScheda(){
   if(selected==null){
     const nU=Object.keys(S).length, nm=D.materiali.reduce((s,m)=>s+(m.NR||0),0);
     P.innerHTML=`<div class="empty"><p style="font-family:var(--f-ui);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px">${D.demo?"Scavo immaginario · ":""}${esc(ORIG.crs||"coordinate locali")}</p>
-      <p><b>${nU}</b> unità stratigrafiche ricostruite in 3D a partire da poligoni, quote e profili del GIS, con <b>${nm.toLocaleString("it-IT")}</b> frammenti inventariati, ${D.rs.length} reperti speciali e ${D.campioni.length} campioni.</p>
+      <p><b>${nU}</b> unità stratigrafiche ricostruite in 3D a partire da poligoni, quote e profili del GIS, con <b>${nm.toLocaleString(LOC)}</b> frammenti inventariati, ${D.rs.length} reperti speciali e ${D.campioni.length} campioni.</p>
       <p>Seleziona un'unità nella scena, nell'elenco o nel diagramma di Harris per aprirne la scheda.</p>
       <ul><li><b>Esploso</b> separa le unità secondo la sequenza stratigrafica.</li><li><b>Scavo virtuale</b> le asporta dall'alto verso il basso.</li><li><b>Sezione</b> taglia il modello con un piano: le campiture mostrano lo spessore irregolare degli strati.</li></ul></div>`;
     return;

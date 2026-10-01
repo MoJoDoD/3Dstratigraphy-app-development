@@ -17,11 +17,18 @@ from shapely.ops import linemerge, polygonize, unary_union
 from . import schema as sc
 from . import stratigrafia as st
 from .esporta import mesh_unita, _hex_rgb
+from .lingue import lingua_corrente, t as _tr
 
 PALETTE_FASI = ["#8e8a7c", "#5c7196", "#6f8f45", "#b88a2c", "#a8573a", "#7b4b86", "#cf6e4f", "#2f8580", "#6d6659"]
 
 
 # ---------------------------------------------------------------------------------------------- dati
+def _traduttore(lingua=None):
+    """Funzione che traduce i testi degli elaborati nella lingua scelta (quella dell'interfaccia)."""
+    L = lingua or lingua_corrente()
+    return lambda s, *a: _tr(s, *a, lingua=L)
+
+
 def _schede(scavo):
     return {**{u: ("US", r) for u, r in scavo.schede_us().items()},
             **{u: ("USM", r) for u, r in scavo.schede_usm().items()}}
@@ -97,7 +104,7 @@ def scrivi_tabella_volumi(scavo, percorso):
     fasi = scavo.tabelle.get(sc.S_FASI)
     titoli = {}
     if fasi is not None and "Fase" in fasi.columns:
-        for _, r in fasi.iterrows():
+        for _i, r in fasi.iterrows():
             try:
                 titoli[int(float(r["Fase"]))] = r.get("Titolo")
             except (TypeError, ValueError):
@@ -107,14 +114,21 @@ def scrivi_tabella_volumi(scavo, percorso):
         "Area in pianta (m²)": ("Area in pianta (m²)", "sum")}).reset_index()
     per_fase.insert(1, "Titolo", per_fase["Fase"].map(titoli))
     per_fase = per_fase.sort_values("Fase", ascending=False)
+    L = lingua_corrente()
+    _ = _traduttore(L)
+    if L != "it":
+        for c in ("Tipo", "Strategia", "Base"):
+            df[c] = df[c].map(lambda v: _(v) if isinstance(v, str) else v)
+        df = df.rename(columns=_)
+        per_fase = per_fase.rename(columns=_)
     with pd.ExcelWriter(percorso, engine="openpyxl") as w:
-        df.to_excel(w, sheet_name="Unità", index=False)
-        per_fase.to_excel(w, sheet_name="Per fase", index=False)
-        pd.DataFrame({"Nota": [
-            f"Progetto: {scavo.meta.get('nome', '')}",
-            "Volumi calcolati dalle mesh chiuse ricostruite; i tagli sono superfici e non hanno volume.",
-            "«Strategia» dice da quali dati viene la forma (misurata, profondità, impilata, schematica).",
-            f"Coordinate: {scavo.crs or 'locali'}."]}).to_excel(w, sheet_name="Note", index=False)
+        df.to_excel(w, sheet_name=_("Unità"), index=False)
+        per_fase.to_excel(w, sheet_name=_("Per fase"), index=False)
+        pd.DataFrame({_("Nota"): [
+            _("Progetto: {0}", scavo.meta.get('nome', '')),
+            _("Volumi calcolati dalle mesh chiuse ricostruite; i tagli sono superfici e non hanno volume."),
+            _("«Strategia» dice da quali dati viene la forma (misurata, profondità, impilata, schematica)."),
+            _("Coordinate: {0}.", scavo.crs or _("locali"))]}).to_excel(w, sheet_name=_("Note"), index=False)
         for ws in w.book.worksheets:
             for col in ws.columns:
                 larg = max(len(str(c.value)) if c.value is not None else 0 for c in col)
@@ -230,10 +244,11 @@ def linee_sezione(scavo):
         out.append([nome, tuple(cc[0][:2]), tuple(cc[-1][:2])])
     # nomi vuoti o ripetuti (archivi senza identificativo): si numerano
     from collections import Counter
+    _ = _traduttore()
     conta = Counter(n for n, _, _ in out)
     for i, x in enumerate(out):
         if x[0] in ("", "0", "—", "nan", "None"):
-            x[0] = f"Sezione {i + 1}"
+            x[0] = _("Sezione {0}", i + 1)
         elif conta[x[0]] > 1:
             x[0] = f"{x[0]} ({i + 1})"
     return [tuple(x) for x in out]
@@ -247,8 +262,9 @@ def sezioni_centrali(scavo):
     x0, y0, x1, y1 = unary_union(poli).bounds
     o = scavo.origine
     cx, cy = (x0 + x1) / 2 + o["E0"], (y0 + y1) / 2 + o["N0"]
-    return [("Sezione E-O (centrale)", (x0 + o["E0"], cy), (x1 + o["E0"], cy)),
-            ("Sezione N-S (centrale)", (cx, y0 + o["N0"]), (cx, y1 + o["N0"]))]
+    _ = _traduttore()
+    return [(_("Sezione E-O (centrale)"), (x0 + o["E0"], cy), (x1 + o["E0"], cy)),
+            (_("Sezione N-S (centrale)"), (cx, y0 + o["N0"]), (cx, y1 + o["N0"]))]
 
 
 # ---------------------------------------------------------------------------------------------- SVG
@@ -266,6 +282,7 @@ def sezioni_svg(scavo, sezioni, percorso, scala=50, esagerazione=1.0):
     """Disegno delle sezioni in un unico SVG, una sotto l'altra. ``sezioni``: [(nome, a, b)] reali.
     ``scala``: 1:scala (mm sulla carta)."""
     k = 1000.0 / scala                      # mm di carta per metro
+    _ = _traduttore()
     calcolate = []
     mesh = _Mesh(scavo)
     for nome, a, b in sezioni:
@@ -289,8 +306,10 @@ def sezioni_svg(scavo, sezioni, percorso, scala=50, esagerazione=1.0):
         alt = max(alt, h)
     W, H = larghezza, y + alt + 6
     out = _svg_testa(W, H)
-    out.append(f'<text x="10" y="8" font-size="4" font-weight="bold">{_esc(scavo.meta.get("nome", "Scavo"))} — '
-               f'sezioni dal modello 3D, scala 1:{scala}{"" if esagerazione == 1 else f", altezze ×{esagerazione:g}"}</text>')
+    titolo = _("{0} — sezioni dal modello 3D, scala 1:{1}", scavo.meta.get("nome") or _("Scavo"), scala)
+    if esagerazione != 1:
+        titolo += _(", altezze ×{0}", f"{esagerazione:g}")
+    out.append(f'<text x="10" y="8" font-size="4" font-weight="bold">{_esc(titolo)}</text>')
     for nome, tagli, L, z0, z1, y0, h, x0 in blocchi:
         X = lambda d, x0=x0: x0 + 20 + d * k
         Y = lambda z, y0=y0, z1=z1: y0 + 12 + (z1 - z) * k * esagerazione
@@ -307,11 +326,11 @@ def sezioni_svg(scavo, sezioni, percorso, scala=50, esagerazione=1.0):
                 pts = " ".join(f"{X(x):.2f},{Y(y):.2f}" for x, y in g.exterior.coords)
                 buchi = "".join(" M" + " L".join(f"{X(x):.2f},{Y(y):.2f}" for x, y in r.coords) + " Z" for r in g.interiors)
                 out.append(f'<path d="M{pts.replace(" ", " L")} Z{buchi}" fill="{t["colore"]}" fill-opacity="0.85" '
-                           f'stroke="#222" stroke-width="0.25" fill-rule="evenodd"><title>US {t["unita"]}</title></path>')
+                           f'stroke="#222" stroke-width="0.25" fill-rule="evenodd"><title>{_esc(_("US {0}", t["unita"]))}</title></path>')
             for g in t["linee"]:
                 pts = " L".join(f"{X(x):.2f},{Y(y):.2f}" for x, y in g.coords)
                 out.append(f'<path d="M{pts}" fill="none" stroke="#111" stroke-width="0.35" stroke-dasharray="1.2 0.8">'
-                           f'<title>US {t["unita"]} (taglio)</title></path>')
+                           f'<title>{_esc(_("US {0} (taglio)", t["unita"]))}</title></path>')
         for t in tagli:                      # etichette sopra i colori
             for g in t["aree"]:
                 if g.area * k * k * esagerazione > 20:
@@ -342,10 +361,11 @@ def pianta_svg(scavo, percorso, scala=200, fasi=None):
             per_fase.setdefault(f, []).append(u)
     if not per_fase:
         raise ValueError("Nessuna unità nelle fasi indicate")
+    _ = _traduttore()
     titoli = {}
     t = scavo.tabelle.get(sc.S_FASI)
     if t is not None and "Fase" in t.columns:
-        for _, r in t.iterrows():
+        for _i, r in t.iterrows():
             try:
                 titoli[int(float(r["Fase"]))] = str(r.get("Titolo") or "")
             except (TypeError, ValueError):
@@ -363,14 +383,14 @@ def pianta_svg(scavo, percorso, scala=200, fasi=None):
     W, H = col * pw + 20, righe * ph + 30
     out = _svg_testa(W, H)
     o = scavo.origine
-    out.append(f'<text x="10" y="9" font-size="4" font-weight="bold">{_esc(scavo.meta.get("nome", "Scavo"))} — piante per fase, '
-               f'scala 1:{scala}</text>')
+    titolo = _("{0} — piante per fase, scala 1:{1}", scavo.meta.get("nome") or _("Scavo"), scala)
+    out.append(f'<text x="10" y="9" font-size="4" font-weight="bold">{_esc(titolo)}</text>')
     livello = st.livelli_dal_basso(scavo.rapporti())
     for n, f in enumerate(fasi_ord):
         ox, oy = 10 + (n % col) * pw, 16 + (n // col) * ph
         X = lambda x, ox=ox: ox + 8 + (x - x0) * k
         Y = lambda y, oy=oy: oy + 10 + (y1 - y) * k
-        out.append(f'<g><text x="{ox + 8:.2f}" y="{oy + 6:.2f}" font-size="3.2" font-weight="bold">Fase {f}'
+        out.append(f'<g><text x="{ox + 8:.2f}" y="{oy + 6:.2f}" font-size="3.2" font-weight="bold">{_esc(_("Fase {0}", f))}'
                    f'{" · " + _esc(titoli[f]) if titoli.get(f) else ""}</text>')
         def tracciato(g):
             d = ""
@@ -393,10 +413,10 @@ def pianta_svg(scavo, percorso, scala=200, fasi=None):
             neg = str(r.get(sc.C_TIPO, "")).lower() == "negativa" if len(r) else False
             if neg:
                 out.append(f'<path d="{tracciato(poli[u])}" fill="none" stroke="#111" stroke-width="0.3" '
-                           f'stroke-dasharray="1 0.7"><title>{tipo} {u}</title></path>')
+                           f'stroke-dasharray="1 0.7"><title>{_esc(_(tipo + " {0}", u))}</title></path>')
             else:
                 out.append(f'<path d="{tracciato(poli[u])}" fill="{colore_unita(scavo, u, schede)}" fill-opacity="0.8" '
-                           f'stroke="#222" stroke-width="0.2" fill-rule="evenodd"><title>{tipo} {u}</title></path>')
+                           f'stroke="#222" stroke-width="0.2" fill-rule="evenodd"><title>{_esc(_(tipo + " {0}", u))}</title></path>')
         visti = []
         for u in sorted(per_fase[f], key=lambda u: -poli[u].area):
             c = poli[u].representative_point()
@@ -472,10 +492,11 @@ def pianta_dxf(scavo, percorso):
     poli = {**scavo.poligoni_us(), **scavo.poligoni_usm()}
     o = scavo.origine
     dxf = _DXF()
+    _ = _traduttore()
     fasi = scavo.tabelle.get(sc.S_FASI)
     titoli = {}
     if fasi is not None and "Fase" in fasi.columns:
-        for _, r in fasi.iterrows():
+        for _i, r in fasi.iterrows():
             try:
                 titoli[int(float(r["Fase"]))] = str(r.get("Titolo") or "")
             except (TypeError, ValueError):
@@ -484,20 +505,21 @@ def pianta_dxf(scavo, percorso):
         tipo, r = schede.get(u, ("US", {}))
         f = _fase(r) if len(r) else 0
         neg = str(r.get(sc.C_TIPO, "")).lower() == "negativa" if len(r) else False
-        nome = "TAGLI" if neg else (f"USM_fase_{f}" if tipo == "USM" else f"US_fase_{f}_{titoli.get(f, '')}")
+        nome = _("TAGLI") if neg else (_("USM_fase_{0}", f) if tipo == "USM" else _("US_fase_{0}_{1}", f, titoli.get(f, '')))
         lay = dxf.layer(nome, "#333333" if neg else colore_unita(scavo, u, schede))
         for p in getattr(g, "geoms", [g]):
             for ring in [p.exterior, *p.interiors]:
                 cc = np.asarray(ring.coords)[:-1]
                 dxf.polilinea(lay, [(x + o["E0"], y + o["N0"]) for x, y in cc[:, :2]], chiusa=True)
         c = g.representative_point()
-        dxf.testo(dxf.layer("NUMERI", "#000000"), c.x + o["E0"], c.y + o["N0"], f"{'USM ' if tipo == 'USM' else ''}{u}")
+        dxf.testo(dxf.layer(_("NUMERI"), "#000000"), c.x + o["E0"], c.y + o["N0"], _("USM {0}", u) if tipo == "USM" else u)
     return dxf.salva(percorso)
 
 
 def sezioni_dxf(scavo, sezioni, percorso, distanza=2.0):
     """Sezioni come disegno 2D: x = distanza lungo la sezione, y = quota; una sotto l'altra."""
     dxf = _DXF()
+    _ = _traduttore()
     schede = _schede(scavo)
     base_y = 0.0
     mesh = _Mesh(scavo)
@@ -509,20 +531,20 @@ def sezioni_dxf(scavo, sezioni, percorso, distanza=2.0):
               for c in (g.exterior.coords if g.geom_type == "Polygon" else g.coords)]
         z1 = max(zs)
         dy = base_y - z1                      # la sezione successiva va sotto
-        lay_t = dxf.layer("TITOLI", "#000000")
+        lay_t = dxf.layer(_("TITOLI"), "#000000")
         dxf.testo(lay_t, 0, z1 + dy + 0.6, f"{nome}  (A -> B, {L:.2f} m)", h=0.3)
         for t in tagli:
             tipo, r = schede.get(t["unita"], ("US", {}))
             f = _fase(r) if len(r) else 0
-            lay = dxf.layer("TAGLI" if t["tipo"] == "taglio" else f"{'USM' if tipo == 'USM' else 'US'}_fase_{f}", t["colore"])
+            lay = dxf.layer(_("TAGLI") if t["tipo"] == "taglio" else _(("USM" if tipo == "USM" else "US") + "_fase_{0}", f), t["colore"])
             for g in t["aree"]:
                 for ring in [g.exterior, *g.interiors]:
                     dxf.polilinea(lay, [(x, y + dy) for x, y in list(ring.coords)[:-1]], chiusa=True)
                 c = g.representative_point()
-                dxf.testo(dxf.layer("NUMERI", "#000000"), c.x, c.y + dy, t["unita"], h=0.12)
+                dxf.testo(dxf.layer(_("NUMERI"), "#000000"), c.x, c.y + dy, t["unita"], h=0.12)
             for g in t["linee"]:
                 dxf.polilinea(lay, [(x, y + dy) for x, y in g.coords], chiusa=False)
-        dxf.polilinea(dxf.layer("RIFERIMENTI", "#808080"), [(0, z1 + dy + 0.3), (L, z1 + dy + 0.3)], chiusa=False)
+        dxf.polilinea(dxf.layer(_("RIFERIMENTI"), "#808080"), [(0, z1 + dy + 0.3), (L, z1 + dy + 0.3)], chiusa=False)
         dxf.testo(lay_t, 0, z1 + dy + 0.35, "A", h=0.2)
         dxf.testo(lay_t, L, z1 + dy + 0.35, "B", h=0.2)
         base_y = min(zs) + dy - distanza

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stratigrafia3d"
-version = "0.8.0"
+version = "0.9.0"
 description = "3D reconstruction of archaeological stratigraphic units from 2D excavation records (GIS + spreadsheets)"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -20,14 +20,15 @@ classifiers = [
   "Natural Language :: English",
 ]
 
-[project.urls]
-Repository = "https://github.com/MoJoDoD/3Dstratigraphy-app-development"
-Issues = "https://github.com/MoJoDoD/3Dstratigraphy-app-development/issues"
 dependencies = [
   "numpy>=1.26", "scipy>=1.11", "pandas>=2.0", "geopandas>=0.14", "pyogrio>=0.7",
   "shapely>=2.0", "networkx>=3.0", "openpyxl>=3.1", "tifffile>=2023.1", "pillow>=9",
   "triangle>=20230923; python_version < '3.14'",   # facoltativa: senza, si usa la triangolazione scipy
 ]
+
+[project.urls]
+Repository = "https://github.com/MoJoDoD/3Dstratigraphy-app-development"
+Issues = "https://github.com/MoJoDoD/3Dstratigraphy-app-development/issues"
 
 [project.optional-dependencies]
 demo = ["scikit-image>=0.22", "matplotlib>=3.8"]
@@ -43,6 +44,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "stratigrafia3d.visualizzatore" = ["*.html"]
 "stratigrafia3d.ricette" = ["*.json"]
+"stratigrafia3d.lingue" = ["*.json"]
 "stratigrafia3d.app" = ["statici/*.html", "statici/vendor/*", "statici/fonts/*"]
 
 [tool.pytest.ini_options]

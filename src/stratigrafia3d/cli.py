@@ -177,6 +177,8 @@ def cmd_importa(a):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="strat3d", description="Ricostruzione 3D delle unità stratigrafiche.")
     p.add_argument("--version", action="version", version=f"stratigrafia3d {__version__}")
+    p.add_argument("--lingua", choices=["it", "en"],
+                   help="lingua degli elaborati e del visualizzatore esportati (predefinita: quella dell'app)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     d = sub.add_parser("demo", help="genera lo scavo dimostrativo (GeoPackage + Excel)")
@@ -242,6 +244,8 @@ def main(argv=None):
     im.set_defaults(f=cmd_importa)
 
     a = p.parse_args(argv)
+    if a.lingua:
+        os.environ["S3D_LINGUA"] = a.lingua
     if a.cmd == "verifica" and not a.sorgente.endswith(".scavo") and not a.excel:
         p.error("con un GeoPackage serve anche il file Excel")
     return a.f(a) or 0

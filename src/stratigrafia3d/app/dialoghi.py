@@ -28,7 +28,7 @@ import json, sys, tkinter as tk
 from tkinter import filedialog
 a = json.loads(sys.argv[1])
 r = tk.Tk(); r.withdraw(); r.attributes("-topmost", True)
-ft = [tuple(x) for x in a["filtri"]] + [("Tutti i file", "*.*")]
+ft = [tuple(x) for x in a["filtri"]] + [(a["tutti"], "*.*")]
 if a["tipo"] == "apri":
     p = filedialog.askopenfilenames(filetypes=ft) if a["multiplo"] else filedialog.askopenfilename(filetypes=ft)
     p = list(p) if a["multiplo"] else ([p] if p else [])
@@ -41,13 +41,14 @@ print(json.dumps(p))
 
 def scegli(tipo="apri", filtri=("dati",), multiplo=False, nome=None):
     """Ritorna una lista di percorsi (vuota se annullato) oppure None se nessun dialogo è disponibile."""
-    ft = [FILTRI[f] for f in filtri if f in FILTRI]
+    from ..lingue import t
+    ft = [(t(FILTRI[f][0]), FILTRI[f][1]) for f in filtri if f in FILTRI]
     est = ft[0][1].split()[0].lstrip("*") if ft and tipo == "salva" else ""
     if FINESTRA is not None:
         try:
             import webview
             kind = webview.OPEN_DIALOG if tipo == "apri" else webview.SAVE_DIALOG
-            tipi = tuple(f"{d} ({p.replace(' ', ';')})" for d, p in ft) + ("Tutti i file (*.*)",)
+            tipi = tuple(f"{d} ({p.replace(' ', ';')})" for d, p in ft) + (t("Tutti i file") + " (*.*)",)
             r = FINESTRA.create_file_dialog(kind, allow_multiple=multiplo, file_types=tipi,
                                             save_filename=nome or "")
             if r is None:
@@ -56,7 +57,7 @@ def scegli(tipo="apri", filtri=("dati",), multiplo=False, nome=None):
         except Exception:
             pass
     try:
-        out = subprocess.run([sys.executable, "-c", _TK, json.dumps(dict(tipo=tipo, filtri=ft, multiplo=multiplo,
+        out = subprocess.run([sys.executable, "-c", _TK, json.dumps(dict(tipo=tipo, filtri=ft, multiplo=multiplo, tutti=t("Tutti i file"),
                                                                          nome=nome, est=est))],
                              capture_output=True, text=True, timeout=600)
         if out.returncode != 0:
