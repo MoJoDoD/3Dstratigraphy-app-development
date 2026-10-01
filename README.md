@@ -96,6 +96,21 @@ aggiornato in cantiere), all'apertura del progetto l'app propone **Aggiorna dai 
 con la stessa ricetta e ricostruisce solo le unità toccate. Dalla riga di comando:
 `strat3d riscrivi progetto.scavo` e `strat3d aggiorna progetto.scavo`.
 
+## Foto, disegni, ortofoto e modelli 3D
+
+- **Documentazione.** Se il foglio della documentazione ha una colonna con il file (per esempio
+  `photographs/9248.jpg`), l'app trova le immagini accanto al file delle schede o, per nome, nelle
+  sue sottocartelle. Nella scheda di ogni unità compaiono le miniature; un clic apre l'immagine
+  grande, e le frecce passano alle altre. TIFF e immagini pesanti vengono ridotti al volo; i PDF e gli
+  altri file si aprono con il programma del computer.
+- **Ortofoto.** Un GeoTIFF a colori (anche compresso JPEG) aggiunto tra i file viene riconosciuto da
+  solo. Si ritaglia sull'area dello scavo e si conserva nel progetto. Nel visualizzatore, con
+  Colore → ortofoto, è proiettata dall'alto sulle unità.
+- **Modelli 3D rilevati.** OBJ (con colori o texture dal file .mtl) e PLY (ASCII o binario) nelle
+  coordinate del GIS; uno spostamento si indica nel wizard. Sopra i 300 000 triangoli il modello
+  viene semplificato. Si accende e si spegne con «Rilievo 3D», e diventa trasparente quando si
+  sceglie un'unità.
+
 ## Visualizzatore
 
 - **Colore**: sedimento, fase, categoria, affidabilità, oppure qualsiasi campo a categorie della scheda

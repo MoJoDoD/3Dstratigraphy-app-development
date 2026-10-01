@@ -228,7 +228,7 @@ dialog .row{justify-content:flex-end;margin-top:12px}
         </div>
 
         <div id="s1">
-          <p class="lead">Aggiungi i file del rilievo (GeoPackage, SpatiaLite, shapefile, DXF, GeoJSON, CSV anche con geometrie, archivi .zip), le schede (Excel o più CSV collegati) e, se mancano le quote, un modello del terreno (GeoTIFF). Una <b>ricetta</b> ripete le scelte fatte per un archivio dello stesso tipo: ce ne sono di pronte, e ogni importazione si può salvare come ricetta.</p>
+          <p class="lead">Aggiungi i file del rilievo (GeoPackage, SpatiaLite, shapefile, DXF, GeoJSON, CSV anche con geometrie, archivi .zip), le schede (Excel o più CSV collegati) e, se mancano le quote, un modello del terreno (GeoTIFF). Si possono aggiungere anche un'ortofoto (GeoTIFF a colori) e modelli 3D rilevati (OBJ, PLY). Una <b>ricetta</b> ripete le scelte fatte per un archivio dello stesso tipo: ce ne sono di pronte, e ogni importazione si può salvare come ricetta.</p>
           <div class="flist" id="flist"></div>
           <div class="row">
             <button class="btn pri" id="bAggiungi">Aggiungi file…</button>
@@ -258,8 +258,10 @@ dialog .row{justify-content:flex-end;margin-top:12px}
             <div class="box"><h3>Tabelle collegate</h3><div class="kv" id="kvColl"></div><p class="mot" style="margin:0">Righe collegate alle unità tramite il loro numero: si vedono nella scheda di ogni unità.</p></div>
             <div class="box"><h3>Opzioni</h3><div class="kv" id="kvOpz"></div></div>
             <div class="box"><h3>Schede USM</h3><div class="kv" id="kvUSM"></div></div>
-            <div class="box"><h3>Superficie di riferimento</h3><div class="kv" id="kvSup"></div>
+            <div class="box"><h3>Superficie di riferimento e ortofoto</h3><div class="kv" id="kvSup"></div>
               <p class="mot" style="margin:8px 0 0">Da qui partono le unità senza quote proprie: i tagli scendono della loro profondità, gli strati e i riempimenti si impilano con il loro spessore. Le unità con quote rilevate non cambiano.</p></div>
+            <div class="box" id="boxM3D" hidden><h3>Modelli 3D rilevati</h3><div class="kv" id="kvM3D"></div>
+              <p class="mot" style="margin:8px 0 0">Fotogrammetria o laser scanner (OBJ, PLY), mostrati accanto alle unità. Le coordinate devono essere quelle del GIS: se il modello è stato esportato con uno spostamento (per esempio da Metashape), scrivilo qui e verrà sommato.</p></div>
           </div>
           <h2 class="sez">Anteprima del foglio delle US</h2>
           <div class="tw"><table class="t" id="tPrev"></table></div>
@@ -523,7 +525,7 @@ function fogli(){ return tabelleTutte() }
 function colonne(f){ return (fogli()[f]||{}).colonne||[] }
 function disegnaSuperficie(){
   const a=W.abb; a.superficie=a.superficie||{tipo:"nessuna"}; const s=a.superficie;
-  const rs=Object.entries(W.esame.raster||{});
+  const tutti=Object.entries(W.esame.raster||{}), rs=tutti.filter(([f,d])=>d.tipo!=="ortofoto"), orto=tutti.filter(([f,d])=>d.tipo==="ortofoto");
   let h=`<label for="supTipo">Tipo</label><select id="supTipo">${opzioni(TIPI_SUP,s.tipo)}</select>`;
   if(s.tipo==="costante") h+=`<label for="supQ">Quota (m)</label><input id="supQ" type="number" step="0.01" value="${esc(s.quota??0)}">`;
   if(s.tipo==="raster"){
@@ -533,6 +535,9 @@ function disegnaSuperficie(){
     if(d) h+=d.errore?`<label>Stato</label><span class="mot">${esc(d.errore)}</span>`:`<label>Contenuto</label><span class="mot">${d.colonne}×${d.righe} celle da ${d.passo} m, quote ${d.quota_min}–${d.quota_max} m</span>`;
   }
   if(s.tipo!=="nessuna") h+=`<label for="supAbb">Abbassa di (m)</label><input id="supAbb" type="number" step="0.01" min="0" value="${esc(s.abbassa??0)}" title="Per esempio lo spessore dell'arativo asportato prima dello scavo">`;
+  // ortofoto: un GeoTIFF a colori da drappeggiare sul modello
+  h+=`<label for="supO">Ortofoto</label>`+(orto.length?`<select id="supO">${opzioni([["","nessuna"],...orto.map(([f,d])=>[f,base(f)+` (${d.colonne}×${d.righe} px, ${Math.round(d.passo*1000)/10} cm)`])],a.ortofoto||"")}</select>`:
+    `<span class="mot">Nessuna immagine a colori tra i file. Un GeoTIFF RGB (ortofoto, fotopiano) si drappeggia sul modello.</span>`);
   $("kvSup").innerHTML=h;
   const on=(id,fn)=>{const e=$(id); if(e) e.onchange=fn};
   on("supTipo",e=>{ const t=e.target.value; a.superficie={tipo:t,abbassa:s.abbassa||0};
@@ -540,6 +545,15 @@ function disegnaSuperficie(){
   on("supQ",e=>{a.superficie.quota=parseFloat(e.target.value)||0});
   on("supR",e=>{a.superficie.sorgente=e.target.value; disegnaSuperficie()});
   on("supAbb",e=>{a.superficie.abbassa=parseFloat(e.target.value)||0});
+  on("supO",e=>{a.ortofoto=e.target.value||null});
+}
+function disegnaModelli3D(){
+  const a=W.abb, M=a.modelli3d||[]; $("boxM3D").hidden=!M.length;
+  $("kvM3D").innerHTML=M.map((m,i)=>`<label for="m3u${i}" title="${esc(m.percorso)}">${esc(base(m.percorso))}</label><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="m3u${i}" data-m3=${i} ${m.escluso?"":"checked"}> mostra nel 3D</label>
+      <label>Spostamento E, N, quota (m)</label><span style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">${["E","N","quota"].map((k,j)=>`<input type="number" step="0.001" data-m3s="${i}:${j}" value="${esc((m.spostamento||[0,0,0])[j])}" style="min-width:0" aria-label="Spostamento ${k} di ${esc(base(m.percorso))}">`).join("")}</span>`).join("");
+  $("kvM3D").querySelectorAll("[data-m3]").forEach(c=>c.onchange=()=>{ M[+c.dataset.m3].escluso=!c.checked });
+  $("kvM3D").querySelectorAll("[data-m3s]").forEach(c=>c.onchange=()=>{ const [i,j]=c.dataset.m3s.split(":").map(Number);
+    M[i].spostamento=M[i].spostamento||[0,0,0]; M[i].spostamento[j]=parseFloat(c.value)||0 });
 }
 async function caricaVocabolario(tipo){
   // valori distinti della colonna del tipo o dei rapporti, con la proposta del programma
@@ -622,7 +636,7 @@ function disegnaSchede(){
     rp+=`<label for="selRT">Colonna</label><select id="selRT">${opzioni([["","—"],...colonne(a.foglio_us).map(c=>[c,c])],r.colonna||"")}</select>`;
   }
   $("kvRap").innerHTML=rp;
-  disegnaPadri(); disegnaVocabolari(); disegnaCollegati(); disegnaOpzioni(); disegnaSuperficie();
+  disegnaPadri(); disegnaVocabolari(); disegnaCollegati(); disegnaOpzioni(); disegnaSuperficie(); disegnaModelli3D();
   // anteprima
   const f=fogli()[a.foglio_us];
   $("tPrev").innerHTML=f?`<thead><tr>${f.colonne.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${f.esempio.map(r=>`<tr>${r.map(v=>`<td>${esc(v==null?"":String(v).slice(0,60))}</td>`).join("")}</tr>`).join("")}</tbody>`:`<tbody><tr><td class="mot">Nessun foglio scelto.</td></tr></tbody>`;
@@ -702,6 +716,10 @@ addEventListener("message",async e=>{
         ["Ricostruisci",()=>ricostruisciUnita(r.ricostruire,q.unita)]);
     else avviso("Modifica salvata nel progetto");
   }catch(err){ rispondi({ok:false,errore:err.message}) }
+});
+addEventListener("message",e=>{
+  const f=$("frame"); if(e.origin!==location.origin||!e.data||e.data.s3d!=="apri_file"||e.source!==f.contentWindow) return;
+  api("apri_file",{percorso:e.data.percorso}).catch(err=>avviso(err.message,true));
 });
 async function ricostruisciUnita(lista,sel){
   try{ const r=await lavoro(`Ricostruzione di ${lista.length} unità…`,()=>api("ricostruisci",{unita:lista,forza:true}));

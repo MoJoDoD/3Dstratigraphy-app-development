@@ -34,13 +34,8 @@ class Raster:
     @classmethod
     def leggi(cls, path):
         """GeoTIFF (tag GeoTIFF o file .tfw accanto). Con più bande si usa la prima."""
-        try:
-            import tifffile
-        except ImportError as e:      # pragma: no cover - dipende dall'installazione
-            raise RuntimeError("Per leggere i raster serve il pacchetto 'tifffile': esegui di nuovo "
-                               "l'installazione (Installa (Windows).bat)") from e
-        import logging
-        logging.getLogger("tifffile").setLevel(logging.ERROR)
+        g = georef(path)
+        import tifffile
         with tifffile.TiffFile(path) as t:
             p = t.pages[0]
             try:
@@ -48,45 +43,12 @@ class Raster:
             except Exception as e:
                 raise RuntimeError(f"Compressione del raster non supportata ({p.compression}); "
                                    "salvalo senza compressione o con compressione DEFLATE") from e
-            tags = p.tags
-            nodata = None
-            if "GDAL_NODATA" in tags:
-                try:
-                    nodata = float(str(tags["GDAL_NODATA"].value).strip().strip("\x00"))
-                except ValueError:
-                    nodata = None
-            geo = None
-            if "ModelTransformationTag" in tags:
-                m = tags["ModelTransformationTag"].value
-                if abs(m[1]) > 1e-9 or abs(m[4]) > 1e-9:
-                    raise RuntimeError("Raster ruotato: non supportato")
-                geo = (m[3], m[7], m[0], -m[5])            # angolo in alto a sinistra, passo x, passo y
-            elif "ModelPixelScaleTag" in tags and "ModelTiepointTag" in tags:
-                sx, sy = tags["ModelPixelScaleTag"].value[:2]
-                i, j, _, X, Y, _ = tags["ModelTiepointTag"].value[:6]
-                geo = (X - i * sx, Y + j * sy, sx, sy)
-            punto = False
-            if "GeoKeyDirectoryTag" in tags:
-                gk = list(tags["GeoKeyDirectoryTag"].value)
-                for k in range(4, len(gk) - 3, 4):
-                    if gk[k] == 1025 and gk[k + 3] == 2:      # GTRasterTypeGeoKey = RasterPixelIsPoint
-                        punto = True
-        tfw = _cerca_tfw(path)
-        if tfw is not None:
-            a, d, b, e, c, f = tfw
-            if abs(d) > 1e-6 * abs(a) or abs(b) > 1e-6 * abs(e):
-                raise RuntimeError("Raster ruotato nel file .tfw: non supportato")
-            geo = (c - a / 2, f - e / 2, a, -e)            # il .tfw indica il centro della prima cella
-            punto = False
-        if geo is None:
-            raise RuntimeError("Il raster non è georiferito (mancano tag GeoTIFF e file .tfw)")
         if z.ndim == 3:
             z = z[..., 0] if z.shape[-1] <= 4 else z[0]
         if z.dtype == np.int16:                           # valori "vuoti" tipici dei DEM interi
             z = np.where((z == -32768) | (z == 32767), np.nan, z.astype("float32"))
-        xs, ys, sx, sy = geo
-        off = 0.0 if punto else 0.5
-        return cls(z, xs + off * sx, ys - off * sy, sx, sy, nodata, os.path.basename(path))
+        xs, ys, sx, sy = g["angolo"][0], g["angolo"][1], g["passo"][0], g["passo"][1]
+        return cls(z, xs + sx / 2, ys - sy / 2, sx, sy, g["nodata"], os.path.basename(path))
 
     # ------------------------------------------------------------------ uso
     def __call__(self, x, y):
@@ -143,6 +105,69 @@ class Raster:
         d = np.load(io.BytesIO(b))
         x0, y0, sx, sy = d["geo"]
         return cls(d["z"], x0, y0, sx, sy, None, str(d["nome"]))
+
+
+def georef(path):
+    """Georiferimento di un GeoTIFF senza decodificare i pixel: angolo in alto a sinistra (bordo della
+    cella), passo, dimensioni, bande, tipo, valore vuoto. Legge i tag GeoTIFF o il file .tfw accanto."""
+    try:
+        import tifffile
+    except ImportError as e:      # pragma: no cover - dipende dall'installazione
+        raise RuntimeError("Per leggere i raster serve il pacchetto 'tifffile': esegui di nuovo "
+                           "l'installazione (Installa (Windows).bat)") from e
+    import logging
+    logging.getLogger("tifffile").setLevel(logging.ERROR)
+    with tifffile.TiffFile(path) as t:
+        p = t.pages[0]
+        tags = p.tags
+        forma = p.shape
+        bande = p.samplesperpixel
+        dtype = str(p.dtype)
+        nodata = None
+        if "GDAL_NODATA" in tags:
+            try:
+                nodata = float(str(tags["GDAL_NODATA"].value).strip().strip("\x00"))
+            except ValueError:
+                nodata = None
+        geo = None
+        if "ModelTransformationTag" in tags:
+            m = tags["ModelTransformationTag"].value
+            if abs(m[1]) > 1e-9 or abs(m[4]) > 1e-9:
+                raise RuntimeError("Raster ruotato: non supportato")
+            geo = (m[3], m[7], m[0], -m[5])            # angolo in alto a sinistra, passo x, passo y
+        elif "ModelPixelScaleTag" in tags and "ModelTiepointTag" in tags:
+            sx, sy = tags["ModelPixelScaleTag"].value[:2]
+            i, j, _, X, Y, _ = tags["ModelTiepointTag"].value[:6]
+            geo = (X - i * sx, Y + j * sy, sx, sy)
+        punto = False
+        if "GeoKeyDirectoryTag" in tags:
+            gk = list(tags["GeoKeyDirectoryTag"].value)
+            for k in range(4, len(gk) - 3, 4):
+                if gk[k] == 1025 and gk[k + 3] == 2:      # GTRasterTypeGeoKey = RasterPixelIsPoint
+                    punto = True
+    tfw = _cerca_tfw(path)
+    if tfw is not None:
+        a, d, b, e, c, f = tfw
+        if abs(d) > 1e-6 * abs(a) or abs(b) > 1e-6 * abs(e):
+            raise RuntimeError("Raster ruotato nel file .tfw: non supportato")
+        geo = (c - a / 2, f - e / 2, a, -e)            # il .tfw indica il centro della prima cella
+        punto = False
+    if geo is None:
+        raise RuntimeError("Il raster non è georiferito (mancano tag GeoTIFF e file .tfw)")
+    xs, ys, sx, sy = geo
+    if punto:                                          # la coordinata indica il centro della cella
+        xs, ys = xs - sx / 2, ys + sy / 2
+    righe, colonne = forma[0], forma[1]
+    if len(forma) == 3 and forma[0] <= 4 and forma[-1] > 4:       # bande per prime
+        righe, colonne = forma[1], forma[2]
+    return dict(angolo=(float(xs), float(ys)), passo=(float(sx), float(sy)), righe=int(righe),
+                colonne=int(colonne), bande=int(bande), dtype=dtype, nodata=nodata,
+                estensione=[float(xs), float(ys - righe * sy), float(xs + colonne * sx), float(ys)])
+
+
+def e_ortofoto(g):
+    """Un raster a colori (3 o 4 bande a 8 bit) è un'immagine da drappeggiare, non un modello del terreno."""
+    return g["bande"] >= 3 and g["dtype"] == "uint8"
 
 
 def _cerca_tfw(path):

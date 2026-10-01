@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="it">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stratigrafia 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -147,6 +151,18 @@ details.sub>summary{list-style:none;cursor:pointer;padding:7px 10px;display:flex
 details.sub>summary span{flex:1;min-width:0}
 details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--muted);white-space:nowrap}
 .mt{width:100%;border-collapse:collapse;font-size:12.5px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:0 0 10px}
+.thumb{border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:0;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;text-align:left;font:inherit;color:inherit}
+.thumb img{width:100%;height:78px;object-fit:cover;display:block;background:var(--scene-2)}
+.thumb span{font-size:11px;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.thumb:hover{border-color:var(--muted)}
+.doclink{border:0;background:none;color:var(--accent);cursor:pointer;padding:0 0 0 8px;font:inherit;text-decoration:underline}
+.lb{position:fixed;inset:0;background:#000000d9;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px}
+.lb[hidden]{display:none}
+.lb img{max-width:100%;max-height:calc(100% - 70px);object-fit:contain;background:#222}
+.lb p{color:#eee;margin:0;font-size:14px;text-align:center;max-width:900px}
+.lb button{position:absolute;border:0;background:#ffffff22;color:#fff;border-radius:999px;width:40px;height:40px;font-size:20px;cursor:pointer}
+.lb .x{top:16px;right:16px}.lb .pv{left:16px;top:50%}.lb .nx{right:16px;top:50%}
 .mt th{text-align:left;font-weight:500;color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:4px 8px;border-top:1px solid var(--line)}
 .mt td{padding:5px 8px;border-top:1px solid var(--line);vertical-align:top}
 .mt td.r,.mt th.r{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums}
@@ -238,7 +254,7 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
           <select id="colMode"><option value="mun">sedimento (Munsell)</option><option value="fase">fase</option><option value="cat">categoria</option><option value="aff">affidabilità</option></select></div>
         <div class="tool"><label>Mostra</label>
           <div class="seg" role="group" aria-label="Sovrapposizioni">
-            <button id="oLbl" aria-pressed="true" title="Numeri di US">N.</button><button id="oEdge" aria-pressed="true" title="Spigoli">Spigoli</button><button id="oQ" aria-pressed="false" title="Quote rilevate">Quote</button><button id="oP" aria-pressed="false" title="Profili rilevati in sezione">Profili</button><button id="oRS" aria-pressed="true" title="Reperti speciali e campioni">RS</button><button id="oCut" aria-pressed="true" title="Superfici di taglio">Tagli</button>
+            <button id="oLbl" aria-pressed="true" title="Numeri di US">N.</button><button id="oEdge" aria-pressed="true" title="Spigoli">Spigoli</button><button id="oQ" aria-pressed="false" title="Quote rilevate">Quote</button><button id="oP" aria-pressed="false" title="Profili rilevati in sezione">Profili</button><button id="oRS" aria-pressed="true" title="Reperti speciali e campioni">RS</button><button id="oCut" aria-pressed="true" title="Superfici di taglio">Tagli</button><button id="oM3D" aria-pressed="true" title="Modelli 3D rilevati (fotogrammetria, laser scanner)" hidden>Rilievo 3D</button>
           </div></div>
       </div>
       <svg class="compass" id="compass" viewBox="-25 -25 50 50" aria-hidden="true"><circle r="22" fill="var(--panel)" stroke="var(--line)"/><g id="needle"><path d="M0,-17 L5,2 L0,-2 L-5,2 Z" fill="var(--accent)"/><text y="-19" text-anchor="middle" font-size="8" fill="var(--ink)" font-family="IBM Plex Sans Condensed,Arial" font-weight="700">N</text></g></svg>
@@ -259,6 +275,8 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
   </div>
 </div>
 
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="Documentazione"><img id="lbImg" alt=""><p id="lbCap"></p>
+<button class="x" id="lbX" aria-label="Chiudi">×</button><button class="pv" id="lbP" aria-label="Precedente">‹</button><button class="nx" id="lbN" aria-label="Successiva">›</button></div>
 <script type="application/json" id="modello">/*__DATA__*/</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -349,7 +367,7 @@ function b64(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.lengt
 const V=(x,y,z)=>new THREE.Vector3(x-CX,z,-(y-CY));
 
 function colorFor(u){
-  const mode=$("colMode").value;
+  let mode=$("colMode").value; if(mode==="orto") mode="mun";      // elenco e Harris: colori del sedimento
   if(mode==="fase") return PH_COL[faseOf(u)]||"#888";
   if(mode==="cat") return CAT_COL[catOf(u)]||"#999";
   if(mode==="aff") return AFF_COL[affOf(u)]||"#999";
@@ -359,12 +377,41 @@ function colorFor(u){
   return CAT_COL[catOf(u)]||PH_COL[faseOf(u)]||"#9a8f80";   // nessun colore in scheda: per categoria o fase
 }
 
+// modelli 3D rilevati: mesh in coordinate locali, con colori dei vertici o texture
+const M3D=new THREE.Group(); world.add(M3D);
+(D.modelli3d||[]).forEach(m=>{
+  const P=new Float32Array(b64(m.pos)), I=new Uint32Array(b64(m.idx)), pos=new Float32Array(P.length);
+  for(let i=0;i<P.length;i+=3){pos[i]=P[i]-CX;pos[i+1]=P[i+2];pos[i+2]=-(P[i+1]-CY)}
+  const g=new THREE.BufferGeometry(); g.setAttribute("position",new THREE.BufferAttribute(pos,3)); g.setIndex(new THREE.BufferAttribute(I,1));
+  const mat={roughness:.95,metalness:0,side:THREE.DoubleSide,clippingPlanes:[]};
+  if(m.texture&&m.uv){ g.setAttribute("uv",new THREE.BufferAttribute(new Float32Array(b64(m.uv)),2));
+    const t=new THREE.TextureLoader().load("data:image/jpeg;base64,"+m.texture); t.anisotropy=renderer.capabilities.getMaxAnisotropy(); mat.map=t }
+  else if(m.colori){ const c=new Uint8Array(b64(m.colori)), f=new Float32Array(c.length); for(let i=0;i<c.length;i++) f[i]=c[i]/255;
+    g.setAttribute("color",new THREE.BufferAttribute(f,3)); mat.vertexColors=true }
+  else mat.color=new THREE.Color(0xb9b2a6);
+  g.computeVertexNormals();
+  const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial(mat)); mesh.userData.modello=m.nome; M3D.add(mesh);
+});
+if(M3D.children.length) $("oM3D").hidden=false;
+
+// ortofoto: texture proiettata dall'alto (coordinate della pianta -> coordinate dell'immagine)
+const ORTO=D.ortofoto||null;
+let ORTO_TEX=null;
+if(ORTO){ ORTO_TEX=new THREE.TextureLoader().load("data:image/jpeg;base64,"+ORTO.jpeg,()=>{ if($("colMode").value==="orto") applyColors() });
+  ORTO_TEX.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  const o=document.createElement("option"); o.value="orto"; o.textContent="ortofoto"; $("colMode").insertBefore(o,$("colMode").options[1]) }
 D.meshes.forEach(m=>{
   const P=new Uint16Array(b64(m.pos)), I=m.i32?new Uint32Array(b64(m.idx)):new Uint16Array(b64(m.idx));
   const pos=new Float32Array(P.length);
   for(let i=0;i<P.length;i+=3){pos[i]=P[i]*QU-CX;pos[i+1]=P[i+2]*QU;pos[i+2]=-(P[i+1]*QU-CY)}
   const g=new THREE.BufferGeometry();
   g.setAttribute("position",new THREE.BufferAttribute(pos,3));
+  let inOrto=false;
+  if(ORTO){ const E=ORTO.estensione, uv=new Float32Array(P.length/3*2); let dentro=0;
+    for(let i=0,j=0;i<P.length;i+=3,j+=2){uv[j]=(P[i]*QU-E[0])/(E[2]-E[0]); uv[j+1]=(P[i+1]*QU-E[1])/(E[3]-E[1]);
+      if(uv[j]>=0&&uv[j]<=1&&uv[j+1]>=0&&uv[j+1]<=1) dentro++}
+    inOrto=dentro>P.length/3*0.5;            // l'immagine copre almeno metà dell'unità
+    g.setAttribute("uv",new THREE.BufferAttribute(uv,2)) }
   g.setIndex(new THREE.BufferAttribute(I,1));
   g.computeVertexNormals(); g.computeBoundingSphere();
   const grp=new THREE.Group(); grp.userData.id=m.id;
@@ -382,7 +429,7 @@ D.meshes.forEach(m=>{
   const edges=new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0x1c2226,transparent:true,opacity:isCut?.55:.28,clippingPlanes:[]}));
   grp.add(edges);
   world.add(grp);
-  units[m.id]={grp,front,back,edges,def:m,visible:true,cut:isCut,extra:[]};
+  units[m.id]={grp,front,back,edges,def:m,visible:true,cut:isCut,extra:[],inOrto};
 });
 
 // quote, profili, reperti agganciati alle rispettive unità (seguono l'esploso)
@@ -455,7 +502,7 @@ function applyLayout(){
   Object.entries(units).forEach(([u,U])=>{
     U.grp.scale.y=VE; U.grp.position.y=explIndex(+u)*GAP;
   });
-  ref.scale.y=VE;
+  ref.scale.y=VE; M3D.scale.y=VE;
   updateVisibility();
 }
 function updateVisibility(){
@@ -476,13 +523,18 @@ function updateVisibility(){
   syncTree();
 }
 function applyColors(){
-  Object.entries(units).forEach(([u,U])=>{const c=new THREE.Color(colorFor(+u));U.front.material.color.copy(c); if(U.back) U.back.material.color.copy(c.clone().multiplyScalar(.9))});
+  const orto=$("colMode").value==="orto"&&ORTO_TEX;
+  Object.entries(units).forEach(([u,U])=>{const c=new THREE.Color(colorFor(+u));
+    const M=U.front.material, conMappa=orto&&!U.cut&&U.inOrto;
+    if((M.map!=null)!==!!conMappa){ M.map=conMappa?ORTO_TEX:null; M.needsUpdate=true }
+    M.color.copy(conMappa?new THREE.Color(0xffffff):c); if(U.back) U.back.material.color.copy(c.clone().multiplyScalar(.9))});
   buildLegend(); syncTree(true);
 }
 function applyClip(){
   Object.values(units).forEach(U=>{
     [U.front,U.back,U.edges,...U.extra].forEach(o=>{if(o&&o.material) {o.material.clippingPlanes=clipArr(); o.material.needsUpdate=true}});
   });
+  M3D.children.forEach(o=>{o.material.clippingPlanes=clipArr(); o.material.needsUpdate=true});
 }
 function highlight(){
   Object.entries(units).forEach(([u,U])=>{
@@ -497,6 +549,9 @@ function highlight(){
     U.edges.material.color.set(on?(css("--accent")||"#c4321c"):"#1c2226");
     U.edges.material.opacity=on?.95:(ghost?.07:(U.cut?.55:.28));
   });
+  // il rilievo 3D non deve nascondere l'unità scelta
+  const g=GHOST && selected!=null && !clipOn;
+  M3D.children.forEach(o=>{const m=o.material; m.transparent=g; m.opacity=g?.18:1; m.depthWrite=!g; m.needsUpdate=true});
 }
 
 // ------------------------------------------------------------ interfaccia: elenco
@@ -534,6 +589,7 @@ $("btnAll").onclick=()=>{hidden.clear();isolated=false;EXC=0;$("exc").value=0;up
 function buildLegend(){
   const mode=$("colMode").value, L=$("legend");
   if(mode==="fase") L.innerHTML="<h4>Fasi</h4>"+D.fasi.slice().reverse().map(f=>`<div><i style="background:${PH_COL[f.Fase]}"></i>${f.Fase} · ${esc(f.Titolo)}</div>`).join("");
+  else if(mode==="orto"&&ORTO) L.innerHTML=`<h4>Ortofoto</h4><div class="muted" style="max-width:190px;display:block">${esc(ORTO.nome)}, ${String(ORTO.passo_cm).replace(".",",")} cm per pixel, proiettata dall'alto su ogni unità. Sulle pareti ripide l'immagine appare stirata.</div>`;
   else if(mode==="aff"){const cs=Object.keys(AFF_COL).filter(k=>Object.keys(units).some(u=>affOf(+u)===k));
     L.innerHTML="<h4>Affidabilità della forma</h4>"+cs.map(c=>`<div><i style="background:${AFF_COL[c]}"></i>${esc(AFF_TXT[c])}</div>`).join("")}
   else if(mode.startsWith("f:")){const k=mode.slice(2), C=CAMPI_COL[k]; if(!C){L.innerHTML="";return}
@@ -642,6 +698,34 @@ addEventListener("message",e=>{
   editU=null; buildTree(); applyColors(); renderScheda(); select(u,false);
 });
 
+// ------------------------------------------------------------ foto e disegni della documentazione
+const IMG_EST=/\.(jpe?g|png|gif|webp|tiff?|bmp)$/i, WEB_EST=/\.(jpe?g|png|gif|webp)$/i;
+const fileURL=p=>"file:///"+String(p).replace(/\\/g,"/").replace(/^\/+/,"");
+function mediaURL(p,w){
+  if(!p) return null;
+  if(INAPP) return "/media?p="+encodeURIComponent(p)+(w?"&w="+w:"");
+  if(location.protocol==="file:"&&WEB_EST.test(p)) return fileURL(p);
+  return null }
+let LB=[], lbI=0;
+function docHTML(u){
+  const docs=DOCU[u]||[];
+  if(!docs.length) return "<p class='muted'>Nessuna voce.</p>";
+  const img=docs.filter(d=>d["Percorso file"]&&IMG_EST.test(d["Percorso file"])&&mediaURL(d["Percorso file"],240));
+  const thumbs=img.length?`<div class="thumbs">${img.map((d,i)=>`<button class="thumb" data-lb="${i}" title="${esc(d.Soggetto||d.ID||"")}"><img loading="lazy" alt="${esc(d.ID||"")}" src="${esc(mediaURL(d["Percorso file"],240))}"><span>${esc(d.ID||"")}</span></button>`).join("")}</div>`:"";
+  const riga=d=>{const p=d["Percorso file"]; let f="";
+    if(p&&!img.includes(d)) f=INAPP?`<button class="doclink" data-apri="${esc(p)}">apri</button>`:(location.protocol==="file:"?`<a class="doclink" href="${esc(fileURL(p))}" target="_blank" rel="noopener">apri</a>`:"");
+    return `<tr><td class="r" style="text-align:left">${esc(d.ID)}</td><td>${esc(d.Soggetto)}${d.Tipo?` <span class="muted">· ${esc(d.Tipo)}</span>`:""}</td><td class="muted">${esc(d.Data??"")}${f}</td></tr>`};
+  LB=img;
+  return thumbs+`<table class="mt"><tbody>${docs.map(riga).join("")}</tbody></table>`;
+}
+function apriLB(i){ if(!LB.length) return; lbI=(i+LB.length)%LB.length; const d=LB[lbI];
+  $("lbImg").src=mediaURL(d["Percorso file"],1800); $("lbImg").alt=d.Soggetto||d.ID||"";
+  $("lbCap").textContent=[d.ID,d.Soggetto,d.Data].filter(Boolean).join(" · ")+`  (${lbI+1}/${LB.length})`;
+  $("lb").hidden=false; $("lbX").focus() }
+function chiudiLB(){ $("lb").hidden=true; $("lbImg").removeAttribute("src") }
+$("lbX").onclick=chiudiLB; $("lbP").onclick=()=>apriLB(lbI-1); $("lbN").onclick=()=>apriLB(lbI+1);
+$("lb").onclick=e=>{ if(e.target.id==="lb") chiudiLB() };
+
 function renderScheda(){
   const P=$("pScheda");
   if(selected==null){
@@ -687,7 +771,7 @@ function renderScheda(){
     <details class="sec"><summary>Dati metrici</summary><div class="sec-b"><dl class="kv">${metr.map(([k,v])=>`<dt>${k}</dt><dd class="m">${v}</dd>`).join("")}</dl>
       <p class="note">Il volume è ricostruito dalle quote e dai profili: tetto e base interpolati (trend + kriging), base agganciata alle unità coperte secondo i rapporti stratigrafici.</p></div></details>
     ${altri.length?`<details class="sec"><summary>Altri dati della scheda <small>${altri.length}</small></summary><div class="sec-b"><dl class="kv">${kvRighe(altri)}</dl></div></details>`:""}
-    <details class="sec"><summary>Documentazione <small>${docs.length}</small></summary><div class="sec-b">${docs.length?`<table class="mt"><tbody>${docs.map(d=>`<tr><td class="r" style="text-align:left">${esc(d.ID)}</td><td>${esc(d.Soggetto)}</td><td class="muted">${esc(d.Data)}</td></tr>`).join("")}</tbody></table>`:"<p class='muted'>Nessuna voce.</p>"}</div></details>`;
+    <details class="sec" ${docs.some(d=>d["Percorso file"])?"open":""}><summary>Documentazione <small>${docs.length}${docs.some(d=>d["Percorso file"])?" · "+docs.filter(d=>d["Percorso file"]).length+" file":""}</small></summary><div class="sec-b">${docHTML(u)}</div></details>`;
   $("aFocus").onclick=()=>focusUnit(u);
   $("aIso").onclick=()=>{isolated=!isolated;updateVisibility();renderScheda()};
   $("aGhost").onclick=()=>{GHOST=!GHOST;highlight();renderScheda()};
@@ -695,6 +779,8 @@ function renderScheda(){
   $("aClip").onclick=()=>{const L=m.label; $("clipAx").value="x"; clipOn=true; clipSign=1; $("clipPos").value=L[0]; setClip(); };
   $("aClose").onclick=()=>select(null);
   if($("aEdit")) $("aEdit").onclick=()=>{editU=u; renderScheda()};
+  P.querySelectorAll("[data-lb]").forEach(b=>b.onclick=()=>apriLB(+b.dataset.lb));
+  P.querySelectorAll("[data-apri]").forEach(b=>b.onclick=()=>parent.postMessage({s3d:"apri_file",percorso:b.dataset.apri},location.origin));
   P.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>select(+b.dataset.go,true));
   P.querySelectorAll("[data-rs]").forEach(b=>b.onclick=()=>focusRS(b.dataset.rs));
 }
@@ -900,12 +986,15 @@ $("colMode").onchange=()=>{applyColors(); renderHarris(); if(!$("pSez").hidden) 
 function overlayToggle(){
   const q=$("oQ").getAttribute("aria-pressed")==="true", p=$("oP").getAttribute("aria-pressed")==="true", rs=$("oRS").getAttribute("aria-pressed")==="true", ed=$("oEdge").getAttribute("aria-pressed")==="true";
   Object.values(units).forEach(U=>{U.edges.visible=ed; U.extra.forEach(o=>{const k=o.userData.kind; o.visible=k==="quote"?q:k==="profilo"?p:rs})});
+  M3D.visible=$("oM3D").getAttribute("aria-pressed")==="true";
   updateVisibility();
 }
-["oLbl","oEdge","oQ","oP","oRS","oCut"].forEach(id=>$(id).onclick=()=>{const b=$(id);b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true");overlayToggle()});
+["oLbl","oEdge","oQ","oP","oRS","oCut","oM3D"].forEach(id=>$(id).onclick=()=>{const b=$(id);b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true");overlayToggle()});
 $("v3d").onclick=()=>{$("v3d").setAttribute("aria-pressed","true");$("vtop").setAttribute("aria-pressed","false");home()};
 $("vtop").onclick=()=>{$("vtop").setAttribute("aria-pressed","true");$("v3d").setAttribute("aria-pressed","false");home()};
-addEventListener("keydown",e=>{if(e.key!=="Escape") return; if(editU!=null){editU=null;renderScheda()} else select(null)});
+addEventListener("keydown",e=>{
+  if(!$("lb").hidden){ if(e.key==="Escape") chiudiLB(); else if(e.key==="ArrowLeft") apriLB(lbI-1); else if(e.key==="ArrowRight") apriLB(lbI+1); return }
+  if(e.key!=="Escape") return; if(editU!=null){editU=null;renderScheda()} else select(null)});
 
 function resize(){ const w=stage.clientWidth,h=stage.clientHeight; if(!w||!h) return; $("legend").style.visibility=w<720?"hidden":""; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix() }
 new ResizeObserver(resize).observe(stage);

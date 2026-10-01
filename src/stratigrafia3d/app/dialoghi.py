@@ -12,7 +12,7 @@ FINESTRA = None          # impostata da avvio.py quando c'è la finestra pywebvi
 
 FILTRI = {
     "scavo": ("Progetto stratigrafia3d", "*.scavo"),
-    "dati": ("Dati di scavo", "*.gpkg *.shp *.geojson *.json *.dxf *.csv *.xlsx *.xls *.ods *.tif *.tiff *.zip *.sqlite *.db"),
+    "dati": ("Dati di scavo", "*.gpkg *.shp *.geojson *.json *.dxf *.csv *.xlsx *.xls *.ods *.tif *.tiff *.zip *.sqlite *.db *.obj *.ply"),
     "gis": ("GIS e CAD", "*.gpkg *.shp *.geojson *.json *.dxf *.csv"),
     "excel": ("Schede", "*.xlsx *.xls *.ods *.csv"),
     "glb": ("glTF binario", "*.glb"),

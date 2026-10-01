@@ -89,7 +89,10 @@ FOGLI_ALIAS = {
                       "weight (g)": "Peso (g)", "weight": "Peso (g)", "peso": "Peso (g)", "mni": "NMI", "nmi": "NMI",
                       "box": "Cassetta", "cassetta": "Cassetta"}),
     sc.S_DOC: (["documentation", "archive", "documentazione"],
-               {"context": "US/USM", "us": "US/USM", "subject": "Soggetto", "description": "Soggetto", "date": "Data"}),
+               {"context": "US/USM", "us": "US/USM", "subject": "Soggetto", "description": "Soggetto", "date": "Data",
+                "file": "File", "filename": "File", "file name": "File", "path": "File", "percorso": "File",
+                "immagine": "File", "image": "File", "type": "Tipo", "tipo": "Tipo", "soggetto": "Soggetto",
+                "data": "Data"}),
     sc.S_CAMPIONI: (["samples", "campioni"],
                     {"sample": "Campione", "context": "US", "sample type": "Tipo", "type": "Tipo",
                      "analysis": "Analisi", "collected for": "Analisi"}),
@@ -291,13 +294,18 @@ def _coords(g):
 
 
 def esamina_raster(files):
-    """Descrizione dei raster (modelli del terreno) tra i file: percorso -> dict o errore."""
-    from .superficie import Raster, EST_RASTER
+    """Descrizione dei raster tra i file: percorso -> dict (con «tipo»: «dem» o «ortofoto») o errore."""
+    from .superficie import Raster, EST_RASTER, georef, e_ortofoto
     out = {}
     for f in files:
         if os.path.splitext(f)[1].lower() in EST_RASTER:
             try:
-                out[f] = Raster.leggi(f).descrizione()
+                g = georef(f)
+                if e_ortofoto(g):
+                    out[f] = dict(tipo="ortofoto", nome=os.path.basename(f), righe=g["righe"], colonne=g["colonne"],
+                                  passo=round(g["passo"][0], 3), estensione=[round(v, 2) for v in g["estensione"]])
+                else:
+                    out[f] = dict(Raster.leggi(f).descrizione(), tipo="dem")
             except Exception as e:
                 out[f] = dict(errore=str(e))
     return out
@@ -421,7 +429,8 @@ def espandi(files, cartella=None):
     import hashlib
     import zipfile
     from .superficie import EST_RASTER
-    utili = EST_GIS | EST_TAB | EST_RASTER | {".csv"}
+    from .modelli3d import EST_MODELLI
+    utili = EST_GIS | EST_TAB | EST_RASTER | EST_MODELLI | {".csv"}
     out, note = [], []
     base = cartella or os.path.join(os.path.expanduser("~"), ".stratigrafia3d", "estratti")
     for f in files:
@@ -441,7 +450,9 @@ def espandi(files, cartella=None):
         chiave = hashlib.sha1(f"{os.path.abspath(f)}|{os.path.getmtime(f)}".encode()).hexdigest()[:12]
         dest = os.path.join(base, os.path.splitext(os.path.basename(f))[0] + "_" + chiave)
         nomi = [n for n in z.namelist() if not n.endswith("/") and "__MACOSX" not in n]
-        scelti = [n for n in nomi if os.path.splitext(n)[1].lower() in utili | _ACCOMPAGNANO]
+        # con un modello 3D servono anche il .mtl e le immagini della texture
+        extra = {".mtl", ".jpg", ".jpeg", ".png"} if any(os.path.splitext(n)[1].lower() in EST_MODELLI for n in nomi) else set()
+        scelti = [n for n in nomi if os.path.splitext(n)[1].lower() in utili | _ACCOMPAGNANO | extra]
         principali = [n for n in scelti if os.path.splitext(n)[1].lower() in utili]
         if not principali:
             note.append(f"«{os.path.basename(f)}»: nessun file di dati riconosciuto nell'archivio")
@@ -502,6 +513,8 @@ class Abbinamento:
     # fase scritta in due colonne (periodo + fase, come in pyArchInit): {"scheda": [periodo, fase],
     # "fasi": [periodo, fase], "da": colonna anno iniziale, "a": anno finale, "titolo": colonna}
     fase_composta: dict = None
+    ortofoto: str = None                                # GeoTIFF a colori da drappeggiare sul modello
+    modelli3d: list = field(default_factory=list)       # [{"percorso", "spostamento": [dx, dy, dz]}]
 
     def a_json(self):
         return json.dumps(asdict(self), ensure_ascii=False, indent=1)
@@ -864,7 +877,17 @@ def proponi(files):
             abb.note.append(f"Le schede ({len(schede)}) sono molte più dei poligoni ({len(poli)}): "
                             "si tengono solo le unità con una pianta")
     # superficie di riferimento: serve quando mancano le quote o quando ci sono profondità da usare
-    raster = [f for f, d in esamina_raster(files).items() if "errore" not in d]
+    er = esamina_raster(files)
+    raster = [f for f, d in er.items() if "errore" not in d and d.get("tipo") == "dem"]
+    orto = [f for f, d in er.items() if "errore" not in d and d.get("tipo") == "ortofoto"]
+    from .modelli3d import EST_MODELLI
+    for f in files:
+        if os.path.splitext(f)[1].lower() in EST_MODELLI:
+            abb.modelli3d.append({"percorso": f, "spostamento": [0.0, 0.0, 0.0]})
+            abb.note.append(f"Modello 3D «{os.path.basename(f)}»: sarà mostrato accanto alle unità")
+    if orto:
+        abb.ortofoto = orto[0]
+        abb.note.append(f"Ortofoto «{os.path.basename(orto[0])}»: sarà drappeggiata sul modello")
     ha_quote = any(r.ruolo == "quote" or r.quote_vertici for r in abb.layers)
     if raster:
         abb.superficie = {"tipo": "raster", "sorgente": raster[0], "abbassa": 0.0}
@@ -936,8 +959,52 @@ def _tutte_le_tabelle(abb):
             continue
         for nome, df in leggi_tabelle(f).items():
             k = nome if nome not in tabs else f"{os.path.splitext(os.path.basename(f))[0]} · {nome}"
+            df.attrs["s3d_file"] = os.path.abspath(f)       # da dove viene: serve per i percorsi relativi
             tabs[k] = df
     return tabs
+
+
+EST_IMMAGINI = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".bmp"}
+
+
+def risolvi_file(valori, basi, profondita=4, massimo=50000):
+    """Percorsi assoluti dei file citati in una tabella (foto, disegni): assoluti, relativi a una delle
+    cartelle ``basi``, oppure cercati per nome nelle loro sottocartelle. None dove non si trovano."""
+    indice = None
+
+    def cerca(nome):
+        nonlocal indice
+        if indice is None:
+            indice = {}
+            for b in basi:
+                n0 = b.rstrip(os.sep).count(os.sep)
+                for rad, cartelle, files in os.walk(b):
+                    if rad.count(os.sep) - n0 >= profondita:
+                        cartelle[:] = []
+                    cartelle[:] = [c for c in cartelle if not c.startswith((".", "_"))]
+                    for f in files:
+                        indice.setdefault(f.lower(), os.path.join(rad, f))
+                    if len(indice) > massimo:
+                        break
+        return indice.get(nome.lower())
+
+    out = []
+    for v in valori:
+        if v is None or (isinstance(v, float) and np.isnan(v)) or not str(v).strip():
+            out.append(None)
+            continue
+        s = str(v).strip().replace("\\", os.sep).replace("/", os.sep)
+        trovato = s if os.path.isabs(s) and os.path.isfile(s) else None
+        for b in basi:
+            if trovato:
+                break
+            p = os.path.join(b, s)
+            if os.path.isfile(p):
+                trovato = p
+        if not trovato:
+            trovato = cerca(os.path.basename(s))
+        out.append(os.path.abspath(trovato) if trovato else None)
+    return out
 
 
 def _rinomina(df, colonne):
@@ -1591,6 +1658,19 @@ def applica(abb, log=None):
         for c in ("NR", "NMI", "Peso (g)", "Quota (m)"):
             if c in t.columns:
                 t[c] = _misura(t[c], "m", c, nulli)
+        if canon == sc.S_DOC and "File" in t.columns:
+            # foto e disegni: percorsi relativi al file della tabella, o cercati per nome nelle sue cartelle
+            origine = tabs[nome].attrs.get("s3d_file")
+            basi = [os.path.dirname(origine)] if origine else []
+            if abb.tabella:
+                basi.append(os.path.dirname(os.path.abspath(abb.tabella)))
+            basi = list(dict.fromkeys(basi))
+            t = t.copy()
+            t["Percorso file"] = risolvi_file(list(t["File"]), basi)
+            citati, trovati = int(t["File"].notna().sum()), int(t["Percorso file"].notna().sum())
+            if citati:
+                note.append(f"Documentazione: {trovati} file trovati su {citati} citati"
+                            + ("" if trovati == citati else " (gli altri non sono nelle cartelle del progetto)"))
         if canon == sc.S_FASI and fasi_composte is not None:
             t = fasi_composte
         s.tabelle.pop(nome, None)
@@ -1646,13 +1726,59 @@ def applica(abb, log=None):
         s.imposta_superficie({"tipo": "nessuna"})
         raster_fonte = None
 
+    # ------------------------------------------------ ortofoto
+    orto_fonte = None
+    if abb.ortofoto:
+        if not os.path.exists(abb.ortofoto):
+            note.append("Ortofoto non trovata: il modello resterà senza immagine")
+        else:
+            try:
+                from .ortofoto import Ortofoto
+                g = s.layers.get(sc.L_AREA)
+                g = g if g is not None and not g.empty else s.layers.get(sc.L_US)
+                s.ortofoto = Ortofoto.leggi(abb.ortofoto, limiti=tuple(g.total_bounds) if g is not None and len(g) else None)
+                orto_fonte = abb.ortofoto
+                d = s.ortofoto.descrizione()
+                note.append(f"Ortofoto «{d['nome']}»: {d['larghezza']} × {d['altezza']} pixel, {d['passo_cm']} cm")
+            except Exception as e:
+                note.append(f"Ortofoto non letta: {e}")
+
+    # ------------------------------------------------ modelli 3D rilevati
+    modelli_fonti = set()
+    for spec in abb.modelli3d or []:
+        p = spec.get("percorso")
+        if spec.get("escluso"):
+            continue
+        if not p or not os.path.exists(p):
+            note.append(f"Modello 3D non trovato: {p}")
+            continue
+        try:
+            from .modelli3d import Modello3D
+            m = Modello3D.leggi(p, spostamento=tuple(spec.get("spostamento") or (0, 0, 0)))
+        except Exception as e:
+            note.append(f"Modello 3D «{os.path.basename(p)}» non letto: {e}")
+            continue
+        d = m.descrizione()
+        g = s.layers.get(sc.L_US)
+        if g is not None and len(g):
+            x0, y0, x1, y1 = g.total_bounds
+            cx, cy = m.V[:, 0].mean(), m.V[:, 1].mean()
+            if max(x0 - cx, cx - x1, y0 - cy, cy - y1) > 1000:
+                note.append(f"Il modello 3D «{d['nome']}» è a più di un chilometro dallo scavo: forse è stato "
+                            "esportato con uno spostamento delle coordinate, da indicare nel riquadro dei modelli 3D")
+        s.modelli3d.append(m)
+        modelli_fonti.add(p)
+        note.append(f"Modello 3D «{d['nome']}»: {d['triangoli']:,} triangoli".replace(",", ".")
+                    + (", con texture" if d["texture"] else (", con colori" if d["colori"] else "")))
+
     now = _dt.datetime.now().isoformat(timespec="seconds")
     fonti = sorted({x.sorgente for x in abb.layers if x.ruolo != "ignora"} | ({abb.tabella} if abb.tabella else set())
-                   | ({raster_fonte} if raster_fonte else set()))
+                   | ({raster_fonte} if raster_fonte else set()) | ({orto_fonte} if orto_fonte else set())
+                   | modelli_fonti)
     fonti = sorted(set(fonti) | {f for f in (abb.tabelle_extra or []) if f and os.path.exists(f)})
     for p in fonti:
         s.sorgenti.append(dict(percorso=os.path.abspath(p),
-                               tipo="excel" if p == abb.tabella else ("raster" if p == raster_fonte else
+                               tipo="excel" if p == abb.tabella else ("raster" if p in (raster_fonte, orto_fonte) else "modello 3d" if p in modelli_fonti else
                                                                      ("tabella" if p in (abb.tabelle_extra or []) else "gis")),
                                sha256=_sha256(p), dimensione=os.path.getsize(p), importato=now))
     base = next((x.sorgente for x in abb.layers if x.ruolo == "us"), fonti[0] if fonti else "scavo")

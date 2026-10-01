@@ -191,7 +191,36 @@ def dati_visualizzatore(scavo):
         quote=dict(xyz=_b64(quote_arr, "<f4"), meta=[[int(a), b] for a, b in zip(q.us, q.tipo)]),
         profili=profili, sezioni=sezioni, sez_draw=sez_draw, limiti=limiti, harris=st.harris(rap, dedotti=scavo.modello.dedotti),
         dedotti=[[int(a), int(b)] for a, b in scavo.modello.dedotti],
+        ortofoto=_ortofoto(scavo),
+        modelli3d=_modelli3d(scavo),
     )
+
+
+def _modelli3d(scavo):
+    """Modelli 3D rilevati, in coordinate locali (float32), con colori o texture se ci sono."""
+    out = []
+    o = scavo.origine
+    off = np.array([o["E0"], o["N0"], o["Z0"]])
+    for m in getattr(scavo, "modelli3d", []) or []:
+        d = dict(nome=m.nome, n=int(len(m.V)), pos=_b64(m.V - off, "<f4"), idx=_b64(m.F, "<u4"))
+        if m.colori is not None:
+            d["colori"] = _b64(m.colori[:, :3], "u1")
+        if m.uv is not None and m.texture is not None:
+            d["uv"] = _b64(m.uv, "<f4")
+            d["texture"] = base64.b64encode(m.texture).decode()
+        out.append(d)
+    return out
+
+
+def _ortofoto(scavo):
+    """L'ortofoto per il visualizzatore: JPEG in base64 ed estensione in coordinate locali."""
+    o = getattr(scavo, "ortofoto", None)
+    if o is None:
+        return None
+    E0, N0 = scavo.origine["E0"], scavo.origine["N0"]
+    x0, y0, x1, y1 = o.estensione
+    return dict(jpeg=base64.b64encode(o.jpeg).decode(), estensione=[x0 - E0, y0 - N0, x1 - E0, y1 - N0],
+                nome=o.nome, passo_cm=round(o.passo * 100, 1))
 
 
 def pagina_visualizzatore(scavo, modo="offline"):

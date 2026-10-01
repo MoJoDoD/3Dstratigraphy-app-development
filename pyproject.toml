@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stratigrafia3d"
-version = "0.6.0"
+version = "0.7.0"
 description = "Ricostruzione 3D delle unità stratigrafiche da documentazione di scavo 2D (GIS + Excel)"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [{name = "Sebastiano Trabucchi"}]
 dependencies = [
   "numpy>=1.26", "scipy>=1.11", "pandas>=2.0", "geopandas>=0.14", "pyogrio>=0.7",
-  "shapely>=2.0", "networkx>=3.0", "openpyxl>=3.1", "tifffile>=2023.1",
+  "shapely>=2.0", "networkx>=3.0", "openpyxl>=3.1", "tifffile>=2023.1", "pillow>=9",
   "triangle>=20230923; python_version < '3.14'",   # facoltativa: senza, si usa la triangolazione scipy
 ]
 

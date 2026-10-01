@@ -9,7 +9,7 @@ Un file ``.scavo`` è un GeoPackage valido (lo apre anche QGIS) che contiene:
   - ``s3d_sorgenti``  file di origine con impronta SHA-256 (per la sincronizzazione futura)
   - ``s3d_modelli``   geometrie ricostruite di ogni unità (array compressi)
   - ``s3d_storico``   registro delle operazioni
-  - ``s3d_raster``    modello del terreno usato come superficie di riferimento (se c'è)
+  - ``s3d_raster``    modello del terreno usato come superficie di riferimento e ortofoto (se ci sono)
 """
 import datetime as _dt
 import hashlib
@@ -135,6 +135,8 @@ class Scavo:
         self.note_importazione = []
         self.raster_superficie = None     # superficie.Raster (modello del terreno), se usato
         self.modifiche = []               # registro delle modifiche fatte nell'app (vedi modifiche.py)
+        self.ortofoto = None              # ortofoto.Ortofoto drappeggiata sul modello, se c'è
+        self.modelli3d = []               # modelli3d.Modello3D rilevati (fotogrammetria, laser scanner)
 
     # ------------------------------------------------------------------ lettura
     @classmethod
@@ -426,6 +428,7 @@ class Scavo:
             "s3d_modelli": "id INTEGER PRIMARY KEY AUTOINCREMENT, unita INTEGER, tipo TEXT, qualita TEXT, dati BLOB",
             "s3d_storico": "id INTEGER PRIMARY KEY AUTOINCREMENT, quando TEXT, azione TEXT, dettagli TEXT",
             "s3d_raster": "nome TEXT PRIMARY KEY, dati BLOB",
+            "s3d_modelli3d": "id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT, dati BLOB",
         }
         for t, cols in tabelle_s3d.items():
             cur.execute(f"CREATE TABLE {t} ({cols})")
@@ -449,6 +452,10 @@ class Scavo:
                             (int(u), m.tipo, json.dumps(m.qualita, ensure_ascii=False), buf.getvalue()))
         if self.raster_superficie is not None:
             cur.execute("INSERT INTO s3d_raster VALUES (?, ?)", ("superficie", self.raster_superficie.a_bytes()))
+        if self.ortofoto is not None:
+            cur.execute("INSERT INTO s3d_raster VALUES (?, ?)", ("ortofoto", self.ortofoto.a_bytes()))
+        for m in self.modelli3d:
+            cur.execute("INSERT INTO s3d_modelli3d (nome, dati) VALUES (?, ?)", (m.nome, m.a_bytes()))
         self.registra("salvataggio", dict(file=os.path.basename(path)))
         cur.executemany("INSERT INTO s3d_storico (quando, azione, dettagli) VALUES (?,?,?)",
                         [(h["quando"], h["azione"], json.dumps(h["dettagli"], ensure_ascii=False)) for h in self.storico])
@@ -484,6 +491,15 @@ class Scavo:
         righe = list(cur.execute("SELECT unita, tipo, qualita, dati FROM s3d_modelli ORDER BY id"))
         try:
             r = cur.execute("SELECT dati FROM s3d_raster WHERE nome = 'superficie'").fetchone()
+            o = cur.execute("SELECT dati FROM s3d_raster WHERE nome = 'ortofoto'").fetchone()
+            try:
+                from .modelli3d import Modello3D
+                s.modelli3d = [Modello3D.da_bytes(b) for (b,) in cur.execute("SELECT dati FROM s3d_modelli3d ORDER BY id")]
+            except sqlite3.OperationalError:       # progetti precedenti alla versione 0.7
+                pass
+            if o:
+                from .ortofoto import Ortofoto
+                s.ortofoto = Ortofoto.da_bytes(o[0])
         except sqlite3.OperationalError:       # progetti salvati prima della versione 0.3
             r = None
         if r:

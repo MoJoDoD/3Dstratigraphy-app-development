@@ -180,6 +180,20 @@ class App:
                             motivo=m) for v, m in r["saltate"]]
             return dict(scritte=r["scritte"], saltate=saltate, file=[os.path.basename(p) for p in r["file"]],
                         copie=r["copie"], stato=st.descrizione())
+        if nome == "apri_file":
+            # apre un documento (PDF, disegno) con il programma predefinito del sistema
+            p = a.get("percorso") or ""
+            if os.path.normcase(os.path.abspath(p)) not in self.file_documentazione():
+                raise Errore("File non collegato al progetto")
+            import subprocess
+            import sys
+            if sys.platform.startswith("win"):
+                os.startfile(p)          # noqa: S606 - file scelto tra quelli del progetto
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", p])
+            else:
+                subprocess.Popen(["xdg-open", p])
+            return {}
         if nome == "sorgenti":
             self._serve_scavo()
             return dict(cambiate=md.sorgenti_cambiate(st.scavo) if st.scavo.abbinamento is not None else [])
@@ -307,6 +321,39 @@ class App:
         return (html.replace("/*__FONT__*/", css_font(inline=False))
                     .replace("__GETTONE__", self.gettone).replace("__VERSIONE__", __version__))
 
+    def file_documentazione(self):
+        """I soli file che il server può mostrare: quelli citati nella documentazione del progetto."""
+        s = self.stato.scavo
+        t = None if s is None else s.tabelle.get("Documentazione")
+        if t is None or "Percorso file" not in t.columns:
+            return set()
+        return {os.path.normcase(os.path.abspath(p)) for p in t["Percorso file"].dropna()}
+
+    def media(self, p, larghezza=None):
+        """(byte, tipo) di una foto o di un disegno della documentazione; ridotta se serve."""
+        if not p or os.path.normcase(os.path.abspath(p)) not in self.file_documentazione() or not os.path.isfile(p):
+            raise FileNotFoundError(p)
+        ext = os.path.splitext(p)[1].lower()
+        diretti = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif",
+                   ".webp": "image/webp", ".svg": "image/svg+xml", ".pdf": "application/pdf"}
+        if ext in (".tif", ".tiff", ".bmp") or (larghezza and ext in (".jpg", ".jpeg", ".png", ".webp")):
+            try:
+                from PIL import Image
+                import io
+                with Image.open(p) as im:
+                    im.seek(0)
+                    im = im.convert("RGB") if im.mode not in ("RGB", "L") else im
+                    if larghezza:
+                        im.thumbnail((int(larghezza), int(larghezza) * 4))
+                    buf = io.BytesIO()
+                    im.save(buf, "JPEG", quality=85)
+                    return buf.getvalue(), "image/jpeg"
+            except Exception:
+                if ext not in diretti:
+                    raise FileNotFoundError(p)
+        with open(p, "rb") as f:
+            return f.read(), diretti.get(ext, "application/octet-stream")
+
     def pagina_visualizzatore(self):
         with self.stato.lock:
             if self.stato.scavo is None or self.stato.scavo.modello is None:
@@ -333,6 +380,11 @@ def crea_server(app, porta=0):
             try:
                 if path in ("/", "/index.html"):
                     return self._invia(200, app.pagina_app(), TIPI_MIME[".html"])
+                if path == "/media":
+                    from urllib.parse import parse_qs
+                    q = parse_qs(urlparse(self.path).query)
+                    corpo, tipo = app.media(q.get("p", [""])[0], (q.get("w") or [None])[0])
+                    return self._invia(200, corpo, tipo)
                 if path == "/visualizzatore":
                     return self._invia(200, app.pagina_visualizzatore(), TIPI_MIME[".html"])
                 if path.startswith("/statici/"):
