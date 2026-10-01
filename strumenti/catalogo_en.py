@@ -720,6 +720,310 @@ T.update({
     "Fase composta: colonne «{0}» e «{1}» non trovate nelle schede": "Composite phase: columns «{0}» and «{1}» not found in the records",
 })
 
+# ---------------------------------------------------------------- cartelle e inventario
+# destinazioni proposte dall'inventario (inventario.DESTINAZIONE e quelle scritte a mano)
+_DESTINAZIONI = {
+    "Piante delle US": "SU plans", "Piante delle USM": "MSU plans", "Quote": "Levels", "Profili 3D": "3D profiles",
+    "Linee di fondo": "Base-of-slope lines", "Limite di scavo": "Excavation limit",
+    "Tracce delle sezioni": "Section lines", "Disegni delle sezioni": "Section drawings", "Reperti": "Finds",
+    "Campioni": "Samples", "Schede US": "SU records", "Schede USM": "MSU records",
+    "Rapporti stratigrafici": "Stratigraphic relationships", "Materiali": "Materials",
+    "Documentazione (elenco)": "Documentation (list)", "Fasi": "Phases", "Gruppi stratigrafici": "Stratigraphic groups",
+    "Datazioni": "Dates", "Superficie di riferimento": "Reference surface",
+    "Correzione della superficie": "Surface correction", "Ortofoto": "Orthophoto",
+    "Documentazione (foto)": "Documentation (photos)", "Documentazione (disegni)": "Documentation (drawings)",
+    "Documentazione (scansioni)": "Documentation (scans)", "Documenti (relazione)": "Documents (report)",
+    "Documenti (elenco)": "Documents (list)", "Documenti (metadati)": "Documents (metadata)", "Licenza": "Licence",
+    "Dizionario dei dati": "Data dictionary", "Non usato": "Not used", "Modelli 3D": "3D models",
+    "Documenti": "Documents", "Aperto: contenuto elencato": "Opened: contents listed",
+    "Da esportare in CSV": "To be exported to CSV", "Piante e quote (da verificare)": "Plans and levels (to be checked)",
+}
+T.update(_DESTINAZIONI)
+# un file con più layer o fogli ha più destinazioni, separate da virgole: «Piante delle US, Quote»
+T.update({k + ", {0}": v + ", {0}" for k, v in _DESTINAZIONI.items()})
+# «il nome «LEGGIMI» indica: documenti (metadati)»: la destinazione in minuscolo
+T.update({k.lower(): v[0].lower() + v[1:] for k, v in _DESTINAZIONI.items() if k.startswith(("Documenti (", "Licenza", "Dizionario"))})
+# tipo d'immagine dopo il motivo del collegamento: «… — foto: dati EXIF…»
+_TIPI_IMMAGINE = {"foto": "photo", "disegno": "drawing", "scansione": "scan"}
+# il gruppo dell'inventario prende il nome dalla destinazione (o dalla categoria): tra «» non si traduce da solo
+T.update({f"Usa tutti i file di «{k}»": f"Use all the files of «{v}»" for k, v in list(_DESTINAZIONI.items()) + [
+    ("tabella", "table"), ("modello 3D", "3D model"), ("archivio", "archive"), ("documento", "document"),
+    ("immagine", "image"), ("altro", "other"), ("ignorato", "ignored")]})
+T.update({"{0} — " + k + ": {1}": "{0} — " + v + ": {1}" for k, v in _TIPI_IMMAGINE.items()})
+T.update({f"incerto tra {a} e {b}": f"uncertain between {_TIPI_IMMAGINE[a]} and {_TIPI_IMMAGINE[b]}"
+          for a in _TIPI_IMMAGINE for b in _TIPI_IMMAGINE if a != b})
+T.update({
+    # ---- passo 1 dell'app: cartelle e inventario
+    "Aggiungi cartella…": "Add folder…", "Aggiungi cartella": "Add folder",
+    "Una cartella di scavo intera: il programma guarda ogni file e propone a cosa serve":
+        "A whole excavation folder: the program looks at every file and suggests what it is for",
+    "…oppure incolla qui il percorso di un file o di una cartella e premi Invio":
+        "…or paste the path of a file or folder here and press Enter",
+    "Contenuto delle cartelle": "Contents of the folders",
+    "Filtra per nome…": "Filter by name…", "Filtra i file dell'inventario": "Filter the files of the inventory",
+    "Guarda di nuovo le cartelle, se nel frattempo sono cambiate": "Look at the folders again, in case they have changed in the meantime",
+    "Rileggi le cartelle": "Read the folders again",
+    "Il programma ha guardato ogni file e propone a cosa serve. Togli la spunta ai file da non usare; per piante, tabelle, raster e immagini puoi cambiare la destinazione.":
+        "The program has looked at every file and suggests what it is for. Untick the files not to be used; for plans, tables, rasters and images you can change the destination.",
+    "Percorso della cartella": "Folder path", "Scrivi il percorso completo della cartella.": "Type the full path of the folder.",
+    "cartella": "folder", "{0} file": "{0} files", "file": "files",
+    "{0} file, {1} da usare": "{0} files, {1} to use", "{0} da usare": "{0} to use",
+    "piante GIS": "GIS plans", "tabelle": "tables", "modelli 3D": "3D models", "archivi": "archives",
+    "documenti": "documents", "foto": "photos", "altri file": "other files", "ignorati": "ignored",
+    "tabella": "table", "modello 3D": "3D model", "archivio": "archive", "documento": "document",
+    "immagine": "image", "altro": "other", "ignorato": "ignored",
+    "Inventario delle cartelle…": "Inventory of the folders…",
+    "L'inventario delle cartelle non è disponibile: si leggeranno tutti i file di dati che contengono":
+        "The folder inventory is not available: all the data files they contain will be read",
+    "Destinazione": "Destination", "Usa": "Use", "Usa {0}": "Use {0}", "Usa tutti i file di «{0}»": "Use all the files of «{0}»",
+    "Affidabilità della proposta: {0}%": "Reliability of the proposal: {0}%",
+    "Mostra solo questa categoria": "Show only this category", "nascondi": "hide", "mostra": "show",
+    "Mostra altri {0}": "Show {0} more", "{0} non mostrati": "{0} not shown",
+    "Nessun file corrisponde al filtro.": "No file matches the filter.",
+    "Qui non si legge il percorso dei file trascinati: usa «Aggiungi file…» o «Aggiungi cartella…», oppure incolla il percorso":
+        "The path of dragged files cannot be read here: use «Add files…» or «Add folder…», or paste the path",
+    "Nessun file di dati scelto: spunta almeno una pianta, una tabella o un raster nell'inventario":
+        "No data file chosen: tick at least one plan, table or raster in the inventory",
+    "scelto a mano nell'inventario": "chosen by hand in the inventory", "trovato nell'inventario": "found in the inventory",
+    # ---- importazione da cartelle (importa.py)
+    "«{0}» non è un archivio zip valido (download incompleto?): {1}": "«{0}» is not a valid zip archive (incomplete download?): {1}",
+    "estensione del file": "file extension",
+    "Inventario di {0}: {1} file, {2} proposti per l'importazione": "Inventory of {0}: {1} files, {2} proposed for import",
+    "In {0} nessun file di dati riconosciuto": "No data file recognised in {0}",
+    "«{0}»: l'inventario lo indica come modello di troncamento": "«{0}»: the inventory marks it as a truncation model",
+    "Modello 3D «{0}»: escluso dall'inventario (si può includere nel riquadro dei modelli 3D)":
+        "3D model «{0}»: left out in the inventory (it can be included in the 3D models box)",
+    "Documentazione: {0} immagini dell'inventario non sono sul disco (non estratte dall'archivio o spostate): non collegate":
+        "Documentation: {0} images of the inventory are not on disk (not extracted from the archive, or moved): not linked",
+    "Documentazione: {0} file citati ritrovati nelle cartelle esaminate": "Documentation: {0} listed files found in the folders examined",
+    "Registro «{0}» non usato per la documentazione: {1}": "Register «{0}» not used for the documentation: {1}",
+    "Documentazione dai file: {0} file collegati a {1} unità": "Documentation from the files: {0} files linked to {1} units",
+    "Documentazione dai file: {0} file collegati a {1} unità ({2} immagine non collegata a nessuna unità)":
+        "Documentation from the files: {0} files linked to {1} units ({2} image not linked to any unit)",
+    "Documentazione dai file: {0} file collegati a {1} unità ({2} immagini non collegate a nessuna unità)":
+        "Documentation from the files: {0} files linked to {1} units ({2} images not linked to any unit)",
+    "Documentazione dai file: nessuna delle {0} immagini trovate è collegata a un'unità del progetto":
+        "Documentation from the files: none of the {0} images found is linked to a unit of the project",
+    "Documentazione dai file non creata: {0}": "Documentation from the files not created: {0}",
+    "numero dell'unità nel nome del file ({0})": "unit number in the file name ({0})",
+    "File dell'inventario non letti: {0}": "Inventory files not read: {0}",
+    "{0} layer della ricetta trovati nell'inventario delle cartelle: {1}": "{0} recipe layers found in the folder inventory: {1}",
+    "{0} tabelle della ricetta trovate nell'inventario delle cartelle: {1}": "{0} recipe tables found in the folder inventory: {1}",
+    "Modello del terreno «{0}» trovato nell'inventario delle cartelle": "Terrain model «{0}» found in the folder inventory",
+    "Foto": "Photo", "Disegno": "Drawing", "Scansione": "Scan", "automatico": "automatic", "Collegamento": "Link",
+    # scelte fatte a mano nell'inventario
+    "escluso nell'inventario": "left out in the inventory", "«{0}»: escluso nell'inventario": "«{0}»: left out in the inventory",
+    "«{0}»: aggiunto a mano nell'inventario": "«{0}»: added by hand in the inventory",
+    "«{0}»: {1} (scelto a mano nell'inventario)": "«{0}»: {1} (chosen by hand in the inventory)",
+    "«{0}»: correzione della superficie senza un modello del terreno: non usata":
+        "«{0}»: surface correction without a terrain model: not used",
+    "«{0}»: nessuna colonna con i numeri delle unità: non usato come «{1}»": "«{0}»: no column with the unit numbers: not used as «{1}»",
+    "«{0}»: nessuna colonna con i numeri delle unità: non usato come «Schede US»":
+        "«{0}»: no column with the unit numbers: not used as «SU records»",
+    "«{0}»: nessuna colonna con i numeri delle unità: non usato come «Schede USM»":
+        "«{0}»: no column with the unit numbers: not used as «MSU records»",
+    "«{0}»: rapporti non riconosciuti (servono le colonne unità, rapporto, unità correlata)":
+        "«{0}»: relationships not recognised (the columns unit, relationship, related unit are needed)",
+    "«{0}» ha {1} layer: il ruolo si sceglie layer per layer": "«{0}» has {1} layers: the role is chosen layer by layer",
+    "Documentazione: {0} file esclusi nell'inventario non collegati": "Documentation: {0} files left out in the inventory not linked",
+    "Documentazione: {0} file estratti dagli archivi": "Documentation: {0} files extracted from the archives",
+    "disegno": "drawing", "scansione": "scan",
+    # ---- inventario.py: note
+    "Cartella «{0}» oltre la profondità massima ({1}): non esaminata": "Folder «{0}» beyond the maximum depth ({1}): not examined",
+    "«{0}»: {1} immagini ({2} MB) elencate senza estrarle tutte (estratte {3} per riconoscerle)":
+        "«{0}»: {1} images ({2} MB) listed without extracting them all ({3} extracted to recognise them)",
+    "«{0}»: impossibile estrarre «{1}» ({2})": "«{0}»: cannot extract «{1}» ({2})",
+    "«{0}»: troppi archivi uno dentro l'altro, non aperto": "«{0}»: too many archives nested in one another, not opened",
+    "Alcuni file hanno lo stesso nome ma contenuto diverso: {0}. Forse la cartella contiene più scavi: controlla quali usare":
+        "Some files have the same name but different contents: {0}. Perhaps the folder holds several excavations: check which ones to use",
+    "«{0}» ({1} versioni)": "«{0}» ({1} versions)", "«{0}» ({1} versioni), {2}": "«{0}» ({1} versions), {2}",
+    "«{0}» non esiste": "«{0}» does not exist",
+    "Trovati più di {0} file: esaminati solo i primi {1}": "More than {0} files found: only the first {1} examined",
+    "Esaminati {0} file ({1} voci, {2} file accessori uniti al file principale) in {3} cartelle e {4} archivi zip in {5} s":
+        "{0} files examined ({1} entries, {2} sidecar files joined to their main file) in {3} folders and {4} zip archives in {5} s",
+    "Nessun file di dati da importare (piante, schede, raster o modelli 3D)": "No data files to import (plans, records, rasters or 3D models)",
+    # ---- inventario.py: motivo di ogni voce
+    "cartella di sistema": "system folder", "cartella di sistema ({0} file)": "system folder ({0} files)",
+    "file di sistema o temporaneo": "system or temporary file",
+    "archivio zip: il contenuto è elencato qui sotto": "zip archive: its contents are listed below",
+    "archivio zip illeggibile (download incompleto?)": "unreadable zip archive (incomplete download?)",
+    "file non leggibile ({0}: {1})": "unreadable file ({0}: {1})",
+    "nell'archivio, non estratto": "in the archive, not extracted", "nell'archivio, non estratta": "in the archive, not extracted",
+    "{0} (nell'archivio, non estratta)": "{0} (in the archive, not extracted)",
+    "shapefile incompleto: mancano .dbf e .shx": "incomplete shapefile: .dbf and .shx are missing",
+    "file JSON senza geometrie": "JSON file without geometries",
+    "KMZ: aprilo in QGIS ed esporta in GeoPackage": "KMZ: open it in QGIS and export to GeoPackage",
+    "disegno DWG: esportalo in DXF per importarlo": "DWG drawing: export it to DXF to import it",
+    "raster in formato {0}: esportalo in GeoTIFF per usarlo": "raster in {0} format: export it to GeoTIFF to use it",
+    "modello 3D con materiale (.mtl)": "3D model with material (.mtl)", "modello 3D e {0} texture": "3D model and {0} textures",
+    "modello 3D con materiale (.mtl) e {0} texture": "3D model with material (.mtl) and {0} textures",
+    "modello 3D e 1 texture": "3D model and 1 texture",
+    "modello 3D con materiale (.mtl) e 1 texture": "3D model with material (.mtl) and 1 texture",
+    "ricetta «{0}»": "recipe «{0}»",
+    "modello 3D in formato {0}: esportalo in OBJ o PLY per mostrarlo nel progetto":
+        "3D model in {0} format: export it to OBJ or PLY to show it in the project",
+    "database Access: esporta le tabelle in CSV (in Access: Dati esterni → Esporta → File di testo) e aggiungi i CSV":
+        "Access database: export the tables to CSV (in Access: External Data → Export → Text File) and add the CSV files",
+    "archivio {0}: estrailo per esaminarne il contenuto": "{0} archive: extract it to examine its contents",
+    "file XML (metadati)": "XML file (metadata)",
+    "schema.ini: descrive le colonne dei file di testo": "schema.ini: describes the columns of the text files",
+    "progetto GIS: si importano i layer, non il progetto": "GIS project: the layers are imported, not the project",
+    "file accessorio senza il file principale": "sidecar file without its main file",
+    "formato non riconosciuto ({0})": "format not recognised ({0})", "senza estensione": "no extension",
+    "curve di livello: la superficie si ricava dal modello del terreno": "contour lines: the surface is derived from the terrain model",
+    "il nome contiene «{0}»": "the name contains «{0}»",
+    "layer di servizio (griglia, tratteggi…)": "service layer (grid, hatching…)",
+    "{0}: layer di servizio (griglia, tratteggi…)": "{0}: service layer (grid, hatching…)",
+    "poligoni senza un nome riconoscibile: forse piante di US": "polygons without a recognisable name: perhaps SU plans",
+    "punti con quota": "points with levels", "punti con quota (campo «{0}»)": "points with levels (field «{0}»)",
+    "punti con quota (3D)": "points with levels (3D)",
+    "linee 2D: forse tracce di sezione": "2D lines: perhaps section lines",
+    "geometrie miste": "mixed geometries",
+    "{0} elementi, {1}": "{0} features, {1}", "{0} ({1} elementi, {2})": "{0} ({1} features, {2})",
+    "{0} ({1} entità)": "{0} ({1} entities)", "{0} ({1} righe)": "{0} ({1} rows)",
+    "«{0}» è {1}": "«{0}» is {1}", "«{0}» contiene «{1}», {2}": "«{0}» contains «{1}», {2}",
+    "«{0}» è parte di «{1}», {2}": "«{0}» is part of «{1}», {2}", "«{0}» somiglia a «{1}», {2}": "«{0}» resembles «{1}», {2}",
+    "«{0}» ha la forma di una sigla": "«{0}» has the form of a code",
+    "poligono": "polygon", "linea": "line", "punto": "point", "testo": "text",
+    "poligono 3D": "3D polygon", "linea 3D": "3D line", "punto 3D": "3D point", "misto 3D": "mixed 3D",
+    "{0}, senza .prj (sistema di riferimento ignoto)": "{0}, without .prj (unknown coordinate reference system)",
+    "layer vuoto": "empty layer", "layer vuoto ({0})": "empty layer ({0})", "layer illeggibile ({0})": "unreadable layer ({0})",
+    "non è un database SQLite": "not an SQLite database", "nessun layer né tabella": "no layers or tables",
+    "nessuno riconosciuto": "none recognised",
+    "{0} layer: {1}": "{0} layers: {1}", "1 layer: {0}": "1 layer: {0}",
+    "{0} tabelle: {1}": "{0} tables: {1}", "1 tabella: {0}": "1 table: {0}",
+    "{0} fogli: {1}": "{0} sheets: {1}", "1 foglio: {0}": "1 sheet: {0}",
+    "{0} layer e {1} tabelle: {2}": "{0} layers and {1} tables: {2}", "{0} layer e 1 tabella: {1}": "{0} layers and 1 table: {1}",
+    "1 layer e {0} tabelle: {1}": "1 layer and {0} tables: {1}", "1 layer e 1 tabella: {0}": "1 layer and 1 table: {0}",
+    "disegno CAD molto grande: i layer si esaminano all'importazione": "very large CAD drawing: the layers are examined on import",
+    "colonne con le unità e il tipo di rapporto («{0}»)": "columns with the units and the type of relationship («{0}»)",
+    "la colonna «{0}» non contiene nomi di rapporti": "column «{0}» holds no relationship names",
+    "una riga per unità (colonna «{0}»)": "one row per unit (column «{0}»)",
+    "una riga per unità (colonna «{0}») e {1} colonne di rapporti": "one row per unit (column «{0}») and {1} relationship columns",
+    "una riga per USM (colonna «{0}»)": "one row per MSU (column «{0}»)",
+    "colonne di classe, quantità o peso dei reperti": "columns of class, quantity or weight of the finds",
+    "colonne dei campioni": "sample columns",
+    "colonne di file o soggetto (foto, disegni)": "file or subject columns (photos, drawings)",
+    "colonne di fase o periodo con le date": "phase or period columns with dates",
+    "colonna dei gruppi stratigrafici": "stratigraphic group column",
+    "tabella non riconosciuta (nome e colonne)": "table not recognised (name and columns)", "tabella vuota": "empty table",
+    "descrive tabelle, campi o file (dizionario dei dati)": "describes tables, fields or files (data dictionary)",
+    "geometrie in testo (WKT, colonna «{0}»)": "geometries as text (WKT, column «{0}»)",
+    "coordinate nelle colonne «{0}», «{1}»": "coordinates in columns «{0}», «{1}»",
+    "coordinate nelle colonne «{0}», «{1}», «{2}»": "coordinates in columns «{0}», «{1}», «{2}»",
+    "tabella dBase senza shapefile: per usarla salvala in CSV o Excel": "dBase table without a shapefile: to use it, save it as CSV or Excel",
+    "cartella di lavoro vuota": "empty workbook",
+    "TIFF senza georiferimento: {0}": "TIFF without georeferencing: {0}",
+    "immagine georiferita a colori ({0} bande, passo {1} m): da drappeggiare sul modello":
+        "georeferenced colour image ({0} bands, cell size {1} m): to be draped on the model",
+    "raster a una banda ({0}) molto grande: considerato un modello del terreno (valori non controllati)":
+        "very large single-band raster ({0}): taken as a terrain model (values not checked)",
+    "raster senza valori": "raster without values",
+    "valori tutti tra {0} e {1}: differenze di quota (troncamento) da sommare al modello del terreno":
+        "all values between {0} and {1}: level differences (truncation) to be added to the terrain model",
+    "una banda a 8 bit: forse un'immagine in scala di grigi più che un modello del terreno":
+        "one 8-bit band: perhaps a greyscale image rather than a terrain model",
+    "modello del terreno: quote da {0} a {1}": "terrain model: levels from {0} to {1}",
+    "il nome «{0}» indica un disegno": "the name «{0}» suggests a drawing",
+    "il nome «{0}» indica una scansione": "the name «{0}» suggests a scan",
+    "il nome «{0}» indica: {1}": "the name «{0}» suggests: {1}",
+    "fotografia (dal formato e dal nome)": "photograph (from the format and the name)",
+    "riconosciuta solo dal formato": "recognised from the format only",
+    "documento di testo: forse la relazione o una pubblicazione": "text document: perhaps the report or a publication",
+    "file di testo: note sull'archivio": "text file: notes on the archive",
+    "copia di «{0}» (si usa quella); {1}": "copy of «{0}» (that one is used); {1}",
+    "stessi dati in un altro formato di «{0}» (si usa quella); {1}": "same data, in another format, as «{0}» (that one is used); {1}",
+    "layer di una figura della pubblicazione (nome «{0}»): non proposto; {1}":
+        "layer of a figure of the publication (name «{0}»): not proposed; {1}",
+    "layer di una figura della pubblicazione (cartella «{0}»): non proposto; {1}":
+        "layer of a figure of the publication (folder «{0}»): not proposed; {1}",
+    "ruolo solo ipotizzato e nello stesso insieme c'è «{0}» ({1}): non proposto; {2}":
+        "role only guessed, and the same dataset has «{0}» ({1}): not proposed; {2}",
+    "come le altre immagini della cartella ({0})": "like the other images in the folder ({0})",
+    # ---- documenti_auto.py: tipo d'immagine e collegamento alle unità
+    "«{0}» nel nome del file": "«{0}» in the file name", "«{0}» nel nome della cartella": "«{0}» in the folder name",
+    "{0} nel nome del file": "{0} in the file name", "{0} nel nome della cartella": "{0} in the folder name",
+    "{0} nel nome del file (numero senza sigla, unità del progetto)": "{0} in the file name (number without a prefix, unit of the project)",
+    "{0} nel nome della cartella (numero senza sigla, unità del progetto)": "{0} in the folder name (number without a prefix, unit of the project)",
+    "dati EXIF di uno scanner ({0})": "EXIF data of a scanner ({0})", "dati EXIF di scatto ({0})": "EXIF shooting data ({0})",
+    "dati EXIF di scatto (tempo, diaframma)": "EXIF shooting data (exposure time, aperture)",
+    "dati EXIF della fotocamera ({0})": "EXIF data of the camera ({0})",
+    "file PDF": "PDF file", "immagine enorme in bianco e nero o grigi": "huge image in black and white or greys",
+    "immagine enorme": "huge image", "immagine non leggibile": "unreadable image",
+    "nessun indizio chiaro: deciso dal formato del file": "no clear clue: decided from the file format",
+    "foglio chiaro color carta con segni scuri": "light paper-coloured sheet with dark marks",
+    "foglio chiaro color carta con segni scuri, grande o in TIFF": "light paper-coloured sheet with dark marks, large or in TIFF",
+    "linee scure su fondo chiaro": "dark lines on a light background",
+    "linee scure su fondo chiaro (formato da scansione)": "dark lines on a light background (scan format)",
+    "linee sottili su fondo bianco, poche tinte": "thin lines on a white background, few hues",
+    "immagine in toni di grigio": "greyscale image", "disegno a colori su fondo chiaro": "colour drawing on a light background",
+    "immagine a colori con molte tinte": "colour image with many hues",
+    "intervallo {0}-{1} non espanso (non tutte le unità sono note)": "range {0}-{1} not expanded (not all the units are known)",
+    "{0} potrebbe essere un anno": "{0} could be a year", "ambiguo: nel percorso anche {0}": "ambiguous: the path also has {0}",
+    "unità non presente nel progetto": "unit not in the project", "non espanso": "not expanded",
+    "Immagini collegate alle unità dai nomi: {0} su {1}, per {2} unità": "Images linked to the units by their names: {0} of {1}, for {2} units",
+    "{0} file collegati dal nome della cartella": "{0} files linked by the folder name",
+    "{0} PDF collegati alle unità dal nome": "{0} PDFs linked to the units by name",
+    "{0} collegamenti incerti (il motivo spiega perché)": "{0} uncertain links (the reason explains why)",
+    "{0} numeri con sigla non sono unità del progetto (es. {1})": "{0} numbers with a prefix are not units of the project (e.g. {1})",
+    "{0} file con numeri di unità scartati perché sembrano date, scale o numeri di foto":
+        "{0} files with unit numbers discarded because they look like dates, scales or photo numbers",
+    "Senza l'elenco delle unità si collegano solo i nomi con una sigla (US, SU, Context…)":
+        "Without the list of units only the names with a prefix (US, SU, Context…) are linked",
+    "Il registro è vuoto": "The register is empty",
+    "Nel registro non c'è una colonna con le unità (US, Context…)": "The register has no column with the units (US, Context…)",
+    "Nel registro non c'è una colonna con il nome del file o il numero della foto":
+        "The register has no column with the file name or the photo number",
+    "Registro: {0}": "Register: {0}",
+    "file «{0}»": "file «{0}»", "numero «{0}»": "number «{0}»", "unità «{0}»": "unit «{0}»", "descrizione «{0}»": "description «{0}»",
+    "file «{0}», {1}": "file «{0}», {1}", "numero «{0}», {1}": "number «{0}», {1}", "unità «{0}», {1}": "unit «{0}», {1}",
+    "«{0}» citato nel registro": "«{0}» listed in the register",
+    "«{0}» citato nel registro (con un'altra estensione)": "«{0}» listed in the register (with another extension)",
+    "numero {0} del registro nel nome del file": "number {0} of the register in the file name",
+    "numero {0} del registro nel nome del file (numero iniziale del nome)":
+        "number {0} of the register in the file name (number at the start of the name)",
+    "Immagini collegate con il registro: {0} su {1} ({2} per nome del file, {3} per numero), per {4} unità":
+        "Images linked through the register: {0} of {1} ({2} by file name, {3} by number), for {4} units",
+    "{0} righe del registro senza unità: unità prese dalla descrizione": "{0} register rows without units: units taken from the description",
+    "{0} voci del registro senza un file corrispondente": "{0} register entries without a matching file",
+})
+
+
+def _numerati(*pezzi):
+    """Unisce pezzi di modello con i segnaposto «{}» numerandoli di seguito: ("{}; x «{}»", " ({} y)")."""
+    parti = "".join(pezzi).split("{}")
+    return "".join(q + ("{%d}" % i if i < len(parti) - 1 else "") for i, q in enumerate(parti))
+
+
+# Il motivo di un layer finisce con «(12 elementi, poligono)», «(12 entità)» o «(12 righe)»: dove prima c'è
+# un testo che può contenere parentesi (le descrizioni del vocabolario) servono modelli con più testo fisso,
+# che separino la fine nel punto giusto.
+_CODE = ((" ({} elementi, {})", " ({} features, {})"), (" ({} entità)", " ({} entities)"), (" ({} righe)", " ({} rows)"))
+_TESTE = (("{}; numero di US dal campo «{}»", "{}; SU number from field «{}»"),
+          ("{}; la geometria lo conferma", "{}; the geometry confirms it"),
+          ("{}; il contesto («{}») lo conferma", "{}; the context («{}») confirms it"),
+          ("{}: layer di servizio (griglia, tratteggi…)", "{}: service layer (grid, hatching…)"),
+          ("{} (indizio debole)", "{} (weak clue)"),
+          ("punti con quota (campo «{}»)", "points with levels (field «{}»)"),
+          ("punti con quota (3D)", "points with levels (3D)"),
+          ("layer di servizio (griglia, tratteggi…)", "service layer (grid, hatching…)"),
+          ("testi (usabili come etichette)", "texts (usable as labels)"),
+          ("geometrie in testo (WKT, colonna «{}»)", "geometries as text (WKT, column «{}»)"))
+_DESCRIZIONI = ("la griglia (quadrettatura) di scavo", "le piante (poligoni) delle US",
+                "le linee di fondo dei tagli (dove la parete diventa fondo)",
+                "un intervento di scavo (slot, segmento o sondaggio dentro un'evidenza)",
+                "i tratteggi (hachures) delle pareti dei tagli", "il sito (scavo, località)",
+                "un'ortofoto (immagine raddrizzata dello scavo)", "i profili 3D delle US (linee delle interfacce rilevate)",
+                "un'evidenza (feature: insieme di tagli e riempimenti, come una fossa o una buca di palo)",
+                "le piante delle murature (USM)", "i disegni delle sezioni (in coordinate di sezione)",
+                "il perimetro dell'area di scavo (saggio, trincea)",
+                "una tabella tecnica del database GIS (non contiene dati di scavo)")
+for _ci, _ce in _CODE:
+    T.update({_numerati(a, _ci): _numerati(b, _ce) for a, b in _TESTE})
+    T.update({_numerati("{} per " + d, _ci): _numerati("{} for " + T[d], _ce) for d in _DESCRIZIONI})
+    T.update({_numerati("{} per " + d + " (indizio debole)", _ci): _numerati("{} for " + T[d] + " (weak clue)", _ce)
+              for d in _DESCRIZIONI})
+
 if __name__ == "__main__":
     qui = os.path.dirname(os.path.abspath(__file__))
     dest = os.path.join(qui, "..", "src", "stratigrafia3d", "lingue", "en.json")

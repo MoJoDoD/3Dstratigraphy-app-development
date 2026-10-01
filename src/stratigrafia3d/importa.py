@@ -624,9 +624,245 @@ EST_ACCESS = {".mdb", ".accdb"}
 _ACCOMPAGNANO = {".dbf", ".shx", ".prj", ".cpg", ".qpj", ".tfw", ".tifw", ".wld", ".aux", ".xml", ".sbn", ".sbx"}
 
 
+# ============================================================================ cartelle e inventario
+# Una cartella (o uno zip con cartelle e altri zip dentro) si esamina con ``inventario.esamina_cartella``:
+# l'inventario dice cosa c'è (dati GIS, tabelle, raster, modelli 3D, foto, disegni…) e quali file
+# proporre all'importazione. Nell'abbinamento se ne tiene una versione compatta (senza i dettagli).
+_CAMPI_VOCE = ("percorso", "origine", "relativo", "nome", "estensione", "dimensione", "categoria", "ruolo",
+               "destinazione", "punteggio", "motivo", "usa", "archivio", "membro")
+MAX_VOCI_INVENTARIO = 5000
+_INVENTARI_ESPANSI = {}          # file proposto (percorso normalizzato) -> inventario compatto (da ``espandi``)
+
+
+def _chiave_percorso(p):
+    return os.path.normcase(os.path.abspath(str(p)))
+
+
+def _jsonabile(v):
+    """Valore serializzabile in JSON (numeri numpy, insiemi, percorsi…)."""
+    if isinstance(v, dict):
+        return {str(k): _jsonabile(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple, set, frozenset)):
+        return [_jsonabile(x) for x in v]
+    if isinstance(v, np.generic):
+        return v.item()
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return None if isinstance(v, float) and np.isnan(v) else v
+    return str(v)
+
+
+def _testo_nota(n):
+    if isinstance(n, dict):
+        return str(n.get("messaggio") or n.get("testo") or n)
+    return str(n)
+
+
+def _e_contenitore(f):
+    """Vero per una cartella o un archivio zip."""
+    return os.path.isdir(str(f)) or os.path.splitext(str(f))[1].lower() in EST_ZIP
+
+
+def _zip_annidato(f):
+    """Vero se lo zip contiene altri zip (archivi scaricati dentro archivi)."""
+    import zipfile
+    try:
+        with zipfile.ZipFile(f) as z:
+            return any(n.lower().endswith(".zip") and "__MACOSX" not in n for n in z.namelist())
+    except (zipfile.BadZipFile, OSError):
+        return False
+
+
+def _modulo_inventario():
+    try:
+        from . import inventario as m
+    except ImportError:
+        return None
+    return m if hasattr(m, "esamina_cartella") else None
+
+
+def inventaria(percorsi, profondita_max=8, limite_file=20000):
+    """Inventario di cartelle e archivi zip: {"radici", "voci", "riepilogo", "note", "file_proposta"}.
+    Usa ``stratigrafia3d.inventario``; se manca, un elenco semplice per estensione."""
+    percorsi = [str(p) for p in ([percorsi] if isinstance(percorsi, (str, os.PathLike)) else percorsi)]
+    m = _modulo_inventario()
+    if m is not None:
+        return m.esamina_cartella(percorsi, profondita_max=profondita_max, limite_file=limite_file)
+    return _inventario_semplice(percorsi, profondita_max, limite_file)
+
+
+def _categoria_semplice(ext):
+    from .superficie import EST_RASTER
+    from .modelli3d import EST_MODELLI
+    if ext in _ACCOMPAGNANO:
+        return "ignorato"
+    if ext in EST_GIS:
+        return "gis"
+    if ext in EST_TAB or ext == ".csv":
+        return "tabella"
+    if ext in EST_RASTER:
+        return "raster"
+    if ext in EST_MODELLI:
+        return "modello3d"
+    if ext in EST_IMMAGINI:
+        return "immagine"
+    if ext in (".pdf", ".doc", ".docx", ".odt", ".txt", ".rtf"):
+        return "documento"
+    if ext in EST_ACCESS:
+        return "database"
+    if ext in EST_ZIP:
+        return "archivio"
+    return "altro"
+
+
+def _inventario_semplice(percorsi, profondita_max=8, limite_file=20000):
+    """Ripiego senza il modulo ``inventario``: le cartelle si percorrono, gli zip (anche annidati) si
+    estraggono; i file si classificano per estensione."""
+    import hashlib
+    import zipfile
+    base = os.path.join(os.path.expanduser("~"), ".stratigrafia3d", "estratti")
+    voci, note, radici = [], [], []
+
+    def estrai(z, livello=0):
+        try:
+            zf = zipfile.ZipFile(z)
+        except (zipfile.BadZipFile, OSError):
+            note.append(f"«{os.path.basename(z)}» non è un archivio zip valido (download incompleto?)")
+            return None
+        chiave = hashlib.sha1(f"{os.path.abspath(z)}|{os.path.getmtime(z)}".encode()).hexdigest()[:12]
+        dest = os.path.join(base, os.path.splitext(os.path.basename(z))[0] + "_" + chiave)
+        with zf:
+            for n in zf.namelist():
+                if n.endswith("/") or "__MACOSX" in n:
+                    continue
+                p = os.path.join(dest, *[x for x in n.split("/") if x not in ("", ".", "..")])
+                if not os.path.exists(p):
+                    os.makedirs(os.path.dirname(p), exist_ok=True)
+                    with zf.open(n) as src, open(p, "wb") as dst:
+                        dst.write(src.read())
+        return dest
+
+    def percorri(radice, origine, livello=0):
+        n0 = radice.rstrip(os.sep).count(os.sep)
+        for rad, cartelle, files in os.walk(radice):
+            if rad.count(os.sep) - n0 >= profondita_max:
+                cartelle[:] = []
+            cartelle[:] = sorted(c for c in cartelle if not c.startswith((".", "__MACOSX")))
+            for f in sorted(files):
+                if len(voci) >= limite_file:
+                    return
+                p = os.path.join(rad, f)
+                ext = os.path.splitext(f)[1].lower()
+                if ext in EST_ZIP and livello < 3:
+                    d = estrai(p, livello + 1)
+                    if d:
+                        percorri(d, p, livello + 1)
+                    continue
+                cat = "ignorato" if f.startswith(".") else _categoria_semplice(ext)
+                voci.append(dict(percorso=p, origine=origine, relativo=os.path.relpath(p, radice), nome=f,
+                                 estensione=ext, dimensione=os.path.getsize(p), categoria=cat, ruolo=None,
+                                 destinazione=None, punteggio=None, motivo="estensione del file",
+                                 usa=cat in ("gis", "tabella", "raster", "modello3d", "immagine", "documento")))
+
+    for p in percorsi:
+        radici.append(p)
+        if os.path.isdir(p):
+            percorri(p, p)
+        elif os.path.splitext(p)[1].lower() in EST_ZIP:
+            d = estrai(p)
+            if d:
+                percorri(d, p)
+    proposta = [v["percorso"] for v in voci if v["usa"] and v["categoria"] in ("gis", "tabella", "raster", "modello3d")]
+    conta = {}
+    for v in voci:
+        conta[v["categoria"]] = conta.get(v["categoria"], 0) + 1
+    return dict(radici=radici, voci=voci, riepilogo=dict(file=len(voci), categorie=conta), note=note,
+                file_proposta=proposta)
+
+
+def _inventario_compatto(inv, massimo=MAX_VOCI_INVENTARIO):
+    """L'inventario da tenere nell'abbinamento (e nel progetto): voci senza dettagli né parti, senza i
+    file ignorati, al più ``massimo`` voci; serializzabile in JSON."""
+    voci = [v for v in (inv.get("voci") or []) if v.get("categoria") != "ignorato"]
+    out = dict(radici=_jsonabile(inv.get("radici") or []),
+               voci=[{k: _jsonabile(v.get(k)) for k in _CAMPI_VOCE if k in v} for v in voci[:massimo]],
+               riepilogo=_jsonabile(inv.get("riepilogo") or {}),
+               note=[_testo_nota(n) for n in inv.get("note") or []])
+    if inv.get("scelte"):
+        out["scelte"] = _jsonabile(inv["scelte"])
+    if len(voci) > massimo:
+        out["troncato"] = len(voci)
+    return out
+
+
+def _unisci_inventari(inventari):
+    inventari = [i for i in inventari if i]
+    if not inventari:
+        return None
+    if len(inventari) == 1:
+        return inventari[0]
+    visti, voci = set(), []
+    for i in inventari:
+        for v in i.get("voci") or []:
+            k = v.get("percorso")
+            if k not in visti:
+                visti.add(k)
+                voci.append(v)
+    out = dict(radici=list(dict.fromkeys(r for i in inventari for r in i.get("radici") or [])), voci=voci,
+               riepilogo=inventari[0].get("riepilogo") or {}, note=[n for i in inventari for n in i.get("note") or []])
+    scelte = {k: x for i in inventari for k, x in (i.get("scelte") or {}).items()}
+    if scelte:
+        out["scelte"] = scelte
+    return out
+
+
+RUOLI_INV_DIFFERENZA = {"differenza", "differenze", "troncamento", "correzione"}
+RUOLI_INV_ORTOFOTO = {"ortofoto", "ortomosaico"}
+RUOLI_INV_TERRENO = {"dem", "dtm", "dsm", "terreno", "modello del terreno", "superficie"}
+
+
+def _ruoli_inventario(inv):
+    """{percorso normalizzato: voce} delle voci dell'inventario (vuoto senza inventario)."""
+    out = {}
+    for v in (inv or {}).get("voci") or []:
+        if v.get("percorso"):
+            out[_chiave_percorso(v["percorso"])] = v
+    return out
+
+
+def _apri_contenitori(contenitori):
+    """Inventario delle cartelle e degli zip indicati -> (file da proporre, inventario compatto, note)."""
+    inv = inventaria(contenitori)
+    proposti = [str(p) for p in inv.get("file_proposta") or []]
+    compatto = _inventario_compatto(inv)
+    nomi = ", ".join(f"«{os.path.basename(os.path.normpath(str(c)))}»" for c in contenitori)
+    note = [f"Inventario di {nomi}: {len(compatto['voci'])} file, {len(proposti)} proposti per l'importazione"]
+    note += compatto["note"]
+    if not proposti and not any("Nessun file di dati" in n for n in note):
+        note.append(f"In {nomi} nessun file di dati riconosciuto")
+    return proposti, compatto, note
+
+
+def _apri_cartelle(files):
+    """Separa cartelle e zip dagli altri file: i primi passano per l'inventario. Ritorna (file, inventario
+    compatto o None, note). Per i file già estratti da ``espandi`` si ritrova il loro inventario."""
+    files = [str(f) for f in ([files] if isinstance(files, (str, os.PathLike)) else list(files))]
+    contenitori = [f for f in files if _e_contenitore(f)]
+    altri = [f for f in files if f not in contenitori]
+    trovati = []
+    for f in altri:
+        i = _INVENTARI_ESPANSI.get(_chiave_percorso(f))
+        if i is not None and not any(i is x for x in trovati):
+            trovati.append(i)
+    if not contenitori:
+        return altri, _unisci_inventari(trovati), []
+    proposti, inv, note = _apri_contenitori(contenitori)
+    return list(dict.fromkeys(altri + proposti)), _unisci_inventari(trovati + [inv]), note
+
+
 def espandi(files, cartella=None):
     """Apre gli archivi .zip tra i file (in una cartella di lavoro) e ritorna l'elenco dei file utili.
-    Ritorna (file, note)."""
+    Le cartelle, e gli zip che contengono altri zip, passano per l'inventario (``inventaria``): si
+    ritornano i file proposti e ``proponi`` ritroverà l'inventario. Ritorna (file, note)."""
     import hashlib
     import zipfile
     from .superficie import EST_RASTER
@@ -634,7 +870,20 @@ def espandi(files, cartella=None):
     utili = EST_GIS | EST_TAB | EST_RASTER | EST_MODELLI | {".csv"}
     out, note = [], []
     base = cartella or os.path.join(os.path.expanduser("~"), ".stratigrafia3d", "estratti")
+    files = [str(f) for f in ([files] if isinstance(files, (str, os.PathLike)) else list(files))]
+    da_inventariare = [f for f in files if os.path.isdir(f) or
+                       (os.path.splitext(f)[1].lower() in EST_ZIP and _zip_annidato(f))]
+    if da_inventariare:
+        proposti, inv, n_inv = _apri_contenitori(da_inventariare)
+        if len(_INVENTARI_ESPANSI) > 20000:
+            _INVENTARI_ESPANSI.clear()
+        for p in proposti:
+            _INVENTARI_ESPANSI[_chiave_percorso(p)] = inv
+        out.extend(proposti)
+        note.extend(n_inv)
     for f in files:
+        if f in da_inventariare:
+            continue
         ext = os.path.splitext(f)[1].lower()
         if ext in EST_ACCESS:
             note.append(f"«{os.path.basename(f)}» è un database Access: esporta le tabelle in CSV "
@@ -726,6 +975,9 @@ class Abbinamento:
     spiegazioni: dict = field(default_factory=dict)
     # termini che la ricetta insegna al vocabolario per i nomi: {concetto: [nomi]} (es. {"us": ["Kontekst"]})
     termini: dict = field(default_factory=dict)
+    # cartelle e zip esaminati (inventario compatto): {"radici", "voci": [...], "riepilogo", "note"}; None
+    # se si sono indicati solo file. Le voci servono a collegare foto e disegni alle unità.
+    inventario: dict = None
 
     def a_json(self):
         return json.dumps(asdict(self), ensure_ascii=False, indent=1)
@@ -1128,11 +1380,24 @@ def _note_identificativi(df, col):
     return out
 
 
-def proponi(files, termini=None):
+def proponi(files, termini=None, scelte=None):
     """Abbinamento proposto per i file indicati, con il motivo di ogni scelta. ``termini`` aggiunge
-    termini al vocabolario per questa proposta ({concetto: [nomi]})."""
+    termini al vocabolario per questa proposta ({concetto: [nomi]}).
+
+    Tra i ``files`` possono esserci cartelle e archivi zip (anche con cartelle e altri zip dentro): passano
+    per l'inventario (``inventaria``), se ne usano i file proposti e l'inventario resta in ``abb.inventario``.
+    ``scelte``: le scelte fatte a mano nell'inventario, {percorso: {"usa": bool, "ruolo": str}} (vedi
+    ``applica_scelte_inventario``): i file tolti non si leggono, quelli aggiunti sì, le destinazioni cambiate
+    valgono per la proposta; restano in ``abb.inventario["scelte"]``."""
+    files, inventario, note_inventario = _apri_cartelle(files)
+    scelte = _risolvi_scelte(_unisci_scelte((inventario or {}).get("scelte"), scelte), inventario)
+    if scelte:
+        inventario = _inventario_con_scelte(inventario, scelte)
+    files = _file_con_scelte(files, inventario, scelte)
     layers_info, tabelle_per_file = esamina(files)
     abb = Abbinamento()
+    abb.inventario = inventario
+    abb.note.extend(note_inventario)
     if termini:
         abb.termini = {k: list(v) if not isinstance(v, str) else [v] for k, v in termini.items()}
     voc = vocabolario_per(abb)
@@ -1141,7 +1406,14 @@ def proponi(files, termini=None):
     tabs = {}
     origine = {}            # foglio nel progetto -> (file, foglio nel file)
     if tabelle_per_file:
-        # il file con il foglio US più convincente; gli altri file di tabelle restano collegati
+        # il file con il foglio US più convincente; gli altri file di tabelle restano collegati.
+        # Prima i file che l'inventario (o chi l'ha corretto a mano) indica come schede US
+        schede_inv = {k for k, v in _ruoli_inventario(inventario).items()
+                      if v.get("ruolo") == "schede_us" and v.get("usa") is not False}
+        a_mano = {_chiave_percorso(p) for p, x in scelte.items() if x.get("ruolo") == "schede_us"}
+        if schede_inv:
+            tabelle_per_file = dict(sorted(tabelle_per_file.items(), key=lambda x: (
+                _chiave_percorso(x[0]) not in a_mano, _chiave_percorso(x[0]) not in schede_inv)))
         for f, t in tabelle_per_file.items():
             sp = {}
             (fus, cus), (fusm, cusm) = _schede(t, voc, sp)
@@ -1327,11 +1599,37 @@ def proponi(files, termini=None):
     raster = [f for f, d in er.items() if "errore" not in d and d.get("tipo") == "dem" and not d.get("differenza")]
     differenze = [f for f, d in er.items() if "errore" not in d and d.get("differenza")]
     orto = [f for f, d in er.items() if "errore" not in d and d.get("tipo") == "ortofoto"]
+    ruoli_inv = _ruoli_inventario(abb.inventario)
+    if ruoli_inv:
+        # i ruoli dell'inventario (dal nome e dalla cartella) come indizi per i raster ambigui
+        for f, d in er.items():
+            ri = ruoli_inv.get(_chiave_percorso(f), {})
+            ruolo = ri.get("ruolo")
+            if "errore" in d or ri.get("usa") is False:
+                continue
+            if ruolo in RUOLI_INV_DIFFERENZA and f not in differenze and d.get("tipo") == "dem":
+                differenze.append(f)
+                raster = [x for x in raster if x != f]
+                abb.note.append(f"«{os.path.basename(f)}»: l'inventario lo indica come modello di troncamento")
+            elif ruolo in RUOLI_INV_ORTOFOTO and f not in orto:
+                orto.insert(0, f)
+                raster = [x for x in raster if x != f]
+        # tra più modelli del terreno o più ortofoto, prima quelli che l'inventario preferisce
+        def _preferito(x):
+            return -float(ruoli_inv.get(_chiave_percorso(x), {}).get("punteggio") or 0)
+        raster.sort(key=_preferito)
+        orto.sort(key=_preferito)
+        raster = [x for x in raster if ruoli_inv.get(_chiave_percorso(x), {}).get("usa") is not False] or raster
     from .modelli3d import EST_MODELLI
     for f in files:
         if os.path.splitext(f)[1].lower() in EST_MODELLI:
-            abb.modelli3d.append({"percorso": f, "spostamento": [0.0, 0.0, 0.0]})
-            abb.note.append(f"Modello 3D «{os.path.basename(f)}»: sarà mostrato accanto alle unità")
+            spec = {"percorso": f, "spostamento": [0.0, 0.0, 0.0]}
+            if ruoli_inv.get(_chiave_percorso(f), {}).get("usa") is False:
+                spec["escluso"] = True        # l'inventario lo scarta (doppione, versione a bassa risoluzione…)
+            abb.modelli3d.append(spec)
+            abb.note.append(f"Modello 3D «{os.path.basename(f)}»: sarà mostrato accanto alle unità" if not
+                            spec.get("escluso") else f"Modello 3D «{os.path.basename(f)}»: escluso "
+                            "dall'inventario (si può includere nel riquadro dei modelli 3D)")
     if orto:
         abb.ortofoto = orto[0]
         abb.note.append(f"Ortofoto «{os.path.basename(orto[0])}»: sarà drappeggiata sul modello")
@@ -1358,7 +1656,534 @@ def proponi(files, termini=None):
         abb.superficie = {"tipo": "costante", "quota": 0.0, "abbassa": 0.0}
         abb.note.append("Nessuna quota: le unità partono da una superficie piana a quota 0. "
                         "Puoi indicare una quota o un modello del terreno")
+    if scelte:
+        applica_scelte_inventario(abb, scelte)
     return abb
+
+
+# ============================================================================ scelte fatte a mano nell'inventario
+# Nella procedura guidata (e da riga di comando o con una ricetta) si può togliere un file dall'inventario o
+# cambiarne la destinazione: {percorso: {"usa": bool, "ruolo": str}}. Le scelte restano nell'inventario
+# dell'abbinamento («scelte»), quindi nella ricetta salvata e nel progetto.
+RUOLI_SCELTA_LAYER = ("us", "usm", "quote", "profili", "fondi", "area", "sezioni", "sezioni_disegno", "reperti",
+                      "campioni", "ignora")
+RUOLI_SCELTA_TABELLA = ("schede_us", "schede_usm", "rapporti", "materiali", "documentazione", "fasi", "gruppi",
+                        "datazioni", "campioni")
+RUOLI_SCELTA_RASTER = ("dem", "differenza", "ortofoto")
+RUOLI_SCELTA_IMMAGINE = ("foto", "disegno", "scansione")
+_ALIAS_SCELTA = {"dtm": "dem", "dsm": "dem", "terreno": "dem", "modello del terreno": "dem", "superficie": "dem",
+                 "troncamento": "differenza", "differenze": "differenza", "correzione": "differenza",
+                 "ortomosaico": "ortofoto", "schede": "schede_us", "schede us": "schede_us",
+                 "schede usm": "schede_usm"}
+_FOGLIO_COLLEGATO = {"materiali": sc.S_MATERIALI, "documentazione": sc.S_DOC, "fasi": sc.S_FASI,
+                     "campioni": sc.S_CAMPIONI}
+_CATEGORIE_DATI = ("gis", "tabella", "raster", "modello3d")
+MOTIVO_SCELTA = "scelto a mano nell'inventario"
+MOTIVO_ESCLUSO = "escluso nell'inventario"
+
+
+def _ruolo_scelta(r):
+    if r is None:
+        return None
+    r = str(r).strip().lower()
+    return _ALIAS_SCELTA.get(r, r) or None
+
+
+def _normalizza_scelte(scelte):
+    """{percorso: {"usa": bool, "ruolo": str}}; accetta anche {percorso: bool} e {percorso: "ruolo"}."""
+    out = {}
+    for p, x in (scelte or {}).items():
+        if not p:
+            continue
+        if isinstance(x, bool):
+            x = {"usa": x}
+        elif isinstance(x, str):
+            x = {"ruolo": x}
+        elif not isinstance(x, dict):
+            continue
+        d = {}
+        if x.get("usa") is not None:
+            d["usa"] = bool(x["usa"])
+        r = _ruolo_scelta(x.get("ruolo"))
+        if r:
+            d["ruolo"] = r
+        if d:
+            out[str(p)] = d
+    return out
+
+
+def _unisci_scelte(*elenchi):
+    """Le scelte di più elenchi (gli ultimi prevalgono), unite per percorso."""
+    out, chiavi = {}, {}
+    for e in elenchi:
+        for p, x in _normalizza_scelte(e).items():
+            k = _chiave_percorso(p)
+            if k in chiavi:
+                out[chiavi[k]] = dict(out[chiavi[k]], **x)
+            else:
+                chiavi[k] = p
+                out[p] = dict(x)
+    return out
+
+
+def _risolvi_scelte(scelte, inv):
+    """Le scelte con i percorsi delle voci dell'inventario: una chiave può essere anche il percorso relativo
+    alla cartella esaminata («foto/US12.jpg», anche per i file dentro un archivio) o la sua parte finale."""
+    voci = [v for v in (inv or {}).get("voci") or [] if v.get("percorso")]
+    if not scelte or not voci:
+        return dict(scelte or {})
+    presenti = {_chiave_percorso(v["percorso"]) for v in voci}
+    out = {}
+    for p, x in scelte.items():
+        if _chiave_percorso(p) not in presenti and not os.path.exists(p):
+            rel = str(p).replace("\\", "/").strip("/")
+            trovate = [v for v in voci if str(v.get("relativo") or "").replace("\\", "/") == rel] or \
+                [v for v in voci if str(v.get("relativo") or "").replace("\\", "/").endswith("/" + rel)]
+            if len(trovate) == 1:
+                p = trovate[0]["percorso"]
+        out[p] = dict(out.get(p) or {}, **x)
+    return out
+
+
+def _destinazione_ruolo(ruolo):
+    m = _modulo_inventario()
+    return (getattr(m, "DESTINAZIONE", None) or {}).get(ruolo, ruolo)
+
+
+def _inventario_con_scelte(inv, scelte):
+    """Copia dell'inventario con le scelte aggiunte a «scelte» e riportate nelle voci (usa, ruolo, destinazione)."""
+    import copy
+    inv = copy.deepcopy(inv) if inv else dict(radici=[], voci=[], riepilogo={}, note=[])
+    tutte = _unisci_scelte(inv.get("scelte"), scelte)
+    inv["scelte"] = tutte
+    per = {_chiave_percorso(p): x for p, x in tutte.items()}
+    for v in inv.get("voci") or []:
+        x = per.get(_chiave_percorso(v.get("percorso") or ""))
+        if not x:
+            continue
+        if x.get("ruolo") and x["ruolo"] != v.get("ruolo"):
+            v["ruolo"], v["motivo"] = x["ruolo"], MOTIVO_SCELTA
+            v["destinazione"] = _destinazione_ruolo(x["ruolo"])
+        if "usa" in x:
+            v["usa"] = x["usa"]
+    return inv
+
+
+def scelte_inventario(abb):
+    """Le scelte fatte a mano nell'inventario dell'abbinamento ({percorso: {"usa", "ruolo"}})."""
+    return dict((abb.inventario or {}).get("scelte") or {})
+
+
+def _estrai_voce(v, voci=None):
+    """Percorso sul disco del file di una voce dell'inventario: se è rimasto in un archivio, lo si estrae."""
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return v if os.path.isfile(v) else None
+    p = v.get("percorso")
+    if p and os.path.isfile(p):
+        return p
+    f = getattr(_modulo_inventario(), "assicura_estratto", None)
+    if f is None:
+        return None
+    try:
+        return f(v, voci)
+    except Exception:
+        return None
+
+
+def _file_con_scelte(files, inv, scelte):
+    """I file da leggere: senza quelli tolti nell'inventario, con i file di dati spuntati a mano; quelli
+    rimasti in un archivio si estraggono."""
+    voci = (inv or {}).get("voci") or []
+    per_voce = _ruoli_inventario(inv)
+    no = {_chiave_percorso(p) for p, x in (scelte or {}).items() if x.get("usa") is False}
+    out = []
+    for f in files:
+        k = _chiave_percorso(f)
+        if k in no:
+            continue
+        if not os.path.exists(f) and k in per_voce:
+            f = _estrai_voce(per_voce[k], voci) or f
+        out.append(f)
+    presenti = {_chiave_percorso(f) for f in out}
+    for p, x in (scelte or {}).items():
+        k = _chiave_percorso(p)
+        if not x.get("usa") or k in presenti:
+            continue
+        v = per_voce.get(k)
+        cat = v.get("categoria") if v else _categoria_semplice(os.path.splitext(p)[1].lower())
+        if cat not in _CATEGORIE_DATI:
+            continue
+        q = _estrai_voce(v if v else p, voci)
+        if q:
+            out.append(q)
+            presenti.add(k)
+    return out
+
+
+def _file_usati(abb):
+    """Percorsi normalizzati dei file che l'abbinamento usa."""
+    sup = abb.superficie or {}
+    fonti = [l.sorgente for l in abb.layers] + [abb.tabella] + list(abb.tabelle_extra or []) + \
+        [sup.get("sorgente"), sup.get("correzione"), abb.ortofoto] + [m.get("percorso") for m in abb.modelli3d or []]
+    return {_chiave_percorso(f) for f in fonti if f}
+
+
+def _fogli_per_file(abb):
+    """{foglio come lo vede l'applicazione: (file normalizzato, foglio nel file)}, con gli stessi nomi di
+    ``_tutte_le_tabelle`` (i doppioni prendono il nome del file davanti)."""
+    out = {}
+    for f in [abb.tabella] + list(abb.tabelle_extra or []):
+        if not f or not os.path.exists(f):
+            continue
+        try:
+            nomi = list(leggi_tabelle(f))
+        except Exception:
+            continue
+        for nome in nomi:
+            k = nome if nome not in out else f"{os.path.splitext(os.path.basename(f))[0]} · {nome}"
+            out[k] = (_chiave_percorso(f), nome)
+    return out
+
+
+def _rimappa_fogli(abb, prima):
+    """Dopo aver tolto o aggiunto file di tabelle i nomi dei fogli possono cambiare: si aggiornano i
+    riferimenti (fogli tolti -> nessun riferimento)."""
+    dopo = {v: k for k, v in _fogli_per_file(abb).items()}
+    mappa = {k: dopo.get(v) for k, v in prima.items()}
+    if all(k == v for k, v in mappa.items()):
+        return
+
+    def m(x):
+        return mappa[x] if x in mappa else x
+    if abb.foglio_us in mappa:
+        abb.foglio_us = m(abb.foglio_us)
+        if abb.foglio_us is None:
+            abb.colonne_us = {}
+    if abb.foglio_usm in mappa:
+        abb.foglio_usm = m(abb.foglio_usm)
+        if abb.foglio_usm is None:
+            abb.colonne_usm = {}
+    r = abb.rapporti or {}
+    if r.get("foglio") in mappa:
+        abb.rapporti = dict(r, foglio=m(r["foglio"])) if m(r["foglio"]) else {"modo": "nessuno"}
+    abb.rapporti_extra = [dict(e, foglio=m(e.get("foglio"))) for e in abb.rapporti_extra or [] if m(e.get("foglio"))]
+    if abb.fogli_collegati is not None:
+        abb.fogli_collegati = {c: dict(x, foglio=m(x.get("foglio"))) for c, x in abb.fogli_collegati.items()
+                               if m(x.get("foglio"))}
+    abb.colonne_collegate = [dict(c, foglio=m(c.get("foglio"))) for c in abb.colonne_collegate or []
+                             if m(c.get("foglio"))]
+    if abb.fase_composta and abb.fase_composta.get("foglio") in mappa:
+        abb.fase_composta = dict(abb.fase_composta, foglio=m(abb.fase_composta["foglio"])) \
+            if m(abb.fase_composta["foglio"]) else None
+
+
+def _superficie_senza_raster(abb):
+    ha_quote = any((r.ruolo == "quote" and not r.solo_superficie) or r.quote_vertici for r in abb.layers)
+    return {"tipo": "nessuna"} if ha_quote else {"tipo": "costante", "quota": 0.0, "abbassa": 0.0}
+
+
+def _altro_terreno(abb, k, voci):
+    """Un altro modello del terreno dell'inventario (non tolto), per sostituire quello riassegnato."""
+    cand = [v for v in voci or [] if v.get("categoria") == "raster" and v.get("usa") is not False
+            and (v.get("ruolo") in RUOLI_INV_TERRENO) and _chiave_percorso(v.get("percorso") or "") != k]
+    for v in sorted(cand, key=lambda v: -float(v.get("punteggio") or 0)):
+        p = _estrai_voce(v, voci)
+        if p:
+            return p
+    return None
+
+
+def _togli_file(abb, k, nome, note):
+    """Toglie dall'abbinamento un file escluso nell'inventario."""
+    tolto = False
+    for l in abb.layers:
+        if _chiave_percorso(l.sorgente) == k and l.ruolo != "ignora":
+            l.ruolo, l.motivo = "ignora", MOTIVO_ESCLUSO
+            tolto = True
+    if any(f and _chiave_percorso(f) == k for f in [abb.tabella] + list(abb.tabelle_extra or [])):
+        prima = _fogli_per_file(abb)
+        abb.tabelle_extra = [f for f in abb.tabelle_extra or [] if _chiave_percorso(f) != k]
+        if abb.tabella and _chiave_percorso(abb.tabella) == k:
+            abb.tabella = None
+        _rimappa_fogli(abb, prima)
+        tolto = True
+    sup = dict(abb.superficie or {})
+    if sup.get("tipo") == "raster" and _chiave_percorso(sup.get("sorgente") or "") == k:
+        abb.superficie = _superficie_senza_raster(abb)
+        tolto = True
+    elif sup.get("correzione") and _chiave_percorso(sup["correzione"]) == k:
+        sup.pop("correzione")
+        abb.superficie = sup
+        tolto = True
+    if abb.ortofoto and _chiave_percorso(abb.ortofoto) == k:
+        abb.ortofoto = None
+        tolto = True
+    for m in abb.modelli3d or []:
+        if _chiave_percorso(m.get("percorso") or "") == k and not m.get("escluso"):
+            m["escluso"] = True
+            tolto = True
+    if tolto:
+        note.append(f"«{nome}»: {MOTIVO_ESCLUSO}")
+
+
+def _ruolo_layer_scelto(l, ruolo, voc):
+    """Un layer con il ruolo scelto a mano: si completano i campi che il nuovo ruolo richiede."""
+    if l.ruolo == ruolo:
+        return
+    l.ruolo, l.motivo = ruolo, MOTIVO_SCELTA
+    if ruolo == "ignora":
+        return
+    if ruolo != "quote":
+        l.solo_superficie = False
+    if ruolo not in ("us", "usm"):
+        l.quote_vertici = False
+    try:
+        g = leggi_layer(l.sorgente, l.layer)
+    except Exception:
+        g = None
+    if g is None:
+        return
+    if ruolo in ("us", "usm", "quote", "profili", "reperti", "campioni", "sezioni_disegno") and not l.campo_unita:
+        campo, _, _ = _campo_unita(g, set(), voc)
+        if campo:
+            l.campo_unita = campo
+    if ruolo == "quote":
+        if not l.campo_tipo and not l.tipo_predefinito:
+            l.tipo_predefinito = "sup"
+        try:
+            ha_z = bool(g.geometry.has_z.any())
+        except Exception:
+            ha_z = False
+        if l.quota_da == "z" and not ha_z:
+            cq = _campo_quota(g, voc)
+            if cq:
+                l.quota_da = f"campo:{cq}"
+    if ruolo == "profili" and not l.campo_tipo and not l.tipo_predefinito:
+        l.tipo_predefinito = "sup"
+    if ruolo in ("sezioni", "profili", "sezioni_disegno") and not l.campo_sezione:
+        low = {_norm(c): c for c in g.columns}
+        l.campo_sezione = next((low[a] for a in ALIAS_SEZIONE if a in low), None)
+
+
+def _raster_scelto(abb, q, ruolo, voci, nome, note):
+    k = _chiave_percorso(q)
+    sup = dict(abb.superficie or {"tipo": "nessuna"})
+    dem = sup.get("tipo") == "raster" and _chiave_percorso(sup.get("sorgente") or "") == k
+    if ruolo != "ortofoto" and abb.ortofoto and _chiave_percorso(abb.ortofoto) == k:
+        abb.ortofoto = None
+    if ruolo != "differenza" and sup.get("correzione") and _chiave_percorso(sup["correzione"]) == k:
+        sup.pop("correzione")
+    if ruolo == "dem":
+        sup = dict(sup, tipo="raster", sorgente=q)
+        sup.setdefault("abbassa", 0.0)
+        sup.pop("quota", None)
+    elif ruolo in ("differenza", "ortofoto") and dem:
+        altro = _altro_terreno(abb, k, voci)
+        if altro:
+            sup["sorgente"] = altro
+        else:
+            sup = _superficie_senza_raster(abb)
+    if ruolo == "differenza":
+        if sup.get("tipo") != "raster":
+            altro = _altro_terreno(abb, k, voci)
+            if not altro:
+                abb.superficie = sup
+                note.append(f"«{nome}»: correzione della superficie senza un modello del terreno: non usata")
+                return
+            sup = {"tipo": "raster", "sorgente": altro, "abbassa": 0.0}
+        sup["correzione"] = q
+    if ruolo == "ortofoto":
+        abb.ortofoto = q
+    abb.superficie = sup
+    note.append(f"«{nome}»: {_destinazione_ruolo(ruolo)} ({MOTIVO_SCELTA})")
+
+
+def _colonna_numeri(df):
+    """La prima colonna con i numeri delle unità (quasi tutti interi)."""
+    for c in df.columns:
+        v = df[c].dropna()
+        if len(v) and np.mean([_intero(x) is not None for x in v]) >= 0.8:
+            return c
+    return None
+
+
+def _libera_foglio(abb, foglio, ruolo):
+    """Il foglio non ha più il ruolo di prima."""
+    r = abb.rapporti or {}
+    if abb.foglio_us == foglio and ruolo != "schede_us":
+        abb.foglio_us, abb.colonne_us = None, {}
+        abb.rapporti_extra = [e for e in abb.rapporti_extra or [] if e.get("foglio") != foglio]
+        if r.get("modo") in ("colonne", "testo"):
+            abb.rapporti = {"modo": "nessuno"}
+    if abb.foglio_usm == foglio and ruolo != "schede_usm":
+        abb.foglio_usm, abb.colonne_usm = None, {}
+    if r.get("modo") == "foglio" and r.get("foglio") == foglio and ruolo != "rapporti":
+        abb.rapporti = {"modo": "nessuno"}
+    if abb.fogli_collegati is not None:
+        abb.fogli_collegati = {c: x for c, x in abb.fogli_collegati.items()
+                               if x.get("foglio") != foglio or _FOGLIO_COLLEGATO.get(ruolo) == c}
+
+
+def _tabella_scelta(abb, q, ruolo, voc, nome, note):
+    k = _chiave_percorso(q)
+    prima = _fogli_per_file(abb)
+    file_tab = [f for f in [abb.tabella] + list(abb.tabelle_extra or []) if f]
+    if not any(_chiave_percorso(f) == k for f in file_tab):
+        abb.tabelle_extra = list(abb.tabelle_extra or []) + [q]
+    if ruolo == "schede_us" and not (abb.tabella and _chiave_percorso(abb.tabella) == k):
+        abb.tabelle_extra = [f for f in [abb.tabella] + list(abb.tabelle_extra or []) if f and _chiave_percorso(f) != k]
+        abb.tabella = q
+    _rimappa_fogli(abb, prima)
+    fogli = [f for f, (kf, _) in _fogli_per_file(abb).items() if kf == k]
+    if not fogli:
+        return
+    tabs = _tutte_le_tabelle(abb)
+    spieg = abb.spiegazioni
+    foglio, col = fogli[0], None
+    if ruolo in ("schede_us", "schede_usm"):
+        trovati = _schede({f: tabs[f] for f in fogli}, voc)[0 if ruolo == "schede_us" else 1]
+        if trovati[0]:
+            foglio, col = trovati
+        col = col or _colonna_numeri(tabs[foglio])
+        if col is None:
+            note.append(f"«{nome}»: nessuna colonna con i numeri delle unità: non usato come "
+                        f"«{_destinazione_ruolo(ruolo)}»")
+            return
+    df = tabs[foglio]
+    _libera_foglio(abb, foglio, ruolo)
+    if ruolo == "schede_us":
+        abb.foglio_us = foglio
+        abb.colonne_us = _colonne_scheda(df, col, sc.C_US, voc, foglio, spieg)
+        if (abb.rapporti or {}).get("modo") != "foglio":
+            abb.rapporti = _rapporti(tabs, foglio, voc, spieg, col)
+        abb.vocabolari = dict(abb.vocabolari or {}, **_proponi_vocabolari(abb, tabs, voc))
+    elif ruolo == "schede_usm":
+        abb.foglio_usm = foglio
+        abb.colonne_usm = _colonne_scheda(df, col, sc.C_USM, voc, foglio, spieg)
+    elif ruolo == "rapporti":
+        r = _rapporti({foglio: df}, None, voc, spieg)
+        if r.get("modo") != "foglio":
+            note.append(f"«{nome}»: rapporti non riconosciuti (servono le colonne unità, rapporto, unità correlata)")
+            return
+        abb.rapporti = r
+        abb.vocabolari = dict(abb.vocabolari or {}, **_proponi_vocabolari(abb, tabs, voc))
+    elif ruolo in _FOGLIO_COLLEGATO:
+        canon = _FOGLIO_COLLEGATO[ruolo]
+        if abb.fogli_collegati is None:
+            usati = {abb.foglio_us, abb.foglio_usm,
+                     abb.rapporti.get("foglio") if (abb.rapporti or {}).get("modo") == "foglio" else None}
+            abb.fogli_collegati = _proponi_collegati(tabs, usati, voc)
+        coll = {c: x for c, x in abb.fogli_collegati.items() if x.get("foglio") != foglio and c != canon}
+        coll[canon] = {"foglio": foglio, "colonne": _mappa_alias(df, canon, voc, foglio, spieg)}
+        abb.fogli_collegati = coll
+    # gruppi e datazioni: la tabella si legge con le altre e resta nel progetto così com'è
+    note.append(f"«{nome}»: {_destinazione_ruolo(ruolo)} ({MOTIVO_SCELTA})")
+
+
+def _aggiungi_file(abb, q, v, cat, ruolo, voc, nome, note):
+    """Un file di dati spuntato a mano che la proposta non usa: si aggiunge."""
+    if cat == "gis":
+        try:
+            info, _ = esamina([q])
+        except Exception as e:
+            note.append(f"«{nome}»: {e}")
+            return
+        r0 = ruolo or v.get("ruolo")
+        for li in info:
+            l = RuoloLayer(li.sorgente, li.layer, "ignora", motivo=MOTIVO_SCELTA)
+            abb.layers.append(l)
+            if r0 in RUOLI_SCELTA_LAYER and len(info) == 1:
+                _ruolo_layer_scelto(l, r0, voc)
+            if abb.crs is None and li.crs:
+                abb.crs = li.crs
+    elif cat == "tabella":
+        abb.tabelle_extra = list(abb.tabelle_extra or []) + [q]
+    elif cat == "modello3d":
+        abb.modelli3d.append({"percorso": q, "spostamento": [0.0, 0.0, 0.0]})
+    elif cat != "raster":
+        return
+    note.append(f"«{nome}»: aggiunto a mano nell'inventario")
+
+
+def applica_scelte_inventario(abb, scelte=None):
+    """Applica all'abbinamento le scelte fatte a mano nell'inventario: ``scelte`` = {percorso: {"usa": bool,
+    "ruolo": str}} (senza: quelle già in ``abb.inventario["scelte"]``). Un file tolto (usa False) non si
+    usa più (layer ignorati, tabelle, raster e modelli 3D tolti, foto e documenti non collegati); un file di
+    dati spuntato che la proposta non usava si aggiunge. Il ruolo cambia la proposta (per i file spuntati;
+    a un file non spuntato dall'inventario serve anche "usa": True): un layer (con un solo
+    layer nel file) prende il ruolo scelto; un raster diventa «dem» (superficie di riferimento),
+    «differenza» (correzione della superficie) o «ortofoto»; una tabella diventa schede_us, schede_usm,
+    rapporti, materiali, documentazione, fasi, campioni (gruppi, datazioni: si legge e resta così com'è);
+    un'immagine foto, disegno o scansione. Le scelte restano in ``abb.inventario["scelte"]``. Ritorna le
+    note (aggiunte anche ad ``abb.note``)."""
+    if scelte is not None:
+        nuove = _risolvi_scelte(_unisci_scelte(scelte), abb.inventario)
+        if not nuove:
+            return []
+        abb.inventario = _inventario_con_scelte(abb.inventario, nuove)
+    else:
+        nuove = _unisci_scelte((abb.inventario or {}).get("scelte"))
+        if not nuove:
+            return []
+    voci = abb.inventario.get("voci") or []
+    per_voce = _ruoli_inventario(abb.inventario)
+    voc = vocabolario_per(abb)
+    note = []
+    for p, x in nuove.items():
+        k = _chiave_percorso(p)
+        v = per_voce.get(k) or {}
+        nome = v.get("nome") or os.path.basename(p)
+        cat = v.get("categoria") or _categoria_semplice(os.path.splitext(p)[1].lower())
+        ruolo = x.get("ruolo")
+        if x.get("usa") is False:
+            _togli_file(abb, k, nome, note)
+            continue
+        if cat not in _CATEGORIE_DATI or (x.get("usa") is None and not ruolo):
+            continue                      # foto, disegni e documenti: vale la voce dell'inventario
+        if v.get("usa") is False:
+            continue                      # destinazione cambiata a un file non spuntato: resta nella voce
+        q = _estrai_voce(v if v else p, voci)
+        if not q:
+            continue
+        if k not in _file_usati(abb):
+            _aggiungi_file(abb, q, v, cat, ruolo, voc, nome, note)
+            if not ruolo and v.get("ruolo") and cat in ("tabella", "raster"):
+                ruolo = v["ruolo"]
+        if not ruolo:
+            continue
+        if cat == "gis" and ruolo in RUOLI_SCELTA_LAYER:
+            layers = [l for l in abb.layers if _chiave_percorso(l.sorgente) == k]
+            if len(layers) == 1:
+                _ruolo_layer_scelto(layers[0], ruolo, voc)
+            elif len(layers) > 1:
+                note.append(f"«{nome}» ha {len(layers)} layer: il ruolo si sceglie layer per layer")
+        elif cat == "raster" and ruolo in RUOLI_SCELTA_RASTER:
+            _raster_scelto(abb, q, ruolo, voci, nome, note)
+        elif cat == "tabella" and ruolo in RUOLI_SCELTA_TABELLA:
+            _tabella_scelta(abb, q, ruolo, voc, nome, note)
+    abb.note.extend(note)
+    return note
+
+
+def _scelte_della_ricetta(scelte, inv_ricetta, inv):
+    """Le scelte di una ricetta riportate ai file di adesso: stesso percorso o stesso percorso relativo."""
+    rel = {_chiave_percorso(v["percorso"]): v.get("relativo") for v in (inv_ricetta or {}).get("voci") or []
+           if v.get("percorso")}
+    per_rel = {}
+    for v in (inv or {}).get("voci") or []:
+        if v.get("relativo") and v.get("percorso"):
+            per_rel.setdefault(v["relativo"], v["percorso"])
+    presenti = set(_ruoli_inventario(inv))
+    out = {}
+    for p, x in _normalizza_scelte(scelte).items():
+        k = _chiave_percorso(p)
+        if k in presenti:
+            out[p] = x
+        elif rel.get(k) in per_rel:
+            out[per_rel[rel[k]]] = x
+    return out
 
 
 # ============================================================================ applicazione
@@ -1477,6 +2302,184 @@ def risolvi_file(valori, basi, profondita=4, massimo=50000):
             trovato = cerca(os.path.basename(s))
         out.append(os.path.abspath(trovato) if trovato else None)
     return out
+
+
+# ============================================================================ documentazione dai file
+_PAROLE_REGISTRO = ("photo", "foto", "drawing", "disegn", "registro", "register", "media", "image", "immagin",
+                    "plan", "tavol", "scans", "scansion")
+TIPI_DOCUMENTO = {"foto": "Foto", "disegno": "Disegno", "scansione": "Scansione"}
+_US_NEL_NOME = re.compile(r"(?:^|[^a-z])(?:usm|us|su|ctx|context|ue|sk)[\s_.\-]*(\d{1,6})(?!\d)", re.I)
+
+
+def _documenti_semplici(voci, unita):
+    """Ripiego senza ``documenti_auto``: immagini con il numero dell'unità nel nome («US1005_N.jpg»)."""
+    unita = {int(u) for u in unita}
+    coll, non = {}, []
+    for v in voci:
+        if v.get("categoria") != "immagine":
+            continue
+        trovate = [int(m) for m in _US_NEL_NOME.findall(os.path.splitext(v.get("nome") or "")[0])]
+        trovate = [u for u in dict.fromkeys(trovate) if u in unita]
+        if not trovate:
+            non.append(v["percorso"])
+        for u in trovate:
+            coll.setdefault(u, []).append(dict(percorso=v["percorso"], tipo="foto",
+                                               motivo=f"numero dell'unità nel nome del file ({u})"))
+    return dict(collegamenti=coll, non_collegati=non, note=[])
+
+
+def _e_registro(nome, df):
+    """Vero per una tabella che sembra un registro di foto o disegni (con nomi di file o numeri di unità)."""
+    n = _norm(nome)
+    return any(p in n for p in _PAROLE_REGISTRO) and len(df.columns) >= 2 and len(df) > 0
+
+
+def _documentazione_dai_file(s, abb, tabs, collegati, tutte, note):
+    """Foto e disegni trovati nelle cartelle (inventario) collegati alle unità del progetto, nella tabella
+    «Documentazione»: si crea se manca, si completa se esiste ma molti file citati non si trovano (o non ne
+    cita nessuno). Prima si ritrovano per nome i file citati e mancanti, poi si aggiungono quelli nuovi."""
+    voci, fuori, esclusi = [], 0, set()
+    tutte_le_voci = abb.inventario.get("voci") or []
+    da_estrarre = {}             # file ancora nell'archivio (le foto di un archivio grande): si estraggono se servono
+    for v in tutte_le_voci:
+        if not v.get("percorso") or v.get("categoria") not in ("immagine", "documento", None):
+            continue
+        if v.get("usa") is False:               # tolto a mano nell'inventario: non si collega
+            esclusi.add(_chiave_percorso(v["percorso"]))
+            continue
+        if not os.path.isfile(v["percorso"]):
+            if not (v.get("archivio") and v.get("membro")):
+                fuori += v.get("categoria") == "immagine"      # spostate, o non più nell'archivio
+                continue
+            da_estrarre[_chiave_percorso(v["percorso"])] = v
+        if v.get("categoria") == "immagine" and v.get("ruolo") in TIPI_DOCUMENTO and "tipo" not in v:
+            v = dict(v, tipo=v["ruolo"])         # tipo già riconosciuto dall'inventario: non si riapre il file
+        voci.append(v)
+    n_esclusi = len(esclusi)
+    esclusi |= {_chiave_percorso(p) for p, x in (abb.inventario.get("scelte") or {}).items() if x.get("usa") is False}
+
+    estratti = {}
+
+    def sul_disco(p):
+        """Il percorso se il file c'è (estratto ora dall'archivio, se serve), altrimenti None."""
+        k = _chiave_percorso(p)
+        if k not in da_estrarre:
+            return p
+        if k not in estratti:
+            estratti[k] = _estrai_voce(da_estrarre[k], tutte_le_voci)
+        return estratti[k]
+    doc = s.tabelle.get(sc.S_DOC)
+    if doc is not None and esclusi and "Percorso file" in doc.columns:
+        tolti = doc["Percorso file"].map(lambda p: isinstance(p, str) and _chiave_percorso(p) in esclusi)
+        if tolti.any():
+            doc = doc.copy()
+            doc.loc[tolti, "Percorso file"] = None
+            s.tabelle[sc.S_DOC] = doc
+    if n_esclusi:
+        note.append(f"Documentazione: {n_esclusi} file esclusi nell'inventario non collegati")
+    citati = trovati = 0
+    if doc is not None and len(doc):
+        if "Percorso file" in doc.columns:
+            trovati = int(doc["Percorso file"].notna().sum())
+            citati = int(doc["File"].notna().sum()) if "File" in doc.columns else trovati
+            if citati and trovati >= 0.5 * citati and trovati >= 0.5 * len(doc):
+                return               # la documentazione dell'archivio basta
+    # ---- file citati e non trovati nelle cartelle della tabella: si cercano per nome nell'inventario
+    per_nome = {}
+    for v in voci:
+        per_nome.setdefault(str(v.get("nome") or os.path.basename(v["percorso"])).lower(), v["percorso"])
+    if doc is not None and "File" in doc.columns:
+        doc = doc.copy()
+        if "Percorso file" not in doc.columns:
+            doc["Percorso file"] = None
+        ritrovati = 0
+        for i in doc.index[doc["Percorso file"].isna() & doc["File"].notna()]:
+            nome = os.path.basename(str(doc.at[i, "File"]).replace("\\", "/")).lower()
+            if nome in per_nome and sul_disco(per_nome[nome]):
+                doc.at[i, "Percorso file"] = os.path.abspath(per_nome[nome])
+                ritrovati += 1
+        if ritrovati:
+            note.append(f"Documentazione: {ritrovati} file citati ritrovati nelle cartelle esaminate")
+    # ---- collegamenti automatici: registro di foto/disegni tra le tabelle, poi nomi e cartelle dei file
+    try:
+        from . import documenti_auto as da
+    except ImportError:
+        da = None
+    risultati = []
+    unita = sorted(int(u) for u in tutte)
+    if da is not None and hasattr(da, "collega_da_registro"):
+        registri = [spec.get("foglio") for c, spec in (collegati or {}).items() if c == sc.S_DOC]
+        registri += [n for n, t in tabs.items() if _e_registro(n, t)]
+        for nome in dict.fromkeys(x for x in registri if x in tabs):
+            try:
+                r_reg = da.collega_da_registro(tabs[nome], voci, unita_note=unita)
+                if r_reg.get("collegamenti"):           # un elenco senza file né numeri di scatto non serve
+                    risultati.append(r_reg)
+            except Exception as e:
+                note.append(f"Registro «{nome}» non usato per la documentazione: {e}")
+    if da is not None and hasattr(da, "documenti_per_unita"):
+        risultati.append(da.documenti_per_unita(voci, unita_note=unita))
+    else:
+        risultati.append(_documenti_semplici(voci, unita))
+    if da is not None and hasattr(da, "unisci") and len(risultati) > 1:
+        risultati = [da.unisci(*risultati)]
+    gia = set()            # (file, unità) già nella tabella
+    if doc is not None and "Percorso file" in doc.columns:
+        uu = doc["US/USM"].map(_intero) if "US/USM" in doc.columns else pd.Series([None] * len(doc), index=doc.index)
+        gia = {(_chiave_percorso(p), u) for p, u in zip(doc["Percorso file"], uu) if isinstance(p, str) and p}
+    relativi = {_chiave_percorso(v["percorso"]): v.get("relativo") or v.get("nome") for v in voci}
+    righe, ids = [], set(doc["ID"].astype(str)) if doc is not None and "ID" in doc.columns else set()
+    non_collegati = set()
+    for ris in risultati:
+        non_collegati |= {_chiave_percorso(x if isinstance(x, str) else x.get("percorso", ""))
+                          for x in ris.get("non_collegati") or []}
+        for n in ris.get("note") or []:
+            note.append(_testo_nota(n))
+        for u, elenco in (ris.get("collegamenti") or {}).items():
+            u = _intero(u)
+            if u is None or u not in tutte:
+                continue
+            for d in elenco or []:
+                p = d.get("percorso") if isinstance(d, dict) else d
+                if not p:
+                    continue
+                k = _chiave_percorso(p)
+                if (k, u) in gia or k in esclusi:
+                    continue
+                gia.add((k, u))
+                if not sul_disco(p):             # rimasto nell'archivio e non estraibile
+                    continue
+                id_ = os.path.splitext(os.path.basename(p))[0]
+                base_id, j = id_, 2
+                while id_ in ids:
+                    id_, j = f"{base_id} ({j})", j + 1
+                ids.add(id_)
+                tipo = d.get("tipo") if isinstance(d, dict) else None
+                righe.append({"ID": id_, "Tipo": TIPI_DOCUMENTO.get(str(tipo or "").lower(), tipo or "Foto"),
+                              "US/USM": u, "Soggetto": os.path.basename(p), "File": relativi.get(k) or os.path.basename(p),
+                              "Percorso file": os.path.abspath(p), "Collegamento": "automatico",
+                              "Note": (d.get("motivo") if isinstance(d, dict) else None) or ""})
+    collegati_ora = {_chiave_percorso(r["Percorso file"]) for r in righe}
+    non_collegati -= collegati_ora
+    if righe:
+        nuove = pd.DataFrame(righe)
+        doc = nuove if doc is None or not len(doc) else pd.concat([doc, nuove], ignore_index=True)
+        n_u = len({r["US/USM"] for r in righe})
+        note.append(f"Documentazione dai file: {len(collegati_ora)} file collegati a {n_u} unità"
+                    + (f" ({len(non_collegati)} " + ("immagine non collegata" if len(non_collegati) == 1 else
+                                                         "immagini non collegate") + " a nessuna unità)"
+                       if non_collegati else ""))
+    elif non_collegati:
+        note.append(f"Documentazione dai file: nessuna delle {len(non_collegati)} immagini trovate è collegata "
+                    "a un'unità del progetto")
+    fuori += sum(1 for q in estratti.values() if q is None)
+    if fuori:
+        note.append(f"Documentazione: {fuori} immagini dell'inventario non sono sul disco (non estratte "
+                    "dall'archivio o spostate): non collegate")
+    if estratti and any(estratti.values()):
+        note.append(f"Documentazione: {sum(1 for q in estratti.values() if q)} file estratti dagli archivi")
+    if doc is not None:
+        s.tabelle[sc.S_DOC] = doc
 
 
 def _rinomina(df, colonne):
@@ -1741,6 +2744,122 @@ def _proponi_vocabolari(abb, tabs, voc=None):
     return voc
 
 
+def _fogli_della_ricetta(r):
+    """Nomi dei fogli (o tabelle) che la ricetta usa."""
+    nomi = [r.foglio_us, r.foglio_usm]
+    if (r.rapporti or {}).get("modo") != "nessuno":
+        nomi.append((r.rapporti or {}).get("foglio"))
+    nomi += [e.get("foglio") for e in r.rapporti_extra or []]
+    nomi += [v.get("foglio") for v in (r.fogli_collegati or {}).values()]
+    nomi += [c.get("foglio") for c in r.colonne_collegate or []]
+    nomi.append((r.fase_composta or {}).get("foglio"))
+    return [x for x in dict.fromkeys(nomi) if x]
+
+
+def _completa_da_inventario(out, r, note):
+    """Aggiunge all'abbinamento ``out`` i file dell'inventario che la ricetta ``r`` chiede e che la proposta
+    non ha preso: layer con il nome dei suoi (anche con *), tabelle con il nome dei suoi fogli, il modello
+    del terreno. Così una ricetta funziona anche quando si indica la cartella dell'archivio."""
+    import fnmatch
+    from .superficie import EST_RASTER
+    tolti = {_chiave_percorso(p) for p, x in ((out.inventario or {}).get("scelte") or {}).items()
+             if x.get("usa") is False}
+    voci = [v for v in (out.inventario or {}).get("voci") or [] if v.get("percorso") and os.path.isfile(v["percorso"])
+            and _chiave_percorso(v["percorso"]) not in tolti]
+    if not voci:
+        return
+    presenti = {_chiave_percorso(p) for p in [l.sorgente for l in out.layers] + [out.tabella] +
+                list(out.tabelle_extra or []) if p}
+    # ---- layer
+    schemi = [x.layer.lower() for x in r.layers if x.layer and x.layer != "*" and x.ruolo != "ignora"]
+    mancano = [s for s in schemi if not any(fnmatch.fnmatch(l.layer.lower(), s) for l in out.layers)]
+    nuovi = []
+    if mancano:
+        for v in voci:
+            p = v["percorso"]
+            ext = os.path.splitext(p)[1].lower()
+            if ext not in EST_GIS or ext == ".dxf" or _chiave_percorso(p) in presenti:
+                continue
+            if ext in EST_CONTENITORI:
+                try:
+                    nomi = [n.lower() for n, _ in pyogrio.list_layers(p)]
+                except Exception:
+                    continue
+            else:
+                nomi = [os.path.splitext(os.path.basename(p))[0].lower()]
+            if any(fnmatch.fnmatch(n, s) for n in nomi for s in mancano):
+                nuovi.append(p)
+                presenti.add(_chiave_percorso(p))
+    if nuovi:
+        try:
+            info, _ = esamina(nuovi)
+        except Exception as e:
+            info = []
+            note.append(f"File dell'inventario non letti: {e}")
+        aggiunti = 0
+        for li in info:
+            if any(fnmatch.fnmatch(li.layer.lower(), s) for s in mancano):
+                out.layers.append(RuoloLayer(li.sorgente, li.layer, "ignora", motivo="trovato nell'inventario"))
+                aggiunti += 1
+                if out.crs is None and li.crs:
+                    out.crs = li.crs
+        if aggiunti:
+            note.append(f"{aggiunti} layer della ricetta trovati nell'inventario delle cartelle: "
+                        + ", ".join(sorted({os.path.basename(p) for p in nuovi})))
+    # ---- tabelle
+    fogli = _fogli_della_ricetta(r)
+    if fogli:
+        noti = set()
+        for f in [out.tabella] + list(out.tabelle_extra or []):
+            if f and os.path.exists(f):
+                try:
+                    noti |= set(leggi_tabelle(f))
+                except Exception:
+                    pass
+        cercati = {_norm(x): x for x in fogli if x not in noti}
+        trovati = []
+        excel = 0
+        for v in voci:
+            if not cercati:
+                break
+            p = v["percorso"]
+            ext = os.path.splitext(p)[1].lower()
+            if _chiave_percorso(p) in presenti or not (ext == ".csv" or ext in EST_TAB):
+                continue
+            if ext == ".csv":
+                k = _norm(os.path.splitext(os.path.basename(p))[0])
+                nomi = [k] if k in cercati else []
+            else:
+                excel += 1
+                if excel > 30:
+                    continue
+                try:
+                    nomi = [_norm(n) for n in pd.ExcelFile(p).sheet_names if _norm(n) in cercati]
+                except Exception:
+                    nomi = []
+            if nomi:
+                trovati.append(p)
+                presenti.add(_chiave_percorso(p))
+                for k in nomi:
+                    cercati.pop(k, None)
+        if trovati:
+            if out.tabella is None:
+                out.tabella = trovati[0]
+                out.tabelle_extra = list(out.tabelle_extra or []) + trovati[1:]
+            else:
+                out.tabelle_extra = list(out.tabelle_extra or []) + trovati
+            note.append(f"{len(trovati)} tabelle della ricetta trovate nell'inventario delle cartelle: "
+                        + ", ".join(os.path.basename(p) for p in trovati))
+    # ---- modello del terreno, se la ricetta ne usa uno e la proposta non l'ha trovato
+    if (r.superficie or {}).get("tipo") == "raster" and (out.superficie or {}).get("tipo") != "raster":
+        cand = [v for v in voci if os.path.splitext(v["percorso"])[1].lower() in EST_RASTER
+                and (v.get("ruolo") in RUOLI_INV_TERRENO or v.get("destinazione") in RUOLI_INV_TERRENO)]
+        if cand:
+            p = max(cand, key=lambda v: float(v.get("punteggio") or 0))["percorso"]
+            out.superficie = {"tipo": "raster", "sorgente": p, "abbassa": 0.0}
+            note.append(f"Modello del terreno «{os.path.basename(p)}» trovato nell'inventario delle cartelle")
+
+
 def applica_ricetta(abb, ricetta):
     """Adatta una ricetta salvata (o pronta) ai file di adesso: layer riconosciuti per nome (anche con *),
     fogli e colonne se esistono, trasformazioni copiate. Ritorna (abbinamento, note)."""
@@ -1749,6 +2868,10 @@ def applica_ricetta(abb, ricetta):
     r = ricetta if isinstance(ricetta, Abbinamento) else Abbinamento.da_json(ricetta)
     out = copy.deepcopy(abb)
     note = []
+    if out.inventario:
+        # dati indicati per cartella: i layer e le tabelle della ricetta che la proposta non ha preso
+        # si cercano tra tutti i file dell'inventario
+        _completa_da_inventario(out, r, note)
     n = 0
     for l in out.layers:
         cand = [x for x in r.layers if fnmatch.fnmatch(l.layer.lower(), x.layer.lower()) and
@@ -1811,6 +2934,13 @@ def applica_ricetta(abb, ricetta):
             note.append("La ricetta usa un modello del terreno: aggiungilo ai file")
     elif sup.get("tipo") not in (None, "nessuna"):
         out.superficie = sup
+    # le scelte fatte a mano nell'inventario della ricetta (file tolti, destinazioni cambiate) valgono per i
+    # file di adesso con lo stesso percorso, o con lo stesso percorso dentro la cartella
+    scelte = _scelte_della_ricetta((r.inventario or {}).get("scelte"), r.inventario, out.inventario)
+    if scelte:
+        prima = len(out.note)
+        note.extend(applica_scelte_inventario(out, scelte))
+        del out.note[prima:]             # le note tornano con quelle della ricetta
     return out, note
 
 
@@ -2306,6 +3436,11 @@ def applica(abb, log=None):
         note.append(f"Foglio «{nome}» letto come «{canon}»")
     if fasi_composte is not None and sc.S_FASI not in s.tabelle:
         s.tabelle[sc.S_FASI] = fasi_composte
+    if abb.inventario and (abb.inventario.get("voci") or []):
+        try:
+            _documentazione_dai_file(s, abb, tabs, collegati, tutte, note)
+        except Exception as e:          # la documentazione non deve fermare l'importazione
+            note.append(f"Documentazione dai file non creata: {e}")
 
     # ------------------------------------------------ quote: US mancanti e tipi coerenti con la scheda
     if sc.L_QUOTE in s.layers:

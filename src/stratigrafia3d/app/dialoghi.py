@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Finestre di dialogo native per scegliere file e percorsi di salvataggio.
+"""Finestre di dialogo native per scegliere file, cartelle e percorsi di salvataggio.
 
 Con la finestra dell'app (pywebview) si usano i suoi dialoghi; altrimenti si apre un
 dialogo Tk in un processo separato (sicuro rispetto ai thread del server).
@@ -29,7 +29,10 @@ from tkinter import filedialog
 a = json.loads(sys.argv[1])
 r = tk.Tk(); r.withdraw(); r.attributes("-topmost", True)
 ft = [tuple(x) for x in a["filtri"]] + [(a["tutti"], "*.*")]
-if a["tipo"] == "apri":
+if a["tipo"] == "cartella":
+    p = filedialog.askdirectory(mustexist=True)
+    p = [p] if p else []
+elif a["tipo"] == "apri":
     p = filedialog.askopenfilenames(filetypes=ft) if a["multiplo"] else filedialog.askopenfilename(filetypes=ft)
     p = list(p) if a["multiplo"] else ([p] if p else [])
 else:
@@ -39,15 +42,32 @@ print(json.dumps(p))
 """
 
 
+def _tipo_webview(webview, tipo):
+    """Costante del dialogo di pywebview (nomi vecchi e nuovi: OPEN_DIALOG / FileDialog.OPEN)."""
+    vecchio = {"apri": "OPEN_DIALOG", "salva": "SAVE_DIALOG", "cartella": "FOLDER_DIALOG"}[tipo]
+    if hasattr(webview, vecchio):
+        return getattr(webview, vecchio)
+    return getattr(webview.FileDialog, {"apri": "OPEN", "salva": "SAVE", "cartella": "FOLDER"}[tipo])
+
+
 def scegli(tipo="apri", filtri=("dati",), multiplo=False, nome=None):
-    """Ritorna una lista di percorsi (vuota se annullato) oppure None se nessun dialogo è disponibile."""
+    """Ritorna una lista di percorsi (vuota se annullato) oppure None se nessun dialogo è disponibile.
+
+    ``tipo``: "apri" (uno o più file), "salva" (un percorso nuovo) o "cartella" (una cartella)."""
+    if tipo not in ("apri", "salva", "cartella"):
+        tipo = "apri"
     from ..lingue import t
     ft = [(t(FILTRI[f][0]), FILTRI[f][1]) for f in filtri if f in FILTRI]
     est = ft[0][1].split()[0].lstrip("*") if ft and tipo == "salva" else ""
     if FINESTRA is not None:
         try:
             import webview
-            kind = webview.OPEN_DIALOG if tipo == "apri" else webview.SAVE_DIALOG
+            kind = _tipo_webview(webview, tipo)
+            if tipo == "cartella":
+                r = FINESTRA.create_file_dialog(kind, allow_multiple=multiplo)
+                if r is None:
+                    return []
+                return [r] if isinstance(r, str) else list(r)
             tipi = tuple(f"{d} ({p.replace(' ', ';')})" for d, p in ft) + (t("Tutti i file") + " (*.*)",)
             r = FINESTRA.create_file_dialog(kind, allow_multiple=multiplo, file_types=tipi,
                                             save_filename=nome or "")

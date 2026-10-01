@@ -146,11 +146,54 @@ def cmd_app(a):
     avvia(a.progetto, finestra=not a.browser, porta=a.porta, browser=not a.senza_browser)
 
 
+def _carica_ricetta(importa, nome):
+    """Una ricetta pronta (per chiave, es. «framework_archaeology») o un file JSON salvato."""
+    if os.path.isfile(nome):
+        return importa.Abbinamento.carica_profilo(nome)
+    pronte = importa.ricette_pronte()
+    if nome in pronte:
+        return importa.carica_ricetta_pronta(nome)
+    raise SystemExit(f"Ricetta «{nome}» non trovata. Ricette pronte: {', '.join(sorted(pronte))}")
+
+
+def _scelte_da_argomenti(a):
+    """Le scelte sull'inventario date da riga di comando: {percorso: {"usa": bool, "ruolo": str}}."""
+    scelte = {}
+    if getattr(a, "scelte", None):
+        import json
+        with open(a.scelte, encoding="utf-8") as f:
+            scelte.update(json.load(f))
+
+    def chiave(p):          # un file che c'è, oppure il percorso dentro la cartella o l'archivio esaminati
+        return os.path.abspath(p) if os.path.exists(p) else p
+    for p in getattr(a, "escludi", None) or []:
+        scelte[chiave(p)] = dict(scelte.get(chiave(p)) or {}, usa=False)
+    for x in getattr(a, "destinazione", None) or []:
+        p, _, ruolo = x.rpartition("=")
+        if not p or not ruolo:
+            raise SystemExit(f"--destinazione «{x}»: scrivi FILE=RUOLO (es. raster/diff.tif=differenza)")
+        scelte[chiave(p)] = dict(scelte.get(chiave(p)) or {}, ruolo=ruolo, usa=True)
+    return scelte
+
+
 def cmd_importa(a):
     from . import importa
     from .ricostruzione import ricostruisci
-    abb = importa.Abbinamento.carica_profilo(a.profilo) if a.profilo else importa.proponi(a.file)
-    if not a.profilo:
+    if not a.file and not a.profilo:
+        print("Indica i file o le cartelle da importare (oppure --profilo).")
+        return 1
+    scelte = _scelte_da_argomenti(a)
+    if a.profilo and not a.file:
+        # profilo salvato con i percorsi dei suoi file
+        abb = importa.Abbinamento.carica_profilo(a.profilo)
+        for n in importa.applica_scelte_inventario(abb, scelte) if scelte else []:
+            print("  ", n)
+    else:
+        abb = importa.proponi(a.file, scelte=scelte or None)          # file, cartelle e archivi zip
+        ricetta = a.ricetta or a.profilo       # con i file indicati il profilo vale come ricetta
+        if ricetta:
+            abb, note = importa.applica_ricetta(abb, _carica_ricetta(importa, ricetta))
+            abb.note.extend(note)
         for n in abb.note:
             print("  ", n)
         for r in abb.layers:
@@ -171,6 +214,42 @@ def cmd_importa(a):
         ricostruisci(s)
         s.salva(a.output)
         print("Progetto salvato in", a.output)
+    return 0
+
+
+def cmd_inventario(a):
+    from . import importa
+    for p in a.percorsi:
+        if not os.path.exists(p):
+            print(f"«{p}» non esiste.")
+            return 1
+    inv = importa.inventaria(a.percorsi, profondita_max=a.profondita, limite_file=a.limite)
+    if a.json:
+        import json
+        with open(a.json, "w", encoding="utf-8") as f:
+            json.dump(importa._jsonabile(inv), f, ensure_ascii=False, indent=1)
+        print("Inventario salvato in", a.json)
+    m = importa._modulo_inventario()
+    riassunto = m.riassunto_testo(inv) if m is not None and hasattr(m, "riassunto_testo") else None
+    if riassunto is not None and not (a.tutti or a.elenco):
+        print(riassunto)
+        return 0
+    voci = [v for v in inv.get("voci") or [] if a.tutti or v.get("categoria") != "ignorato"]
+    print(f"{'File':60s} {'Categoria':10s} {'Destinazione':40s} {'Punteggio':>9s}")
+    for v in voci:
+        rel = str(v.get("relativo") or v.get("nome") or v.get("percorso"))
+        rel = rel if len(rel) <= 60 else "…" + rel[-59:]
+        pt = v.get("punteggio")
+        dest = str(v.get("destinazione") or "—")
+        dest = dest if len(dest) <= 40 else dest[:39] + "…"
+        print(f"{rel:60s} {str(v.get('categoria') or ''):10s} {dest:40s} "
+              f"{(f'{pt:.2f}' if isinstance(pt, (int, float)) else '—'):>9s}")
+    if riassunto is not None:
+        print(riassunto)
+        return 0
+    for n in inv.get("note") or []:
+        print("  ", importa._testo_nota(n))
+    print(f"{len(voci)} file, {len(inv.get('file_proposta') or [])} proposti per l'importazione.")
     return 0
 
 
@@ -235,13 +314,32 @@ def main(argv=None):
     ap.add_argument("--senza-browser", action="store_true", help="non apre nulla, avvia solo il server")
     ap.set_defaults(f=cmd_app)
 
-    im = sub.add_parser("importa", help="import flessibile di file qualsiasi (GIS, DXF, Excel) con abbinamento automatico")
-    im.add_argument("file", nargs="*"); im.add_argument("--profilo", help="usa un profilo di abbinamento salvato")
+    im = sub.add_parser("importa", help="import flessibile di file qualsiasi (GIS, DXF, Excel), anche di intere "
+                                        "cartelle o archivi zip, con abbinamento automatico")
+    im.add_argument("file", nargs="*", help="file, cartelle o archivi zip")
+    im.add_argument("--profilo", help="usa un profilo di abbinamento salvato (con file o cartelle: come ricetta)")
+    im.add_argument("--ricetta", help="applica una ricetta: pronta (es. framework_archaeology) o file JSON")
     im.add_argument("--salva-profilo"); im.add_argument("-o", "--output", help="crea il progetto .scavo")
     im.add_argument("--forza", action="store_true")
     im.add_argument("--quota-superficie", type=float, help="superficie di riferimento piana a questa quota (m)")
     im.add_argument("--abbassa", type=float, help="abbassa la superficie di riferimento (es. arativo asportato, m)")
+    im.add_argument("--escludi", action="append", metavar="FILE",
+                    help="non usare questo file della cartella (dati, foto o documenti; ripetibile)")
+    im.add_argument("--destinazione", action="append", metavar="FILE=RUOLO",
+                    help="usa il file con questo ruolo (es. us, quote, schede_us, rapporti, materiali, dem, "
+                         "differenza, ortofoto, foto, disegno; ripetibile)")
+    im.add_argument("--scelte", metavar="JSON",
+                    help="file JSON con le scelte sull'inventario: {percorso: {\"usa\": false, \"ruolo\": \"…\"}}")
     im.set_defaults(f=cmd_importa)
+
+    iv = sub.add_parser("inventario", help="esamina cartelle o archivi zip: cosa contengono e cosa importare")
+    iv.add_argument("percorsi", nargs="+", metavar="CARTELLA_O_ZIP")
+    iv.add_argument("--profondita", type=int, default=8, help="livelli di sottocartelle da esaminare")
+    iv.add_argument("--limite", type=int, default=20000, help="numero massimo di file da esaminare")
+    iv.add_argument("--elenco", action="store_true", help="elenca i file uno per uno, prima del riassunto")
+    iv.add_argument("--tutti", action="store_true", help="elenca anche i file ignorati")
+    iv.add_argument("--json", help="salva l'inventario completo in un file JSON")
+    iv.set_defaults(f=cmd_inventario)
 
     a = p.parse_args(argv)
     if a.lingua:

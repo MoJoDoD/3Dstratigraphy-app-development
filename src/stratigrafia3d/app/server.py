@@ -87,18 +87,130 @@ def _problemi(s):
     return [dict(livello=p.livello, codice=p.codice, messaggio=p.messaggio, unita=list(p.unita)) for p in s.verifica()]
 
 
-def _esamina(files):
-    files, note_file = importa.espandi(files)
-    layers, tabelle = importa.esamina(files)
+# ---------------------------------------------------------------------- cartelle e inventario
+CATEGORIE_DATI = ("gis", "tabella", "raster", "modello3d")    # i file che vanno a importa.proponi
+RUOLI_LAYER = {"us", "usm", "quote", "profili", "fondi", "area", "sezioni", "sezioni_disegno", "reperti", "campioni",
+               "ignora"}
+
+
+def _modulo_inventario():
+    """Il modulo dell'inventario delle cartelle, se c'è (si importa solo quando serve)."""
+    import importlib
+    try:
+        return importlib.import_module("stratigrafia3d.inventario")
+    except ModuleNotFoundError as e:
+        if e.name in ("stratigrafia3d.inventario", "stratigrafia3d"):
+            return None
+        raise
+
+
+def _e_radice(p):
+    """Una cartella o un archivio .zip: si inventaria prima di proporre come usarne i file."""
+    return bool(p) and (os.path.isdir(p) or (p.lower().endswith(".zip") and os.path.isfile(p)))
+
+
+def _json_sicuro(x):
+    return json.loads(json.dumps(x, ensure_ascii=False, default=str))
+
+
+def _snella(v, soglia=400):
+    """Una voce dell'inventario senza i dettagli voluminosi (restano i valori brevi)."""
+    if not isinstance(v, dict):
+        return v
+    v = dict(v)
+    d = v.get("dettagli")
+    if d is not None and len(json.dumps(d, ensure_ascii=False, default=str)) > soglia:
+        v["dettagli"] = ({k: x for k, x in d.items() if isinstance(x, (int, float, bool, str)) and len(str(x)) <= 80}
+                         if isinstance(d, dict) else None)
+    if isinstance(v.get("parti"), list):
+        v["parti"] = [_snella(x, soglia) for x in v["parti"][:200]]
+    return v
+
+
+def _file_cartelle_semplice(cartella, profondita_max=8, limite=20000):
+    """Senza il modulo dell'inventario: i file di dati di una cartella, per estensione."""
+    from ..superficie import EST_RASTER
+    from ..modelli3d import EST_MODELLI
+    utili = importa.EST_GIS | importa.EST_TAB | EST_RASTER | EST_MODELLI | {".csv", ".zip"}
+    out = []
+    base = os.path.abspath(cartella)
+    for rad, cartelle, files in os.walk(base):
+        if rad[len(base):].count(os.sep) >= profondita_max:
+            cartelle[:] = []
+        cartelle[:] = sorted(c for c in cartelle if not c.startswith((".", "_", "__MACOSX")))
+        for f in sorted(files):
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in utili or f.lower() == "thumbs.db":
+                continue
+            p = os.path.join(rad, f)
+            if ext in (".db", ".sqlite", ".gpkg"):          # solo i veri database SQLite
+                try:
+                    with open(p, "rb") as fh:
+                        if fh.read(16) != b"SQLite format 3\x00":
+                            continue
+                except OSError:
+                    continue
+            out.append(p)
+        if len(out) >= limite:
+            break
+    return out[:limite]
+
+
+def _categorie_dati(mod):
+    return set(getattr(mod, "CATEGORIE_DATI", None) or CATEGORIE_DATI)
+
+
+def _chiave(p):
+    return os.path.normcase(os.path.abspath(str(p or "")))
+
+
+def _scelte(usa=None, ruoli=None):
+    """Le spunte e le destinazioni cambiate a mano nell'inventario, nella forma di importa:
+    {percorso: {"usa": bool, "ruolo": str}}."""
+    out = {}
+    for p, u in (usa or {}).items():
+        if p and u is not None:
+            out.setdefault(p, {})["usa"] = bool(u)
+    for p, r in (ruoli or {}).items():
+        if p and r:
+            out.setdefault(p, {})["ruolo"] = r
+    return out
+
+
+def _proponi(files, scelte=None, inventario=None):
+    """importa.proponi con l'inventario della procedura guidata e le scelte fatte a mano (file tolti,
+    destinazioni cambiate): le applica importa, così valgono anche da riga di comando e nelle ricette."""
+    if inventario is not None and isinstance(getattr(importa, "_INVENTARI_ESPANSI", None), dict):
+        # come per le cartelle aperte da importa.espandi: proponi ritrova l'inventario dai file proposti
+        for f in files:
+            importa._INVENTARI_ESPANSI[_chiave(f)] = inventario
+    abb = importa.proponi(files, scelte=scelte or None)
+    if inventario is not None and not getattr(abb, "inventario", None):
+        abb.inventario = inventario
+        if scelte:
+            importa.applica_scelte_inventario(abb, scelte)
+    return abb
+
+
+def _esamina(files, dati=None, scelte=None, inventario=None):
+    """``files``: come li ha scelti l'utente (anche cartelle); ``dati``: i file da leggere davvero
+    (le cartelle sostituite dai file spuntati nell'inventario). Senza ``dati`` si usano ``files``.
+    ``scelte``: le spunte e le destinazioni cambiate a mano nell'inventario."""
+    dati = list(files if dati is None else dati)
+    dati, note_file = importa.espandi(dati)
+    layers, tabelle = importa.esamina(dati)
     tab = {}
     for f, fogli in tabelle.items():
         tab[f] = {n: dict(colonne=[str(c) for c in df.columns], righe=len(df),
                           esempio=json.loads(df.head(5).to_json(orient="values", date_format="iso", default_handler=str)))
                   for n, df in fogli.items()}
-    abb = importa.proponi(files)
+    abb = _proponi(dati, scelte, inventario)
     abb.note = note_file + abb.note
-    return dict(files=files, layers=[asdict(l) for l in layers], tabelle=tab, raster=importa.esamina_raster(files),
-                abbinamento=asdict(abb))
+    d_abb = asdict(abb)
+    if inventario is not None and "inventario" not in d_abb:
+        d_abb["inventario"] = inventario
+    return dict(files=dati, cartelle=[f for f in files if os.path.isdir(f)], layers=[asdict(l) for l in layers],
+                tabelle=tab, raster=importa.esamina_raster(dati), abbinamento=_json_sicuro(d_abb))
 
 
 class Attivita:
@@ -139,6 +251,8 @@ class App:
         self.stato = Stato()
         self.gettone = secrets.token_urlsafe(16)
         self.attivita = Attivita()
+        self._inventari = {}            # radice -> (firma, inventario): gli inventari già fatti
+        self._lock_inventari = threading.Lock()
         if progetto:
             self.apri(progetto)
 
@@ -155,6 +269,114 @@ class App:
             self.stato.versione_modello += 1
             aggiungi_recente(percorso)
         return self.stato.descrizione()
+
+    def _inventario_radice(self, mod, radice, forza=False):
+        try:
+            firma = (os.path.getmtime(radice), os.path.getsize(radice) if os.path.isfile(radice) else 0)
+        except OSError:
+            firma = None
+        with self._lock_inventari:
+            c = self._inventari.get(radice)
+        if c and c[0] == firma and not forza:
+            return c[1]
+        # la lettura può essere lunga: si fa fuori da ogni blocco (il server risponde intanto alle altre richieste)
+        inv = mod.esamina_cartella([radice])
+        inv = dict(inv or {})
+        voci = []
+        for v in inv.get("voci") or []:
+            v = dict(v)
+            v["_radice"] = radice
+            voci.append(v)
+        inv["voci"] = voci
+        with self._lock_inventari:
+            if len(self._inventari) >= 16:
+                self._inventari.pop(next(iter(self._inventari)))
+            self._inventari[radice] = (firma, inv)
+        return inv
+
+    def inventario(self, percorsi, forza=False):
+        """Inventario delle cartelle e degli archivi .zip tra ``percorsi`` (gli altri file si ignorano).
+        Le voci portano ``_radice``: la cartella o lo zip da cui vengono, così come l'ha indicato l'utente."""
+        radici = []
+        for p in percorsi or []:
+            if _e_radice(p) and p not in radici:
+                radici.append(p)
+        mod = _modulo_inventario()
+        out = dict(disponibile=mod is not None, radici=radici, cartelle=[p for p in radici if os.path.isdir(p)],
+                   voci=[], riepilogo={}, note=[], file_proposta=[])
+        if mod is None or not radici:
+            return out
+        for r in radici:
+            inv = self._inventario_radice(mod, r, forza)
+            out["voci"] += inv["voci"]
+            for k, n in (inv.get("riepilogo") or {}).items():
+                out["riepilogo"][k] = out["riepilogo"].get(k, 0) + (n if isinstance(n, (int, float)) else 0)
+            out["note"] += list(inv.get("note") or [])
+            out["file_proposta"] += [f for f in inv.get("file_proposta") or [] if f not in out["file_proposta"]]
+        return out
+
+    def dati_da_esaminare(self, files, scelti=None, usa=None, ruoli=None):
+        """(file da leggere, inventario per l'abbinamento): le cartelle sostituite dai file di dati spuntati.
+
+        ``scelti``: i file di dati spuntati nell'inventario (None = la proposta dell'inventario);
+        ``usa``: {percorso: bool} le spunte cambiate a mano; ``ruoli``: {percorso: ruolo} le destinazioni
+        cambiate: restano nell'inventario («scelte») e le applica ``importa.proponi``. I file spuntati rimasti
+        in un archivio si estraggono adesso."""
+        cartelle = [f for f in files if os.path.isdir(f)]
+        if scelti is None and (not cartelle or hasattr(importa, "inventaria")):
+            # nessuna scelta nell'inventario: file, cartelle e zip passano così come sono (importa li apre)
+            return list(files), None
+        mod = _modulo_inventario()
+        if mod is None:
+            out = []
+            for f in files:
+                for x in (_file_cartelle_semplice(f) if os.path.isdir(f) else [f]):
+                    if x not in out:
+                        out.append(x)
+            return out, None
+        inv = self.inventario(files)
+        voci = inv["voci"]
+        if scelti is None:
+            proposta = set(inv.get("file_proposta") or [])
+            dati = _categorie_dati(mod)
+            scelti = [v["percorso"] for v in voci if v.get("percorso") in proposta
+                      or (v.get("usa") and v.get("categoria") in dati)]
+        scelti = set(scelti)
+        estrai = getattr(mod, "assicura_estratto", None)
+
+        def sul_disco(v):
+            """Il file della voce: se è rimasto nell'archivio (non estratto dall'inventario) lo si estrae ora."""
+            if os.path.isfile(v["percorso"]):
+                return v["percorso"]
+            return estrai(v, voci) if callable(estrai) else None
+        out = []
+        for f in files:
+            membri = [v for v in voci if v.get("_radice") == f]
+            if f in inv["radici"] and (os.path.isdir(f) or membri):
+                nuovi = [p for p in (sul_disco(v) for v in membri if v["percorso"] in scelti) if p]
+            else:
+                nuovi = [f]                             # un file, o un archivio che non si è potuto aprire
+            out += [x for x in nuovi if x not in out]
+        voci_abb = [_snella({k: x for k, x in v.items() if k != "_radice"}) for v in voci]
+        inv_abb = dict(radici=inv["radici"], voci=voci_abb, riepilogo=inv["riepilogo"], note=inv["note"])
+        scelte = _scelte(usa, ruoli)
+        if scelte:
+            inv_abb["scelte"] = scelte
+        compatto = getattr(importa, "_inventario_compatto", None)      # la stessa forma delle cartelle aperte da importa
+        return out, _json_sicuro(compatto(inv_abb) if callable(compatto) else inv_abb)
+
+    def _esamina_richiesta(self, a):
+        files = [f for f in a.get("files") or [] if f]
+        mancanti = [f for f in files if not os.path.exists(f)]
+        if mancanti:
+            raise Errore("File non trovati: " + ", ".join(mancanti))
+        if not files:
+            raise Errore("Aggiungi almeno un file")
+        ruoli = {k: v for k, v in (a.get("ruoli") or {}).items() if v}
+        dati, inv = self.dati_da_esaminare(files, a.get("scelti"), a.get("usa"), ruoli)
+        if not dati:
+            raise Errore("Nessun file di dati scelto: spunta almeno una pianta, una tabella o un raster nell'inventario")
+        return _esamina(files, dati, _scelte(a.get("usa"), ruoli), inv)
 
     def azione(self, nome, a):
         st = self.stato
@@ -174,14 +396,18 @@ class App:
         if nome == "dialogo":
             r = dialoghi.scegli(a.get("tipo", "apri"), a.get("filtri", ["dati"]), a.get("multiplo", False), a.get("nome"))
             return dict(percorsi=r, disponibile=r is not None)
-        if nome == "esamina":
-            files = [f for f in a.get("files", []) if f]
-            mancanti = [f for f in files if not os.path.exists(f)]
+        if nome == "inventario":
+            # cosa c'è nelle cartelle (e negli zip): senza blocchi sullo stato, il server intanto risponde
+            percorsi = [p for p in a.get("percorsi") or [] if p]
+            mancanti = [p for p in percorsi if not os.path.exists(p)]
             if mancanti:
                 raise Errore("File non trovati: " + ", ".join(mancanti))
-            if not files:
-                raise Errore("Aggiungi almeno un file")
-            return _esamina(files)
+            inv = self.inventario(percorsi, forza=bool(a.get("forza")))
+            inv["voci"] = [_snella(v) for v in inv["voci"]]
+            inv["categorie_dati"] = sorted(_categorie_dati(_modulo_inventario()))
+            return _json_sicuro(inv)
+        if nome == "esamina":
+            return self._esamina_richiesta(a)
         if nome == "importa":
             if os.environ.get("S3D_DEBUG"):
                 json.dump(a["abbinamento"], open(os.environ["S3D_DEBUG"], "w"), indent=1)
@@ -364,10 +590,7 @@ class App:
             except OSError as e:
                 raise Errore(f"Impossibile salvare il vocabolario: {e}")
             files = [f for f in a.get("files") or [] if f]
-            mancanti = [f for f in files if not os.path.exists(f)]
-            if mancanti:
-                raise Errore("File non trovati: " + ", ".join(mancanti))
-            return dict(_esamina(files) if files else {}, concetto=concetto)
+            return dict(self._esamina_richiesta(a) if files else {}, concetto=concetto)
         if nome == "ricette":
             return dict(ricette=importa.ricette_pronte())
         if nome == "ricetta_applica":
