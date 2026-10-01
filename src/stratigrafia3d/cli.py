@@ -93,6 +93,35 @@ def cmd_aggiorna(a):
     print("; ".join(note) + (f"; ricostruite {len(unita)} unità" if unita else ""))
 
 
+def cmd_elaborati(a):
+    from .progetto import Scavo
+    from . import elaborati as el
+    s = Scavo.apri(a.progetto)
+    if s.modello is None:
+        print("Il progetto non ha ancora il modello 3D: esegui prima «strat3d ricostruisci».")
+        return 1
+    fatti = []
+    if a.volumi:
+        fatti.append(el.scrivi_tabella_volumi(s, a.volumi))
+    if a.piante:
+        fatti.append(el.pianta_svg(s, a.piante, scala=a.scala_pianta))
+    if a.pianta_dxf:
+        fatti.append(el.pianta_dxf(s, a.pianta_dxf))
+    if a.sezioni:
+        sez = []
+        for i, t in enumerate(a.sezione or []):
+            v = [float(x) for x in t.split(",")]
+            sez.append((f"Sezione {i + 1}", (v[0], v[1]), (v[2], v[3])))
+        sez = sez or el.linee_sezione(s) or el.sezioni_centrali(s)
+        for p in a.sezioni:
+            fatti.append((el.sezioni_dxf if p.lower().endswith(".dxf") else el.sezioni_svg)(s, sez, p))
+    if not fatti:
+        print("Indica almeno un elaborato: --volumi, --piante, --pianta-dxf, --sezioni")
+        return 1
+    for f in fatti:
+        print("Scritto", f)
+
+
 def cmd_info(a):
     from .progetto import Scavo
     print(Scavo.apri(a.progetto).riepilogo())
@@ -176,6 +205,17 @@ def main(argv=None):
                                                  help="scarta le modifiche fatte nell'app non ancora scritte")
     ag.add_argument("--forza", action="store_true", help="rilegge anche se i file sembrano uguali")
     ag.set_defaults(f=cmd_aggiorna)
+
+    el = sub.add_parser("elaborati", help="tabella dei volumi, piante e sezioni (SVG, DXF) dal modello 3D")
+    el.add_argument("progetto")
+    el.add_argument("--volumi", help="tabella Excel dei volumi")
+    el.add_argument("--piante", help="piante per fase (.svg)")
+    el.add_argument("--scala-pianta", type=int, default=200)
+    el.add_argument("--pianta-dxf", help="pianta in coordinate reali (.dxf)")
+    el.add_argument("--sezioni", nargs="+", help="sezioni dal modello (.svg e/o .dxf)")
+    el.add_argument("--sezione", action="append", metavar="E1,N1,E2,N2",
+                    help="traccia di una sezione (ripetibile); senza, quelle del GIS o due centrali")
+    el.set_defaults(f=cmd_elaborati)
 
     i = sub.add_parser("info", help="riepilogo di un progetto"); i.add_argument("progetto"); i.set_defaults(f=cmd_info)
 

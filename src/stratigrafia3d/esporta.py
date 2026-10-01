@@ -258,9 +258,13 @@ def _hex_rgb(h, default=(0.6, 0.6, 0.6)):
         return default
 
 
-def glb(scavo, percorso, esploso=0.0):
-    """Esporta il modello in glTF binario (.glb), un nodo per unità (Y in alto, metri).
-    Si apre in Blender, MeshLab, visualizzatori web. ``esploso``: distanza verticale tra livelli."""
+def glb(scavo, percorso, esploso=0.0, ortofoto=True, rilievi=True):
+    """Esporta il modello in glTF binario (.glb): un nodo per unità, raggruppate per fase (Y in alto,
+    metri, origine locale del progetto). Si apre in Blender, MeshLab, visualizzatori web.
+
+    ``esploso``: distanza verticale tra livelli. ``ortofoto``: l'ortofoto del progetto come texture
+    delle unità che copre. ``rilievi``: anche i modelli 3D rilevati (fotogrammetria, laser scanner)."""
+    from .elaborati import colore_unita, _fase
     if scavo.modello is None:
         raise ValueError("modello 3D non calcolato")
     o = scavo.origine
@@ -269,51 +273,105 @@ def glb(scavo, percorso, esploso=0.0):
               **{u: ("USM", r) for u, r in scavo.schede_usm().items()}}
     blob = bytearray()
     views, accessors, meshes, nodes, materials = [], [], [], [], []
+    images, textures = [], []
 
-    def add_view(data, target):
+    def add_view(data, target=None):
         while len(blob) % 4:
             blob.append(0)
         off = len(blob)
         blob.extend(data)
-        views.append(dict(buffer=0, byteOffset=off, byteLength=len(data), target=target))
+        v = dict(buffer=0, byteOffset=off, byteLength=len(data))
+        if target:
+            v["target"] = target
+        views.append(v)
         return len(views) - 1
 
+    def add_acc(arr, ctype, tipo, minmax=False, target=34962, normalized=False):
+        a = dict(bufferView=add_view(arr.tobytes(), target), componentType=ctype, count=len(arr), type=tipo)
+        if minmax:
+            a.update(min=arr.min(0).tolist(), max=arr.max(0).tolist())
+        if normalized:
+            a["normalized"] = True
+        accessors.append(a)
+        return len(accessors) - 1
+
+    def add_image(jpeg):
+        images.append(dict(bufferView=add_view(jpeg), mimeType="image/jpeg"))
+        textures.append(dict(source=len(images) - 1, sampler=0))
+        return len(textures) - 1
+
+    orto = getattr(scavo, "ortofoto", None) if ortofoto else None
+    tex_orto = add_image(orto.jpeg) if orto is not None else None
+    per_fase = {}
     for u, m in sorted(scavo.modello.unita.items()):
         P, F = mesh_unita(m)
         # locali -> glTF: x = est, y = quota relativa, z = -nord
         G = np.c_[P[:, 0], P[:, 2] - o["Z0"] + livello.get(u, 0) * esploso, -P[:, 1]].astype("<f4")
         F = F.astype("<u4")
         N = _normali(G.astype(float), F).astype("<f4")
-        vp = add_view(G.tobytes(), 34962)
-        accessors.append(dict(bufferView=vp, componentType=5126, count=len(G), type="VEC3",
-                              min=G.min(0).tolist(), max=G.max(0).tolist()))
-        ap = len(accessors) - 1
-        vn = add_view(N.tobytes(), 34962)
-        accessors.append(dict(bufferView=vn, componentType=5126, count=len(N), type="VEC3"))
-        an = len(accessors) - 1
-        vi = add_view(F.ravel().tobytes(), 34963)
-        accessors.append(dict(bufferView=vi, componentType=5125, count=F.size, type="SCALAR"))
-        ai = len(accessors) - 1
+        attr = dict(POSITION=add_acc(G, 5126, "VEC3", True), NORMAL=add_acc(N, 5126, "VEC3"))
         tipo, r = schede.get(u, ("US", {}))
-        col = _hex_rgb(r.get(sc.C_COLORE) if tipo == "US" else r.get("Colore HEX", "#c9c2b4"),
-                       (0.79, 0.76, 0.71) if tipo == "USM" else (0.6, 0.55, 0.5))
-        mat = dict(name=f"{tipo} {u}", doubleSided=m.tipo == "taglio",
-                   pbrMetallicRoughness=dict(baseColorFactor=[*col, 0.35 if m.tipo == "taglio" else 1.0],
-                                             metallicFactor=0.0, roughnessFactor=0.9))
+        col = _hex_rgb(colore_unita(scavo, u), (0.6, 0.55, 0.5))
+        pbr = dict(baseColorFactor=[*col, 0.35 if m.tipo == "taglio" else 1.0], metallicFactor=0.0, roughnessFactor=0.9)
+        if tex_orto is not None and m.tipo != "taglio":
+            x0, y0, x1, y1 = orto.estensione
+            ex = np.c_[(P[:, 0] + o["E0"] - x0) / (x1 - x0), (y1 - (P[:, 1] + o["N0"])) / (y1 - y0)].astype("<f4")
+            if ((ex >= 0) & (ex <= 1)).all(1).mean() > 0.5:
+                attr["TEXCOORD_0"] = add_acc(ex, 5126, "VEC2")
+                pbr = dict(baseColorTexture=dict(index=tex_orto), metallicFactor=0.0, roughnessFactor=0.9)
+        mat = dict(name=f"{tipo} {u}", doubleSided=m.tipo == "taglio", pbrMetallicRoughness=pbr)
         if m.tipo == "taglio":
             mat["alphaMode"] = "BLEND"
         materials.append(mat)
-        meshes.append(dict(name=f"{tipo} {u}", primitives=[dict(attributes=dict(POSITION=ap, NORMAL=an),
-                                                                     indices=ai, material=len(materials) - 1)]))
+        meshes.append(dict(name=f"{tipo} {u}", primitives=[dict(attributes=attr, indices=add_acc(F.ravel(), 5125, "SCALAR",
+                                                                                                 target=34963),
+                                                                     material=len(materials) - 1)]))
         extras = {k: _json_val(v) for k, v in dict(r).items() if _json_val(v) is not None} if len(r) else {}
         extras.update(dict(unita=int(u), tipo_modello=m.tipo, livello=int(livello.get(u, 0)),
                            volume_m3=round(m.volume(), 3), qualita=m.qualita))
-        nodes.append(dict(name=f"{tipo} {u}", mesh=len(meshes) - 1, extras=extras))
+        definizione = r.get("Definizione") if len(r) else None
+        nome = f"{tipo} {u}" + (f" {definizione}" if isinstance(definizione, str) and definizione.strip() else "")
+        nodes.append(dict(name=nome, mesh=len(meshes) - 1, extras=extras))
+        per_fase.setdefault(_fase(r) if len(r) else 0, []).append(len(nodes) - 1)
+    # un nodo per fase, dalla più recente: comodo nell'elenco degli oggetti di Blender
+    titoli = {}
+    t = scavo.tabelle.get(sc.S_FASI)
+    if t is not None and "Fase" in t.columns:
+        for _, rr in t.iterrows():
+            try:
+                titoli[int(float(rr["Fase"]))] = str(rr.get("Titolo") or "")
+            except (TypeError, ValueError):
+                pass
+    radici = []
+    for f in sorted(per_fase, reverse=True):
+        nodes.append(dict(name=f"Fase {f}" + (f" {titoli[f]}" if titoli.get(f) else ""), children=per_fase[f]))
+        radici.append(len(nodes) - 1)
+    # modelli 3D rilevati
+    for mr in (getattr(scavo, "modelli3d", []) if rilievi else []):
+        G = np.c_[mr.V[:, 0] - o["E0"], mr.V[:, 2] - o["Z0"], -(mr.V[:, 1] - o["N0"])].astype("<f4")
+        F = mr.F.astype("<u4")
+        attr = dict(POSITION=add_acc(G, 5126, "VEC3", True), NORMAL=add_acc(_normali(G.astype(float), F).astype("<f4"), 5126, "VEC3"))
+        pbr = dict(baseColorFactor=[0.73, 0.70, 0.65, 1.0], metallicFactor=0.0, roughnessFactor=0.95)
+        if mr.texture is not None and mr.uv is not None:
+            uv = np.c_[mr.uv[:, 0], 1 - mr.uv[:, 1]].astype("<f4")     # glTF: v dall'alto
+            attr["TEXCOORD_0"] = add_acc(uv, 5126, "VEC2")
+            pbr = dict(baseColorTexture=dict(index=add_image(mr.texture)), metallicFactor=0.0, roughnessFactor=0.95)
+        elif mr.colori is not None:
+            rgba = np.c_[mr.colori[:, :3], np.full(len(mr.colori), 255)].astype("u1")   # 4 byte: allineati
+            attr["COLOR_0"] = add_acc(np.ascontiguousarray(rgba), 5121, "VEC4", normalized=True)
+            pbr["baseColorFactor"] = [1, 1, 1, 1]
+        materials.append(dict(name=f"Rilievo {mr.nome}", doubleSided=True, pbrMetallicRoughness=pbr))
+        meshes.append(dict(name=mr.nome, primitives=[dict(attributes=attr, indices=add_acc(F.ravel(), 5125, "SCALAR", target=34963),
+                                                          material=len(materials) - 1)]))
+        nodes.append(dict(name=f"Rilievo {mr.nome}", mesh=len(meshes) - 1))
+        radici.append(len(nodes) - 1)
     gltf = dict(asset=dict(version="2.0", generator="stratigrafia3d"),
-                scene=0, scenes=[dict(name=scavo.meta.get("nome", "scavo"), nodes=list(range(len(nodes))),
+                scene=0, scenes=[dict(name=scavo.meta.get("nome", "scavo"), nodes=radici,
                                       extras=dict(origine=o, crs=scavo.crs))],
                 nodes=nodes, meshes=meshes, materials=materials, accessors=accessors, bufferViews=views,
                 buffers=[dict(byteLength=len(blob))])
+    if images:
+        gltf.update(images=images, textures=textures, samplers=[dict(magFilter=9729, minFilter=9987)])
     js = json.dumps(gltf, ensure_ascii=False, separators=(",", ":"), default=_json_val).encode("utf-8")
     js += b" " * ((4 - len(js) % 4) % 4)
     while len(blob) % 4:

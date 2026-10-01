@@ -136,7 +136,11 @@ def test_glb_valido(progetto, tmp_path):
     assert magic == 0x46546C67 and ver == 2 and tot == len(b)
     ln, typ = struct.unpack("<II", b[12:20])
     g = json.loads(b[20:20 + ln])
-    assert len(g["nodes"]) == len(s.modello.unita)
+    unita = [n for n in g["nodes"] if "mesh" in n]
+    fasi = [n for n in g["nodes"] if "children" in n]
+    assert len(unita) == len(s.modello.unita)
+    assert sorted(i for n in fasi for i in n["children"]) == sorted(g["nodes"].index(n) for n in unita)
+    assert set(g["scenes"][0]["nodes"]) == {g["nodes"].index(n) for n in fasi}
     assert all("POSITION" in m["primitives"][0]["attributes"] for m in g["meshes"])
 
 

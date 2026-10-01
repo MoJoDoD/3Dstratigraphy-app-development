@@ -111,6 +111,22 @@ con la stessa ricetta e ricostruisce solo le unità toccate. Dalla riga di coman
   viene semplificato. Si accende e si spegne con «Rilievo 3D», e diventa trasparente quando si
   sceglie un'unità.
 
+## Esportazioni
+
+Dal menu **Esporta** (o con `strat3d elaborati`):
+
+| Elaborato | Formato | Contenuto |
+| --- | --- | --- |
+| Modello 3D | `.glb` | Un oggetto per unità con la sua scheda, raggruppati per fase; ortofoto e rilievi 3D se ci sono. Si apre in Blender e MeshLab |
+| Pagina web | `.html` | Il visualizzatore completo in un solo file, da aprire senza internet o da condividere |
+| Tabella dei volumi | `.xlsx` | Area, volume, quote, spessore e affidabilità di ogni unità, più i totali per fase |
+| Piante per fase | `.svg` | Un riquadro per fase, scala 1:200, con il limite di scavo e i numeri |
+| Pianta | `.dxf` | Poligoni in coordinate reali, un layer per fase, per CAD e GIS |
+| Sezioni dal modello | `.svg`, `.dxf` | Il modello tagliato lungo le tracce delle sezioni del GIS (o due sezioni centrali), scala 1:50 |
+
+Le sezioni sono calcolate tagliando le mesh chiuse delle unità: servono come base per il disegno
+e per confrontare il modello con le sezioni rilevate.
+
 ## Visualizzatore
 
 - **Colore**: sedimento, fase, categoria, affidabilità, oppure qualsiasi campo a categorie della scheda

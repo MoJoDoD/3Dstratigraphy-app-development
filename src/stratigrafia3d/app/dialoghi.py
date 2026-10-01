@@ -17,6 +17,9 @@ FILTRI = {
     "excel": ("Schede", "*.xlsx *.xls *.ods *.csv"),
     "glb": ("glTF binario", "*.glb"),
     "html": ("Pagina web", "*.html"),
+    "xlsx": ("Foglio Excel", "*.xlsx"),
+    "svg": ("Disegno SVG", "*.svg"),
+    "dxf": ("Disegno DXF", "*.dxf"),
     "json": ("Ricetta di importazione", "*.json"),
 }
 

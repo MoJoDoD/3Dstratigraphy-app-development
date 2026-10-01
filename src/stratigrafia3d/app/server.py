@@ -271,11 +271,35 @@ class App:
             p = a.get("percorso")
             if not p:
                 raise Errore("Scegli il file di destinazione")
-            if a.get("tipo") == "glb":
-                esporta.glb(st.scavo, p, esploso=float(a.get("esploso") or 0))
-            else:
-                esporta.visualizzatore(st.scavo, p, modo="offline")
-            return dict(percorso=p)
+            from .. import elaborati as el
+            tipo = a.get("tipo")
+            est = {"glb": ".glb", "volumi": ".xlsx", "pianta_svg": ".svg", "pianta_dxf": ".dxf",
+                   "sezioni_svg": ".svg", "sezioni_dxf": ".dxf"}.get(tipo, ".html")
+            if not p.lower().endswith(est):
+                p += est
+            nota = ""
+            try:
+                if tipo == "glb":
+                    esporta.glb(st.scavo, p, esploso=float(a.get("esploso") or 0))
+                elif tipo == "volumi":
+                    el.scrivi_tabella_volumi(st.scavo, p)
+                elif tipo == "pianta_svg":
+                    el.pianta_svg(st.scavo, p)
+                elif tipo == "pianta_dxf":
+                    el.pianta_dxf(st.scavo, p)
+                elif tipo in ("sezioni_svg", "sezioni_dxf"):
+                    sez = el.linee_sezione(st.scavo)
+                    if not sez:
+                        sez = el.sezioni_centrali(st.scavo)
+                        nota = "nessuna traccia di sezione nel GIS: due sezioni centrali"
+                    (el.sezioni_svg if tipo == "sezioni_svg" else el.sezioni_dxf)(st.scavo, sez, p)
+                else:
+                    esporta.visualizzatore(st.scavo, p, modo="offline")
+            except PermissionError:
+                raise Errore(f"Impossibile scrivere {os.path.basename(p)}: il file è aperto in un altro programma?")
+            except ValueError as e:
+                raise Errore(str(e))
+            return dict(percorso=p, nota=nota)
         if nome == "valori":
             v, n = importa.valori_distinti(a["sorgente"], foglio=a.get("foglio"), colonna=a["colonna"],
                                            layer=a.get("layer"))

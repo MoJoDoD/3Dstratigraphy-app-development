@@ -190,6 +190,11 @@ dialog .row{justify-content:flex-end;margin-top:12px}
           <button data-esp="glb">Modello 3D (.glb)<small>Per Blender, MeshLab e visualizzatori glTF</small></button>
           <button data-esp="glbx">Modello 3D esploso (.glb)<small>Unità separate in altezza di 30 cm per livello</small></button>
           <button data-esp="html">Pagina web (.html)<small>Visualizzatore autonomo, funziona senza internet</small></button>
+          <button data-esp="volumi">Tabella dei volumi (.xlsx)<small>Area, volume, quote e affidabilità di ogni unità, totali per fase</small></button>
+          <button data-esp="pianta_svg">Piante per fase (.svg)<small>Una pianta per fase, scala 1:200, da stampare o ritoccare</small></button>
+          <button data-esp="pianta_dxf">Pianta (.dxf)<small>Poligoni in coordinate reali, un layer per fase, per CAD e GIS</small></button>
+          <button data-esp="sezioni_svg">Sezioni dal modello (.svg)<small>Lungo le tracce delle sezioni del GIS (o due sezioni centrali), scala 1:50</small></button>
+          <button data-esp="sezioni_dxf">Sezioni dal modello (.dxf)<small>Le stesse sezioni come disegno CAD: distanza e quota</small></button>
         </div>
       </div>
       <button class="btn" id="bResoconto" aria-pressed="false" hidden>Resoconto</button>
@@ -396,10 +401,12 @@ async function verifica(){
 }
 async function esporta(tipo){
   $("mEsporta").hidden=true; $("bEsporta").setAttribute("aria-expanded","false");
-  const est=tipo==="html"?"html":"glb"; const nome=(S.nome||"scavo")+(tipo==="glbx"?"_esploso":"")+"."+est;
+  const EST={html:"html",glb:"glb",glbx:"glb",volumi:"xlsx",pianta_svg:"svg",pianta_dxf:"dxf",sezioni_svg:"svg",sezioni_dxf:"dxf"};
+  const SUFF={glbx:"_esploso",volumi:"_volumi",pianta_svg:"_piante",pianta_dxf:"_pianta",sezioni_svg:"_sezioni",sezioni_dxf:"_sezioni"};
+  const est=EST[tipo]; const nome=(S.nome||"scavo")+(SUFF[tipo]||"")+"."+est;
   const r=await scegli("salva",[est],false,nome,"Esporta"); if(!r[0]) return;
-  await lavoro("Esportazione…",()=>api("esporta",{tipo:est,percorso:r[0],esploso:tipo==="glbx"?0.3:0}));
-  avviso("Esportato: "+base(r[0]));
+  const x=await lavoro("Esportazione…",()=>api("esporta",{tipo:tipo==="glbx"?"glb":tipo,percorso:r[0],esploso:tipo==="glbx"?0.3:0}));
+  avviso("Esportato: "+base(x.percorso||r[0])+(x.nota?" · "+x.nota:""));
 }
 
 // ------------------------------------------------------------------ procedura
