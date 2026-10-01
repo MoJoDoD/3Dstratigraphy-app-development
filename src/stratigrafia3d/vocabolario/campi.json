@@ -1,0 +1,1321 @@
+{
+ "//": "Vocabolario: campi descrittivi delle schede (definizione, descrizione, colore, composizione…) e colonne delle tabelle collegate (materiali, campioni, documentazione, fasi).",
+ "margini": {
+  "descrizione": "i margini (limiti) dell'unità: netti, rastremati, sfumati",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Margini"
+  },
+  "termini": {
+   "it": [
+    "margini",
+    "limiti",
+    "limite",
+    "limiti/margini",
+    "margini us",
+    "definizione dei limiti",
+    "limiti us",
+    "contatti"
+   ],
+   "en": [
+    "boundary",
+    "boundaries",
+    "edges",
+    "boundary clarity",
+    "horizon clarity",
+    "horizon boundary",
+    "boundary type"
+   ],
+   "fr": [
+    "limites",
+    "netteté des limites",
+    "limite",
+    "contacts",
+    "nature des limites"
+   ],
+   "de": [
+    "grenze",
+    "grenzen",
+    "übergang",
+    "schichtgrenze",
+    "schichtgrenzen",
+    "grenzverlauf"
+   ],
+   "es": [
+    "límite",
+    "límites",
+    "contactos",
+    "nitidez de los límites"
+   ],
+   "sv": [
+    "gräns",
+    "gränser",
+    "övergång",
+    "lagergräns"
+   ],
+   "nl": [
+    "grens",
+    "begrenzing",
+    "overgang",
+    "aflijning",
+    "scherpte begrenzing"
+   ]
+  },
+  "contesti": [
+   "us"
+  ]
+ },
+ "definizione": {
+  "descrizione": "la definizione sintetica dell'unità",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Definizione"
+  },
+  "termini": {
+   "it": [
+    "definizione",
+    "definizione us",
+    "descrizione breve",
+    "interpretazione sintetica",
+    "definizione sintetica",
+    "d stratigrafica",
+    "definizione stratigrafica"
+   ],
+   "en": [
+    "definition",
+    "short description",
+    "interpretation keyword",
+    "keyword",
+    "context definition",
+    "short interpretation",
+    "basic interpretation"
+   ],
+   "fr": [
+    "définition",
+    "définition de l'us",
+    "identification",
+    "interprétation sommaire"
+   ],
+   "de": [
+    "ansprache",
+    "kurzansprache",
+    "befundansprache",
+    "kurzbeschreibung"
+   ],
+   "es": [
+    "definición",
+    "definición de la ue",
+    "descripción breve"
+   ],
+   "sv": [
+    "definition",
+    "kortbeskrivning",
+    "kort beskrivning",
+    "benämning"
+   ],
+   "nl": [
+    "definitie",
+    "korte omschrijving",
+    "kenmerk"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "d_stratigrafica"
+   ],
+   "Intrasis": [
+    "SubClass"
+   ]
+  },
+  "contesti": [
+   "us",
+   "usm"
+  ]
+ },
+ "descrizione": {
+  "descrizione": "la descrizione dell'unità",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Descrizione"
+  },
+  "termini": {
+   "it": [
+    "descrizione",
+    "descrizione us",
+    "descrizione estesa",
+    "descrizione completa"
+   ],
+   "en": [
+    "description",
+    "brief description",
+    "full description",
+    "context description",
+    "deposit description",
+    "descriptive text"
+   ],
+   "fr": [
+    "description",
+    "description de l'us",
+    "description détaillée"
+   ],
+   "de": [
+    "beschreibung",
+    "befundbeschreibung",
+    "schichtbeschreibung"
+   ],
+   "es": [
+    "descripción",
+    "descripción de la ue"
+   ],
+   "sv": [
+    "beskrivning",
+    "kontextbeskrivning",
+    "lagerbeskrivning"
+   ],
+   "nl": [
+    "beschrijving",
+    "omschrijving",
+    "spoorbeschrijving"
+   ]
+  },
+  "abbreviazioni": [
+   "desc",
+   "descr",
+   "descriz",
+   "descrip"
+  ],
+  "contesti": [
+   "us",
+   "usm"
+  ]
+ },
+ "interpretazione": {
+  "descrizione": "l'interpretazione dell'unità",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Interpretazione"
+  },
+  "termini": {
+   "it": [
+    "interpretazione",
+    "interpretazione us",
+    "d interpretativa",
+    "descrizione interpretativa"
+   ],
+   "en": [
+    "interpretation",
+    "context comments",
+    "interpretation and discussion",
+    "discussion",
+    "context interpretation"
+   ],
+   "fr": [
+    "interprétation",
+    "interprétation de l'us"
+   ],
+   "de": [
+    "interpretation",
+    "deutung",
+    "befunddeutung",
+    "befundinterpretation"
+   ],
+   "es": [
+    "interpretación",
+    "interpretación de la ue"
+   ],
+   "sv": [
+    "tolkning",
+    "kontexttolkning"
+   ],
+   "nl": [
+    "interpretatie",
+    "duiding"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "d_interpretativa"
+   ],
+   "Framework Archaeology": [
+    "Context Comments"
+   ]
+  },
+  "deboli": [
+   "comments",
+   "commenti",
+   "comment"
+  ],
+  "contesti": [
+   "us",
+   "usm"
+  ]
+ },
+ "note": {
+  "descrizione": "le note e osservazioni",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {},
+  "termini": {
+   "it": [
+    "note",
+    "osservazioni",
+    "annotazioni"
+   ],
+   "en": [
+    "notes",
+    "remarks",
+    "observations",
+    "note"
+   ],
+   "fr": [
+    "remarques",
+    "observations",
+    "notes"
+   ],
+   "de": [
+    "bemerkungen",
+    "anmerkungen",
+    "bemerkung",
+    "notizen"
+   ],
+   "es": [
+    "notas",
+    "observaciones"
+   ],
+   "sv": [
+    "anmärkningar",
+    "anmärkning",
+    "kommentar",
+    "noteringar"
+   ],
+   "nl": [
+    "opmerkingen",
+    "opmerking",
+    "notities"
+   ]
+  }
+ },
+ "colore": {
+  "descrizione": "il colore",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Colore"
+  },
+  "termini": {
+   "it": [
+    "colore",
+    "colori",
+    "colorazione"
+   ],
+   "en": [
+    "colour",
+    "color",
+    "colours",
+    "colors"
+   ],
+   "fr": [
+    "couleur",
+    "couleurs"
+   ],
+   "de": [
+    "farbe",
+    "farben",
+    "färbung"
+   ],
+   "es": [
+    "color",
+    "colores",
+    "coloración"
+   ],
+   "sv": [
+    "färg",
+    "färger"
+   ],
+   "nl": [
+    "kleur",
+    "kleuren"
+   ]
+  },
+  "contesti": [
+   "us"
+  ]
+ },
+ "colore_hex": {
+  "descrizione": "il colore di visualizzazione (codice esadecimale)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Colore HEX"
+  },
+  "termini": {
+   "it": [
+    "colore hex",
+    "colore rgb",
+    "colore esadecimale",
+    "codice colore"
+   ],
+   "en": [
+    "hex",
+    "rgb",
+    "colour hex",
+    "color hex",
+    "hex colour",
+    "hex color",
+    "colour code",
+    "color code"
+   ],
+   "fr": [
+    "code couleur",
+    "couleur hex",
+    "couleur rgb"
+   ],
+   "de": [
+    "farbcode",
+    "farbe hex",
+    "hex farbe"
+   ],
+   "es": [
+    "código de color",
+    "color hex"
+   ],
+   "sv": [
+    "färgkod",
+    "hexfärg"
+   ],
+   "nl": [
+    "kleurcode",
+    "hex kleur"
+   ]
+  }
+ },
+ "munsell": {
+  "descrizione": "il colore secondo le tavole Munsell",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Colore Munsell"
+  },
+  "termini": {
+   "it": [
+    "munsell",
+    "colore munsell",
+    "codice munsell",
+    "tavole munsell"
+   ],
+   "en": [
+    "munsell",
+    "munsell colour",
+    "munsell color",
+    "munsell code",
+    "munsell value"
+   ],
+   "fr": [
+    "code munsell",
+    "couleur munsell"
+   ],
+   "de": [
+    "munsell farbe",
+    "munsell-farbe",
+    "munsellfarbe",
+    "munsell code"
+   ],
+   "es": [
+    "color munsell",
+    "código munsell"
+   ],
+   "sv": [
+    "munsellfärg",
+    "munsell färg"
+   ],
+   "nl": [
+    "munsellkleur",
+    "munsell kleur"
+   ]
+  }
+ },
+ "composizione": {
+  "descrizione": "la composizione (componenti e inclusi)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Componenti"
+  },
+  "termini": {
+   "it": [
+    "composizione",
+    "componenti",
+    "inclusi",
+    "inclusioni",
+    "componenti organici",
+    "componenti inorganici",
+    "componenti naturali",
+    "componenti artificiali"
+   ],
+   "en": [
+    "composition",
+    "inclusions",
+    "components",
+    "constituents",
+    "coarse components",
+    "soil composition"
+   ],
+   "fr": [
+    "composition",
+    "inclusions",
+    "constituants",
+    "éléments constitutifs"
+   ],
+   "de": [
+    "zusammensetzung",
+    "einschlüsse",
+    "bestandteile",
+    "beimengungen",
+    "einschlüsse und beimengungen"
+   ],
+   "es": [
+    "composición",
+    "inclusiones",
+    "componentes"
+   ],
+   "sv": [
+    "sammansättning",
+    "inslag",
+    "inneslutningar"
+   ],
+   "nl": [
+    "samenstelling",
+    "insluitsels",
+    "bijmengingen",
+    "inclusies"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "inclusi"
+   ]
+  },
+  "contesti": [
+   "us"
+  ]
+ },
+ "consistenza": {
+  "descrizione": "la consistenza (compattezza) del deposito",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Consistenza"
+  },
+  "termini": {
+   "it": [
+    "consistenza",
+    "compattezza",
+    "grado di compattezza"
+   ],
+   "en": [
+    "consistency",
+    "compaction",
+    "compactness",
+    "consistence"
+   ],
+   "fr": [
+    "consistance",
+    "compacité",
+    "compaction"
+   ],
+   "de": [
+    "konsistenz",
+    "festigkeit",
+    "verdichtung",
+    "lagerungsdichte"
+   ],
+   "es": [
+    "consistencia",
+    "compactación",
+    "compacidad"
+   ],
+   "sv": [
+    "konsistens",
+    "fasthet",
+    "packning"
+   ],
+   "nl": [
+    "consistentie",
+    "compactheid",
+    "vastheid"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "consistenza"
+   ]
+  },
+  "contesti": [
+   "us"
+  ]
+ },
+ "data": {
+  "descrizione": "una data",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Data"
+  },
+  "deboli": [
+   "data",
+   "date",
+   "datum",
+   "fecha",
+   "giorno",
+   "day"
+  ]
+ },
+ "data_scavo": {
+  "descrizione": "la data di scavo o di schedatura",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Data scavo"
+  },
+  "termini": {
+   "it": [
+    "data scavo",
+    "data di scavo",
+    "data schedatura",
+    "data rilievo",
+    "data compilazione"
+   ],
+   "en": [
+    "date recorded",
+    "date excavated",
+    "excavation date",
+    "recording date",
+    "recorded date",
+    "date dug",
+    "date of excavation"
+   ],
+   "fr": [
+    "date de fouille",
+    "date d'enregistrement",
+    "date de la fouille"
+   ],
+   "de": [
+    "grabungsdatum",
+    "aufnahmedatum",
+    "datum der aufnahme",
+    "dokumentationsdatum"
+   ],
+   "es": [
+    "fecha de excavación",
+    "fecha de registro"
+   ],
+   "sv": [
+    "grävdatum",
+    "dokumentationsdatum",
+    "undersökningsdatum"
+   ],
+   "nl": [
+    "opgravingsdatum",
+    "datum opgraving",
+    "registratiedatum"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "data_schedatura"
+   ],
+   "Framework Archaeology": [
+    "Date Recorded"
+   ]
+  },
+  "contesti": [
+   "us",
+   "usm"
+  ]
+ },
+ "responsabile": {
+  "descrizione": "il responsabile della scheda (chi ha scavato o registrato)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Responsabile"
+  },
+  "termini": {
+   "it": [
+    "responsabile",
+    "schedatore",
+    "compilatore",
+    "rilevatore",
+    "redattore",
+    "responsabile scientifico"
+   ],
+   "en": [
+    "recorded by",
+    "recorder",
+    "excavator",
+    "excavated by",
+    "supervisor",
+    "compiled by",
+    "author"
+   ],
+   "fr": [
+    "responsable",
+    "fouilleur",
+    "rédacteur",
+    "auteur",
+    "enregistré par"
+   ],
+   "de": [
+    "bearbeiter",
+    "ausgräber",
+    "verfasser",
+    "bearbeitet von",
+    "dokumentiert von"
+   ],
+   "es": [
+    "responsable",
+    "excavador",
+    "autor",
+    "registrado por"
+   ],
+   "sv": [
+    "grävare",
+    "dokumenterad av",
+    "handläggare",
+    "utförd av"
+   ],
+   "nl": [
+    "opgraver",
+    "auteur",
+    "beschreven door",
+    "geregistreerd door"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "schedatore"
+   ]
+  }
+ },
+ "classe": {
+  "descrizione": "la classe di materiale del reperto (ceramica, metallo, osso…)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Classe"
+  },
+  "termini": {
+   "it": [
+    "classe",
+    "classe di materiale",
+    "tipo reperto",
+    "classe materiale",
+    "materiale",
+    "classe ceramica"
+   ],
+   "en": [
+    "material",
+    "material class",
+    "material type",
+    "find type",
+    "finds type",
+    "material category"
+   ],
+   "fr": [
+    "matériau",
+    "matière",
+    "catégorie de mobilier",
+    "classe de mobilier"
+   ],
+   "de": [
+    "werkstoff",
+    "materialgruppe",
+    "fundgattung",
+    "gattung",
+    "materialart"
+   ],
+   "es": [
+    "clase",
+    "clase de material",
+    "tipo de material"
+   ],
+   "sv": [
+    "materialtyp",
+    "materialkategori",
+    "fyndkategori"
+   ],
+   "nl": [
+    "materiaal",
+    "materiaalsoort",
+    "materiaalcategorie",
+    "materiaalgroep"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "tipo_reperto"
+   ]
+  },
+  "contesti": [
+   "materiali",
+   "reperti"
+  ]
+ },
+ "forma": {
+  "descrizione": "il tipo o la forma del reperto",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Tipo / forma"
+  },
+  "termini": {
+   "it": [
+    "tipo / forma",
+    "tipo/forma",
+    "forma",
+    "tipo forma",
+    "forma vascolare",
+    "definizione reperto"
+   ],
+   "en": [
+    "object",
+    "object type",
+    "form",
+    "vessel form",
+    "vessel type",
+    "object name"
+   ],
+   "fr": [
+    "objet",
+    "forme",
+    "type d'objet",
+    "forme du vase"
+   ],
+   "de": [
+    "objekt",
+    "form",
+    "gefäßform",
+    "objektart",
+    "gefäßtyp"
+   ],
+   "es": [
+    "forma",
+    "tipo de objeto",
+    "objeto"
+   ],
+   "sv": [
+    "objekt",
+    "sakord",
+    "föremål",
+    "kärlform"
+   ],
+   "nl": [
+    "objecttype",
+    "vorm",
+    "vormtype",
+    "voorwerp"
+   ]
+  },
+  "contesti": [
+   "materiali",
+   "reperti"
+  ],
+  "deboli": [
+   "type",
+   "tipo",
+   "typ"
+  ]
+ },
+ "conteggio": {
+  "descrizione": "il numero di frammenti o di oggetti (NR)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "NR"
+  },
+  "termini": {
+   "it": [
+    "numero resti",
+    "n frammenti",
+    "numero frammenti",
+    "totale frammenti",
+    "quantità",
+    "conteggio",
+    "numero di resti",
+    "n. frammenti"
+   ],
+   "en": [
+    "count",
+    "quantity",
+    "object count",
+    "objectcount",
+    "number of fragments",
+    "no of fragments",
+    "sherd count",
+    "fragment count",
+    "no. of objects",
+    "number of objects"
+   ],
+   "fr": [
+    "nombre de restes",
+    "nombre",
+    "quantité",
+    "nombre de fragments",
+    "nr"
+   ],
+   "de": [
+    "anzahl",
+    "stückzahl",
+    "anzahl fragmente",
+    "fragmentanzahl",
+    "menge"
+   ],
+   "es": [
+    "cantidad",
+    "número de fragmentos",
+    "número de restos",
+    "recuento"
+   ],
+   "sv": [
+    "antal",
+    "antal fragment",
+    "fragmentantal"
+   ],
+   "nl": [
+    "aantal",
+    "aantal fragmenten",
+    "fragmentaantal",
+    "hoeveelheid"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "totale_frammenti"
+   ]
+  },
+  "abbreviazioni": [
+   "nr",
+   "qty",
+   "qta",
+   "n fr",
+   "nfr",
+   "cnt"
+  ],
+  "contesti": [
+   "materiali",
+   "reperti"
+  ]
+ },
+ "nmi": {
+  "descrizione": "il numero minimo di individui (NMI)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "NMI"
+  },
+  "termini": {
+   "it": [
+    "nmi",
+    "numero minimo individui",
+    "numero minimo di individui"
+   ],
+   "en": [
+    "mni",
+    "minimum number of individuals",
+    "minimum number of vessels",
+    "mnv",
+    "eve",
+    "eves"
+   ],
+   "fr": [
+    "nombre minimum d'individus",
+    "nmi"
+   ],
+   "de": [
+    "mindestindividuenzahl",
+    "miz",
+    "mindestanzahl"
+   ],
+   "es": [
+    "número mínimo de individuos"
+   ],
+   "sv": [
+    "minsta antal individer"
+   ],
+   "nl": [
+    "minimum aantal individuen"
+   ]
+  },
+  "contesti": [
+   "materiali"
+  ]
+ },
+ "peso": {
+  "descrizione": "il peso",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Peso (g)"
+  },
+  "termini": {
+   "it": [
+    "peso",
+    "peso (g)",
+    "peso g",
+    "peso in grammi",
+    "peso totale"
+   ],
+   "en": [
+    "weight",
+    "weight (g)",
+    "weight g",
+    "mass",
+    "total weight"
+   ],
+   "fr": [
+    "poids",
+    "poids (g)",
+    "masse"
+   ],
+   "de": [
+    "gewicht",
+    "gewicht (g)",
+    "masse"
+   ],
+   "es": [
+    "peso",
+    "peso (g)"
+   ],
+   "sv": [
+    "vikt",
+    "vikt (g)"
+   ],
+   "nl": [
+    "gewicht",
+    "gewicht (g)"
+   ]
+  },
+  "abbreviazioni": [
+   "wt",
+   "wgt",
+   "gr"
+  ],
+  "contesti": [
+   "materiali",
+   "reperti",
+   "campioni"
+  ]
+ },
+ "cassetta": {
+  "descrizione": "la cassetta (contenitore di magazzino)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Cassetta"
+  },
+  "termini": {
+   "it": [
+    "cassetta",
+    "cassa",
+    "numero cassetta",
+    "contenitore",
+    "busta"
+   ],
+   "en": [
+    "box",
+    "box number",
+    "box no",
+    "crate",
+    "bag",
+    "bag number",
+    "container"
+   ],
+   "fr": [
+    "caisse",
+    "numéro de caisse",
+    "sachet",
+    "conteneur"
+   ],
+   "de": [
+    "kiste",
+    "fundkiste",
+    "karton",
+    "kistennummer",
+    "fundtüte"
+   ],
+   "es": [
+    "caja",
+    "número de caja",
+    "bolsa"
+   ],
+   "sv": [
+    "låda",
+    "lådnummer",
+    "påse"
+   ],
+   "nl": [
+    "doos",
+    "doosnummer",
+    "krat",
+    "zak"
+   ]
+  },
+  "contesti": [
+   "materiali",
+   "reperti",
+   "campioni"
+  ]
+ },
+ "analisi": {
+  "descrizione": "le analisi previste per il campione",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Analisi"
+  },
+  "termini": {
+   "it": [
+    "analisi",
+    "analisi richieste",
+    "tipo di analisi",
+    "finalità"
+   ],
+   "en": [
+    "analysis",
+    "analyses",
+    "collected for",
+    "sample collected for",
+    "purpose",
+    "analysis type"
+   ],
+   "fr": [
+    "analyse",
+    "analyses",
+    "type d'analyse"
+   ],
+   "de": [
+    "analyse",
+    "untersuchung",
+    "analysen",
+    "untersuchungsziel"
+   ],
+   "es": [
+    "análisis",
+    "tipo de análisis"
+   ],
+   "sv": [
+    "analys",
+    "analyser",
+    "analystyp"
+   ],
+   "nl": [
+    "analyse",
+    "analyses",
+    "type analyse"
+   ]
+  },
+  "sistemi": {
+   "Framework Archaeology": [
+    "Sample Collected for"
+   ]
+  },
+  "contesti": [
+   "campioni"
+  ]
+ },
+ "file": {
+  "descrizione": "il file (percorso dell'immagine o del documento)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "File"
+  },
+  "termini": {
+   "it": [
+    "file",
+    "nome file",
+    "percorso",
+    "immagine",
+    "nome immagine",
+    "percorso file"
+   ],
+   "en": [
+    "filename",
+    "file name",
+    "path",
+    "image",
+    "file path",
+    "image file",
+    "image name"
+   ],
+   "fr": [
+    "fichier",
+    "nom de fichier",
+    "chemin",
+    "image"
+   ],
+   "de": [
+    "datei",
+    "dateiname",
+    "pfad",
+    "bild",
+    "bilddatei"
+   ],
+   "es": [
+    "archivo",
+    "nombre de archivo",
+    "ruta",
+    "imagen",
+    "fichero"
+   ],
+   "sv": [
+    "fil",
+    "filnamn",
+    "sökväg",
+    "bild"
+   ],
+   "nl": [
+    "bestand",
+    "bestandsnaam",
+    "pad",
+    "afbeelding"
+   ]
+  },
+  "contesti": [
+   "documentazione"
+  ]
+ },
+ "soggetto": {
+  "descrizione": "il soggetto (didascalia) della foto o del disegno",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Soggetto"
+  },
+  "termini": {
+   "it": [
+    "soggetto",
+    "didascalia",
+    "descrizione foto",
+    "contenuto"
+   ],
+   "en": [
+    "subject",
+    "caption",
+    "photo description",
+    "view of",
+    "view description"
+   ],
+   "fr": [
+    "sujet",
+    "légende",
+    "vue"
+   ],
+   "de": [
+    "motiv",
+    "bildinhalt",
+    "beschriftung",
+    "bildbeschreibung"
+   ],
+   "es": [
+    "tema",
+    "motivo",
+    "leyenda",
+    "pie de foto"
+   ],
+   "sv": [
+    "motiv",
+    "bildtext",
+    "bildbeskrivning"
+   ],
+   "nl": [
+    "onderwerp",
+    "bijschrift",
+    "fotobeschrijving"
+   ]
+  },
+  "contesti": [
+   "documentazione"
+  ]
+ },
+ "titolo": {
+  "descrizione": "il titolo (nome) della fase",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Titolo"
+  },
+  "termini": {
+   "it": [
+    "titolo",
+    "nome fase",
+    "titolo fase"
+   ],
+   "en": [
+    "title",
+    "phase name",
+    "period name"
+   ],
+   "fr": [
+    "titre",
+    "nom de la phase"
+   ],
+   "de": [
+    "titel",
+    "phasenname",
+    "bezeichnung"
+   ],
+   "es": [
+    "título",
+    "nombre de la fase"
+   ],
+   "sv": [
+    "titel",
+    "fasnamn"
+   ],
+   "nl": [
+    "titel",
+    "fasenaam"
+   ]
+  },
+  "deboli": [
+   "nome",
+   "name",
+   "nom",
+   "namn",
+   "naam"
+  ],
+  "contesti": [
+   "fase",
+   "periodo",
+   "datazione"
+  ]
+ }
+}

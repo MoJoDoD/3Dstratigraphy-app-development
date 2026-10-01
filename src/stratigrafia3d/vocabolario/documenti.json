@@ -1,0 +1,911 @@
+{
+ "//": "Vocabolario: tabelle e layer collegati (materiali, reperti speciali, campioni, documentazione), sezioni, griglia, ortofoto, modelli del terreno e modelli 3D, tabelle di sistema.",
+ "materiali": {
+  "descrizione": "i materiali (inventario dei reperti)",
+  "descrizioni": {
+   "tabella": "l'inventario dei materiali",
+   "file": "l'inventario dei materiali"
+  },
+  "ambiti": [
+   "file",
+   "tabella"
+  ],
+  "canonico": {
+   "tabella": "Materiali"
+  },
+  "termini": {
+   "it": [
+    "materiali",
+    "inventario materiali",
+    "inventario dei materiali",
+    "elenco materiali",
+    "ceramica",
+    "ceramiche",
+    "materiali per us",
+    "schede materiali",
+    "reperti mobili",
+    "cassette materiali"
+   ],
+   "en": [
+    "finds",
+    "finds summary",
+    "finds summaries",
+    "bulk finds",
+    "materials",
+    "artefacts",
+    "artifacts",
+    "pottery",
+    "ceramics",
+    "finds register",
+    "finds list",
+    "finds catalogue",
+    "finds index",
+    "bulk finds register",
+    "assemblage"
+   ],
+   "fr": [
+    "mobilier",
+    "mobilier archéologique",
+    "inventaire du mobilier",
+    "céramique",
+    "céramiques",
+    "inventaire mobilier",
+    "mobilier céramique"
+   ],
+   "de": [
+    "funde",
+    "fundliste",
+    "fundmaterial",
+    "fundkatalog",
+    "fundinventar",
+    "keramik",
+    "fundbuch",
+    "fundzettel"
+   ],
+   "es": [
+    "materiales",
+    "inventario de materiales",
+    "cerámica",
+    "hallazgos",
+    "materiales arqueológicos"
+   ],
+   "sv": [
+    "fynd",
+    "fyndlista",
+    "fyndmaterial",
+    "keramik",
+    "fyndregister",
+    "fyndtabell"
+   ],
+   "nl": [
+    "vondsten",
+    "vondstenlijst",
+    "vondstmateriaal",
+    "aardewerk",
+    "vondstregister",
+    "vondstlijst"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "inventario_materiali_table",
+    "inventario_materiali"
+   ],
+   "Framework Archaeology": [
+    "FindsSummaries"
+   ]
+  },
+  "deboli": [
+   "reperti",
+   "inventario",
+   "inventory",
+   "objects"
+  ]
+ },
+ "reperti": {
+  "descrizione": "i reperti speciali (oggetti registrati singolarmente)",
+  "descrizioni": {
+   "layer": "i punti dei reperti speciali",
+   "tabella": "l'elenco dei reperti speciali"
+  },
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella"
+  ],
+  "canonico": {
+   "file": "reperti",
+   "layer": "reperti",
+   "tabella": "Reperti_speciali"
+  },
+  "termini": {
+   "it": [
+    "reperti speciali",
+    "reperto speciale",
+    "reperti",
+    "reperto",
+    "rs",
+    "oggetti",
+    "reperti notevoli",
+    "punti reperti",
+    "reperti puntuali"
+   ],
+   "en": [
+    "small finds",
+    "small find",
+    "special finds",
+    "registered finds",
+    "registered artefacts",
+    "registered objects",
+    "find spots",
+    "findspots",
+    "find points",
+    "sf",
+    "sf no",
+    "small find number",
+    "objects",
+    "find number"
+   ],
+   "fr": [
+    "petit mobilier",
+    "objets",
+    "isolats",
+    "mobilier isolé",
+    "objets isolés",
+    "objets enregistrés"
+   ],
+   "de": [
+    "kleinfunde",
+    "einzelfunde",
+    "fundpunkte",
+    "sonderfunde",
+    "einzelfundpunkte",
+    "funde einzeln eingemessen"
+   ],
+   "es": [
+    "hallazgos singulares",
+    "piezas singulares",
+    "objetos",
+    "hallazgos puntuales",
+    "materiales singulares"
+   ],
+   "sv": [
+    "fyndpunkter",
+    "specialfynd",
+    "särskilda fynd",
+    "inmätta fynd",
+    "punktfynd"
+   ],
+   "nl": [
+    "vondstpunten",
+    "vondstnummer",
+    "speciale vondsten",
+    "losse vondsten",
+    "ingemeten vondsten"
+   ]
+  },
+  "abbreviazioni": [
+   "rs",
+   "sf",
+   "sfno",
+   "rs n"
+  ],
+  "deboli": [
+   "finds",
+   "find",
+   "funde",
+   "fynd",
+   "vondsten",
+   "hallazgos",
+   "mobilier"
+  ],
+  "geometrie": [
+   "punto"
+  ],
+  "sistemi": {
+   "Stratigrafia 3D": [
+    "reperti_speciali"
+   ]
+  }
+ },
+ "campioni": {
+  "descrizione": "i campioni (prelievi per analisi)",
+  "descrizioni": {
+   "colonna": "il numero del campione",
+   "tabella": "l'elenco dei campioni",
+   "layer": "i punti di prelievo dei campioni"
+  },
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "file": "campioni",
+   "layer": "campioni",
+   "tabella": "Campioni",
+   "colonna": "Campione"
+  },
+  "termini": {
+   "it": [
+    "campioni",
+    "campione",
+    "campionature",
+    "campionatura",
+    "campioni ambientali",
+    "elenco campioni",
+    "numero campione",
+    "prelievi",
+    "prelievo"
+   ],
+   "en": [
+    "samples",
+    "sample",
+    "sample number",
+    "sample no",
+    "registered samples",
+    "environmental samples",
+    "bulk samples",
+    "soil samples",
+    "ecofacts",
+    "sample register",
+    "sample id"
+   ],
+   "fr": [
+    "échantillons",
+    "échantillon",
+    "prélèvements",
+    "prélèvement",
+    "numéro de prélèvement",
+    "numéro d'échantillon"
+   ],
+   "de": [
+    "proben",
+    "probe",
+    "bodenproben",
+    "probennummer",
+    "probenliste",
+    "probenentnahme"
+   ],
+   "es": [
+    "muestras",
+    "muestra",
+    "toma de muestras",
+    "número de muestra",
+    "muestreo"
+   ],
+   "sv": [
+    "prover",
+    "prov",
+    "jordprov",
+    "provnummer",
+    "provlista",
+    "makroprov"
+   ],
+   "nl": [
+    "monsters",
+    "monster",
+    "monsternummer",
+    "stalen",
+    "staal",
+    "bemonstering"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "campioni_table",
+    "pyarchinit_campionature",
+    "nr_campione"
+   ],
+   "Framework Archaeology": [
+    "RegisteredSamples",
+    "Sample Number"
+   ],
+   "Stratigrafia 3D": [
+    "campioni"
+   ]
+  },
+  "abbreviazioni": [
+   "camp",
+   "smp",
+   "spl",
+   "smpl",
+   "s no",
+   "sample n"
+  ],
+  "pattern": [
+   "^(?:sample|campione|probe|prov|monster|muestra|echantillon|smp|spl)\\s(?:n|nr|no|num|number|numero|nummer|id)$"
+  ],
+  "geometrie": [
+   "punto"
+  ]
+ },
+ "documentazione": {
+  "descrizione": "la documentazione (foto, disegni, registri)",
+  "descrizioni": {
+   "tabella": "l'elenco della documentazione (foto, disegni)"
+  },
+  "ambiti": [
+   "file",
+   "tabella"
+  ],
+  "canonico": {
+   "tabella": "Documentazione"
+  },
+  "termini": {
+   "it": [
+    "documentazione",
+    "documentazione grafica",
+    "documentazione fotografica",
+    "foto",
+    "fotografie",
+    "elenco foto",
+    "registro foto",
+    "disegni",
+    "elenco disegni",
+    "registro disegni",
+    "immagini",
+    "giornale di scavo",
+    "diario di scavo"
+   ],
+   "en": [
+    "documentation",
+    "photographs",
+    "photos",
+    "photo",
+    "photo register",
+    "photo list",
+    "photographic register",
+    "photographic archive",
+    "drawings",
+    "drawing register",
+    "drawings register",
+    "plans register",
+    "images",
+    "contexts photos",
+    "context photos",
+    "site diary",
+    "digital archive"
+   ],
+   "fr": [
+    "documentation",
+    "photos",
+    "photographies",
+    "inventaire photo",
+    "inventaire des photos",
+    "dessins",
+    "minutes",
+    "inventaire des minutes",
+    "journal de fouille",
+    "registre photo"
+   ],
+   "de": [
+    "dokumentation",
+    "fotos",
+    "fotoliste",
+    "fotodokumentation",
+    "zeichnungen",
+    "zeichnungsliste",
+    "planliste",
+    "grabungstagebuch",
+    "bildliste"
+   ],
+   "es": [
+    "documentación",
+    "fotografías",
+    "fotos",
+    "inventario fotográfico",
+    "dibujos",
+    "diario de excavación",
+    "registro fotográfico"
+   ],
+   "sv": [
+    "dokumentation",
+    "foton",
+    "fotolista",
+    "fotoregister",
+    "ritningar",
+    "ritningslista",
+    "ritningsregister",
+    "fotografier",
+    "dagbok"
+   ],
+   "nl": [
+    "documentatie",
+    "foto's",
+    "fotolijst",
+    "tekeningen",
+    "tekeninglijst",
+    "fotoregister",
+    "tekeningenlijst",
+    "dagrapporten"
+   ]
+  },
+  "sistemi": {
+   "Framework Archaeology": [
+    "ContextsPhotos",
+    "Photographs"
+   ],
+   "pyArchInit": [
+    "documentazione_table"
+   ]
+  },
+  "deboli": [
+   "archive",
+   "archivio",
+   "media",
+   "register",
+   "registro",
+   "archiv"
+  ]
+ },
+ "sezioni": {
+  "descrizione": "le sezioni (linee di sezione)",
+  "descrizioni": {
+   "colonna": "il nome della sezione",
+   "layer": "le linee di sezione"
+  },
+  "ambiti": [
+   "file",
+   "layer",
+   "colonna"
+  ],
+  "canonico": {
+   "file": "sezioni",
+   "layer": "sezioni",
+   "colonna": "sezione"
+  },
+  "termini": {
+   "it": [
+    "sezioni",
+    "sezione",
+    "linee di sezione",
+    "linea di sezione",
+    "tracce sezione",
+    "tracce di sezione",
+    "numero sezione",
+    "nome sezione"
+   ],
+   "en": [
+    "sections",
+    "section",
+    "section lines",
+    "section line",
+    "section number",
+    "section id",
+    "section name"
+   ],
+   "fr": [
+    "coupes",
+    "coupe",
+    "ligne de coupe",
+    "lignes de coupe",
+    "numéro de coupe"
+   ],
+   "de": [
+    "profil",
+    "profillinie",
+    "profillinien",
+    "profilschnitt",
+    "profilnummer",
+    "profile"
+   ],
+   "es": [
+    "secciones",
+    "sección",
+    "perfil",
+    "perfiles",
+    "línea de sección",
+    "líneas de sección"
+   ],
+   "sv": [
+    "sektion",
+    "sektioner",
+    "sektionslinje",
+    "sektionslinjer",
+    "sektionsnummer"
+   ],
+   "nl": [
+    "coupe",
+    "coupes",
+    "profiel",
+    "profielen",
+    "coupelijn",
+    "profiellijn",
+    "coupenummer"
+   ]
+  },
+  "sistemi": {
+   "Framework Archaeology": [
+    "sectionlines",
+    "SECTION_ID"
+   ],
+   "pyArchInit": [
+    "pyarchinit_sezioni"
+   ],
+   "Stratigrafia 3D": [
+    "sezioni"
+   ]
+  },
+  "abbreviazioni": [
+   "sez",
+   "sect",
+   "sec",
+   "sez n"
+  ],
+  "geometrie": [
+   "linea"
+  ]
+ },
+ "sezioni_disegno": {
+  "descrizione": "i disegni delle sezioni (in coordinate di sezione)",
+  "ambiti": [
+   "file",
+   "layer"
+  ],
+  "canonico": {
+   "file": "sezioni_disegno",
+   "layer": "sezioni_disegno"
+  },
+  "termini": {
+   "it": [
+    "sezioni disegno",
+    "sezioni_disegno",
+    "disegno sezioni",
+    "disegni sezione",
+    "disegni delle sezioni",
+    "sezioni disegnate",
+    "disegno_sez"
+   ],
+   "en": [
+    "section drawings",
+    "section drawing",
+    "drawn sections",
+    "section drawn"
+   ],
+   "fr": [
+    "relevé de coupe",
+    "relevés de coupe",
+    "dessin de coupe",
+    "dessins de coupe"
+   ],
+   "de": [
+    "profilzeichnung",
+    "profilzeichnungen"
+   ],
+   "es": [
+    "dibujo de sección",
+    "dibujos de sección",
+    "dibujo de perfil"
+   ],
+   "sv": [
+    "sektionsritning",
+    "sektionsritningar"
+   ],
+   "nl": [
+    "coupetekening",
+    "coupetekeningen",
+    "profieltekening",
+    "profieltekeningen"
+   ]
+  },
+  "geometrie": [
+   "poligono",
+   "linea"
+  ],
+  "sistemi": {
+   "Stratigrafia 3D": [
+    "sezioni_disegno"
+   ]
+  }
+ },
+ "griglia": {
+  "descrizione": "la griglia (quadrettatura) di scavo",
+  "ambiti": [
+   "file",
+   "layer",
+   "colonna"
+  ],
+  "canonico": {
+   "file": "ignora",
+   "layer": "ignora"
+  },
+  "termini": {
+   "it": [
+    "griglia",
+    "quadrettatura",
+    "quadrati",
+    "quadrato",
+    "reticolo",
+    "griglia 2m",
+    "griglia_2m",
+    "quadrettato"
+   ],
+   "en": [
+    "grid",
+    "grid squares",
+    "grid square",
+    "site grid",
+    "excavation grid"
+   ],
+   "fr": [
+    "carroyage",
+    "carré",
+    "carrés"
+   ],
+   "de": [
+    "planquadrat",
+    "planquadrate",
+    "grabungsraster",
+    "quadrant"
+   ],
+   "es": [
+    "cuadrícula",
+    "cuadro",
+    "cuadros",
+    "retícula"
+   ],
+   "sv": [
+    "rutnät",
+    "ruta",
+    "rutor"
+   ],
+   "nl": [
+    "grid",
+    "vak",
+    "vakken",
+    "vakkenraster"
+   ]
+  },
+  "geometrie": [
+   "poligono",
+   "linea"
+  ],
+  "sistemi": {
+   "Stratigrafia 3D": [
+    "griglia_2m"
+   ]
+  }
+ },
+ "ortofoto": {
+  "descrizione": "un'ortofoto (immagine raddrizzata dello scavo)",
+  "ambiti": [
+   "file",
+   "layer"
+  ],
+  "canonico": {
+   "file": "ortofoto"
+  },
+  "termini": {
+   "it": [
+    "ortofoto",
+    "ortofotopiano",
+    "ortomosaico",
+    "ortofotomosaico"
+   ],
+   "en": [
+    "orthophoto",
+    "orthophotos",
+    "orthomosaic",
+    "ortho",
+    "orthoimage",
+    "orthophotograph"
+   ],
+   "fr": [
+    "orthophotographie",
+    "orthophotoplan",
+    "orthophoto",
+    "orthomosaïque"
+   ],
+   "de": [
+    "orthofoto",
+    "orthomosaik",
+    "orthophoto"
+   ],
+   "es": [
+    "ortofoto",
+    "ortomosaico",
+    "ortofotografía"
+   ],
+   "sv": [
+    "ortofoto",
+    "ortomosaik"
+   ],
+   "nl": [
+    "orthofoto",
+    "orthomozaïek"
+   ]
+  }
+ },
+ "modello_terreno": {
+  "descrizione": "un modello digitale del terreno",
+  "ambiti": [
+   "file",
+   "layer"
+  ],
+  "canonico": {
+   "file": "dem"
+  },
+  "termini": {
+   "it": [
+    "modello del terreno",
+    "modello digitale del terreno",
+    "modello digitale",
+    "topografia",
+    "modello di elevazione",
+    "rilievo lidar"
+   ],
+   "en": [
+    "digital elevation model",
+    "digital terrain model",
+    "digital surface model",
+    "terrain model",
+    "elevation model",
+    "lidar",
+    "topography",
+    "truncation model"
+   ],
+   "fr": [
+    "modèle numérique de terrain",
+    "modèle numérique d'élévation",
+    "modèle de terrain",
+    "lidar"
+   ],
+   "de": [
+    "geländemodell",
+    "digitales geländemodell",
+    "höhenmodell",
+    "digitales höhenmodell",
+    "oberflächenmodell"
+   ],
+   "es": [
+    "modelo digital del terreno",
+    "modelo digital de elevaciones",
+    "modelo del terreno"
+   ],
+   "sv": [
+    "höjdmodell",
+    "terrängmodell",
+    "digital höjdmodell"
+   ],
+   "nl": [
+    "hoogtemodel",
+    "digitaal hoogtemodel",
+    "terreinmodel",
+    "ahn"
+   ]
+  },
+  "abbreviazioni": [
+   "dem",
+   "dtm",
+   "dsm",
+   "mdt",
+   "mnt",
+   "dgm",
+   "dom",
+   "mde",
+   "mds",
+   "ahn"
+  ]
+ },
+ "modello_3d": {
+  "descrizione": "un modello 3D (fotogrammetria, nuvola di punti)",
+  "ambiti": [
+   "file"
+  ],
+  "canonico": {
+   "file": "modello3d"
+  },
+  "termini": {
+   "it": [
+    "modello 3d",
+    "modelli 3d",
+    "mesh",
+    "fotogrammetria",
+    "nuvola di punti",
+    "modello fotogrammetrico"
+   ],
+   "en": [
+    "3d model",
+    "3d models",
+    "photogrammetry",
+    "point cloud",
+    "3d scan",
+    "laser scan",
+    "photogrammetric model"
+   ],
+   "fr": [
+    "modèle 3d",
+    "photogrammétrie",
+    "nuage de points",
+    "maillage"
+   ],
+   "de": [
+    "3d modell",
+    "photogrammetrie",
+    "fotogrammetrie",
+    "punktwolke",
+    "3d scan"
+   ],
+   "es": [
+    "modelo 3d",
+    "fotogrametría",
+    "nube de puntos",
+    "malla"
+   ],
+   "sv": [
+    "3d modell",
+    "fotogrammetri",
+    "punktmoln"
+   ],
+   "nl": [
+    "3d model",
+    "fotogrammetrie",
+    "puntenwolk"
+   ]
+  }
+ },
+ "tabelle_sistema": {
+  "descrizione": "una tabella tecnica del database GIS (non contiene dati di scavo)",
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella"
+  ],
+  "canonico": {
+   "layer": "ignora"
+  },
+  "sistemi": {
+   "QGIS": [
+    "layer_styles",
+    "qgis_projects"
+   ],
+   "SpatiaLite": [
+    "spatial_ref_sys",
+    "geometry_columns",
+    "spatialite_history",
+    "sql_statements_log",
+    "views_geometry_columns",
+    "virts_geometry_columns",
+    "sqlite_sequence"
+   ],
+   "GeoPackage": [
+    "gpkg_contents",
+    "gpkg_spatial_ref_sys",
+    "gpkg_geometry_columns",
+    "gpkg_ogr_contents",
+    "gpkg_extensions",
+    "gpkg_tile_matrix"
+   ]
+  }
+ },
+ "campi_tecnici": {
+  "descrizione": "un campo tecnico del CAD o del GIS (da ignorare)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {},
+  "sistemi": {
+   "DXF": [
+    "EntityHandle",
+    "SubClasses",
+    "Linetype",
+    "PaperSpace",
+    "ExtendedEntity",
+    "RefName",
+    "Text"
+   ],
+   "Shapefile/GIS": [
+    "Shape_Length",
+    "Shape_Area",
+    "Shape_Leng",
+    "SHAPE_Le_1",
+    "OBJECTID_1",
+    "ogc_fid",
+    "Join_Count",
+    "TARGET_FID"
+   ]
+  }
+ }
+}

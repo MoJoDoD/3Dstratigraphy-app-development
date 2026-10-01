@@ -9,9 +9,14 @@ Tre modi, descritti da un dizionario salvato nei parametri del progetto:
     {"tipo": "raster",   "sorgente": "dtm.tif", "correzione": "troncamento.tif"}   # più un raster di differenze
     {"tipo": "quote",    "abbassa": 0.0}                              # interpolata dalle quote rilevate
     {"tipo": "nessuna"}
+    {"tipo": "raster",   "sorgente": "dtm.tif", "correzione": "troncamento.tif", "quote": true}
 "abbassa" sposta la superficie verso il basso (es. lo spessore dell'arativo asportato).
 "correzione" è un secondo raster di differenze (metri, di solito negativi) da sommare al primo: per esempio
-il modello di troncamento che dice di quanto il piano di scavo sta sotto il terreno storico.
+il modello di troncamento che dice di quanto il piano di scavo sta sotto il terreno storico. Dove il raster
+di correzione non arriva, se ci sono quote rilevate del piano di scavo (sup, orlo, rasatura, anche senza US)
+la correzione si ricava da quelle (quota rilevata meno modello del terreno) e si raccorda al bordo del raster;
+altrimenti vale il bordo più vicino.
+"quote": true adatta in più il risultato alle quote rilevate, dove sono fitte (scarti interpolati e limitati).
 Il raster viene copiato nel progetto, così il file .scavo resta autosufficiente.
 """
 import io
@@ -79,6 +84,16 @@ class Raster:
         rr, cc = ok[i].T
         return self.z[rr, cc].reshape(np.shape(c))
 
+    def copre(self, x, y):
+        """Vero dove il raster ha un valore (dentro l'estensione e cella non vuota)."""
+        x, y = np.asarray(x, float), np.asarray(y, float)
+        c = np.floor((x - self.x0) / self.sx + 0.5).astype(np.int64)
+        r = np.floor((self.y0 - y) / self.sy + 0.5).astype(np.int64)
+        ok = (c >= 0) & (c < self.z.shape[1]) & (r >= 0) & (r < self.z.shape[0])
+        out = np.zeros(np.shape(x), bool)
+        out[ok] = ~np.isnan(self.z[r[ok], c[ok]])
+        return out
+
     def ritaglia(self, xmin, ymin, xmax, ymax, margine=None):
         """Solo la parte che serve allo scavo (con un margine di qualche cella)."""
         m = margine if margine is not None else 3 * max(self.sx, self.sy)
@@ -115,20 +130,186 @@ def e_differenza(descr):
     return descr.get("quota_max") is not None and descr["quota_max"] <= 0 and descr["quota_min"] >= -20
 
 
-def combina(base, correzione, xmin, ymin, xmax, ymax, celle_max=4_000_000):
+CELLA_PUNTI = 0.5         # m: delle quote rilevate si tiene la più alta per cella (i fondi restano sotto)
+# correzione ricavata dalle quote fuori dal raster di correzione
+VICINO, LONTANO = 10.0, 30.0   # m dalla quota più vicina: piena fiducia / nessuna (poi il bordo del raster)
+RACCORDO = 10.0                # m: fascia in cui si passa dal bordo del raster alla correzione delle quote
+# adattamento alle quote ("quote": true)
+ADATTA_VICINO, ADATTA_LONTANO = 3.0, 10.0   # m dalla quota più vicina
+ADATTA_MIN_PUNTI = 3                        # quote entro ADATTA_LONTANO perché i punti contino come «fitti»
+ADATTA_LIMITE = 1.0                         # m: scarto massimo applicato
+
+
+def combina(base, correzione, xmin, ymin, xmax, ymax, celle_max=4_000_000, punti=None, adatta=False):
     """Raster = base + correzione sull'area indicata (coordinate assolute), al passo del più fine dei due
-    ma con al massimo ``celle_max`` celle. Fuori dalla correzione vale il suo bordo più vicino."""
-    passo = min(base.sx, correzione.sx)
+    ma con al massimo ``celle_max`` celle. ``correzione`` può mancare (None).
+
+    Fuori dalla copertura della correzione: se ci sono ``punti`` (N x 3, quote rilevate del piano di scavo)
+    vicini, la correzione è la loro differenza dalla base (senza i fondi, interpolata e smussata) raccordata
+    al bordo del raster; altrimenti vale il bordo più vicino. Con ``adatta`` il risultato si avvicina in più
+    alle quote dove sono fitte."""
+    punti = np.zeros((0, 3)) if punti is None else np.asarray(punti, float).reshape(-1, 3)
+    passo = min(base.sx, correzione.sx) if correzione is not None else base.sx
+    if adatta and len(punti):
+        passo = min(passo, CELLA_PUNTI)
     passo = max(passo, float(np.sqrt((xmax - xmin) * (ymax - ymin) / celle_max)))
     m = 2 * passo
     xs = np.arange(xmin - m, xmax + m + passo / 2, passo)
     ys = np.arange(ymax + m, ymin - m - passo / 2, -passo)
     X, Y = np.meshgrid(xs, ys)
-    z = base(X.ravel(), Y.ravel()) + correzione(X.ravel(), Y.ravel())
-    r = Raster(z.reshape(X.shape), xs[0], ys[0], passo, passo, None, f"{base.nome} + {correzione.nome}")
-    e = correzione.descrizione()["estensione"]
-    r.copertura = float(np.mean((X >= e[0]) & (X <= e[2]) & (Y >= e[1]) & (Y <= e[3])))
+    x, y = X.ravel(), Y.ravel()
+    zb = base(x, y)
+    nome = base.nome
+    usati = adattati = 0
+    copertura = 1.0
+    if correzione is not None:
+        c = correzione(x, y)
+        dentro = correzione.copre(x, y)
+        e = correzione.descrizione()["estensione"]
+        copertura = float(np.mean((x >= e[0]) & (x <= e[2]) & (y >= e[1]) & (y <= e[3])))
+        # le quote servono solo vicino all'area (e fuori dalla copertura della correzione)
+        vicini = _nel_riquadro(punti, xs[0] - LONTANO, ys[-1] - LONTANO, xs[-1] + LONTANO, ys[0] + LONTANO)
+        if len(vicini) and not dentro.all():
+            c, usati = _correzione_dalle_quote(c, dentro, X.shape, passo, base, vicini, x, y)
+        zb = zb + c
+        nome = f"{nome} + {correzione.nome}"
+    r = Raster(zb.reshape(X.shape), xs[0], ys[0], passo, passo, None, nome)
+    if adatta and len(punti):
+        vicini = _nel_riquadro(punti, xs[0] - ADATTA_LONTANO, ys[-1] - ADATTA_LONTANO,
+                               xs[-1] + ADATTA_LONTANO, ys[0] + ADATTA_LONTANO)
+        if len(vicini) >= ADATTA_MIN_PUNTI:
+            dz, adattati = _adatta_alle_quote(r, vicini, x, y)
+            r.z = (r.z.ravel() + dz).reshape(X.shape).astype("float32")
+    if usati or adattati:
+        r.nome = f"{r.nome} + quote rilevate"
+    r.copertura = copertura
+    r.punti_correzione, r.punti_adattamento = int(usati), int(adattati)
     return r
+
+
+def _nel_riquadro(P, x0, y0, x1, y1):
+    if not len(P):
+        return P
+    return P[(P[:, 0] >= x0) & (P[:, 0] <= x1) & (P[:, 1] >= y0) & (P[:, 1] <= y1) & np.isfinite(P[:, 2])]
+
+
+def _massimo_per_cella(P, cella=CELLA_PUNTI):
+    """Per ogni cella la quota più alta: la superficie da cui si scava, non i fondi."""
+    if not len(P):
+        return P
+    k = np.floor(P[:, :2] / cella).astype(np.int64)
+    o = np.lexsort((P[:, 2], k[:, 1], k[:, 0]))
+    ks = k[o]
+    ultima = np.r_[np.any(ks[1:] != ks[:-1], axis=1), True]
+    return P[o][ultima]
+
+
+def _senza_fondi(P, v, vicini=12, raggio=15.0):
+    """Vero per le quote da tenere: via quelle molto più basse delle vicine (fondi di buche, «sinks»),
+    cioè sotto la mediana locale di più di 3 deviazioni robuste (almeno 10 cm)."""
+    n = len(v)
+    if n < 4:
+        return np.ones(n, bool)
+    from scipy.spatial import cKDTree
+    k = min(vicini, n)
+    _, i = cKDTree(P[:, :2]).query(P[:, :2], k=k, distance_upper_bound=raggio)
+    V = np.where(i < n, v[np.minimum(i, n - 1)], np.nan)
+    conta = np.sum(~np.isnan(V), axis=1)
+    med = np.nanmedian(V, axis=1)
+    mad = np.nanmedian(np.abs(V - med[:, None]), axis=1)
+    soglia = np.maximum(0.10, 3 * 1.4826 * mad)
+    return (conta < 4) | ~(v < med - soglia)
+
+
+def _idw(P, v, Q, vicini=12, liscio=2.0):
+    """Media pesata con l'inverso del quadrato della distanza (smussata di ``liscio`` m) e distanza
+    dalla quota più vicina."""
+    from scipy.spatial import cKDTree
+    k = min(vicini, len(v))
+    d, i = cKDTree(P[:, :2]).query(Q, k=k)
+    d, i = d.reshape(len(Q), k), i.reshape(len(Q), k)
+    w = 1.0 / (d ** 2 + liscio ** 2)
+    return (w * v[i]).sum(1) / w.sum(1), d[:, 0]
+
+
+def _correzione_dalle_quote(c, dentro, forma, passo, base, P, x, y):
+    """Fuori dalla copertura del raster di correzione: correzione = quota rilevata − base, interpolata;
+    raccordata al bordo del raster entro RACCORDO m e lasciata al bordo lontano dalle quote."""
+    P = _massimo_per_cella(P)
+    d = P[:, 2] - base(P[:, 0], P[:, 1])
+    tieni = _senza_fondi(P, d)
+    P, d = P[tieni], d[tieni]
+    if not len(P):
+        return c, 0
+    fuori = ~dentro
+    Q = np.c_[x[fuori], y[fuori]]
+    F, dp = _idw(P, d, Q)
+    wp = np.clip((LONTANO - dp) / (LONTANO - VICINO), 0, 1)
+    if not (wp > 0).any():                         # quote tutte lontane dalle celle scoperte
+        return c, 0
+    if dentro.any():
+        from scipy.ndimage import distance_transform_edt
+        dist = distance_transform_edt(~dentro.reshape(forma)).ravel()[fuori] * passo
+    else:
+        dist = np.full(len(Q), np.inf)
+    wb = np.clip(1 - dist / RACCORDO, 0, 1)
+    co = c[fuori]
+    c = c.copy()
+    c[fuori] = wb * co + (1 - wb) * (wp * F + (1 - wp) * co)
+    return c, int(len(P))
+
+
+def _adatta_alle_quote(r, P, x, y):
+    """Scarti quota rilevata − superficie, senza fondi, interpolati e limitati a ±ADATTA_LIMITE; applicati
+    solo dove le quote sono fitte."""
+    from scipy.spatial import cKDTree
+    P = _massimo_per_cella(P)
+    s = P[:, 2] - r(P[:, 0], P[:, 1])
+    tieni = _senza_fondi(P, s) & np.isfinite(s)
+    P, s = P[tieni], np.clip(s[tieni], -ADATTA_LIMITE, ADATTA_LIMITE)
+    if len(P) < ADATTA_MIN_PUNTI:
+        return np.zeros(len(x)), 0
+    Q = np.c_[x, y]
+    dz = np.zeros(len(x))
+    tree = cKDTree(P[:, :2])
+    dp, _ = tree.query(Q, k=1, distance_upper_bound=ADATTA_LONTANO)
+    vic = np.isfinite(dp)
+    vic[vic] = tree.query_ball_point(Q[vic], ADATTA_LONTANO, return_length=True) >= ADATTA_MIN_PUNTI
+    if not vic.any():
+        return dz, 0
+    F, dpv = _idw(P, s, Q[vic], vicini=8, liscio=1.0)
+    w = np.clip((ADATTA_LONTANO - dpv) / (ADATTA_LONTANO - ADATTA_VICINO), 0, 1)
+    dz[vic] = np.clip(w * F, -ADATTA_LIMITE, ADATTA_LIMITE)
+    return dz, int(len(P))
+
+
+# punti quotati usati solo per la superficie di riferimento, senza US (es. i «datum points» di Heathrow)
+L_QUOTE_SUPERFICIE = "quote_superficie"
+
+
+def punti_rilevati(scavo):
+    """Quote rilevate del piano di scavo in coordinate assolute, N x 3: dal layer delle quote quelle di tipo
+    sup, orlo, rasatura (anche senza US); dal layer ``quote_superficie`` tutte (o quelle di quei tipi)."""
+    from . import schema as sc
+    import shapely
+    out = []
+    for nome in (sc.L_QUOTE, L_QUOTE_SUPERFICIE):
+        g = scavo.layers.get(nome)
+        if g is None or not len(g):
+            continue
+        g = g[g.geometry.notna()]
+        g = g[~g.geometry.is_empty & (g.geometry.geom_type == "Point")]
+        if sc.F_TIPO_QUOTA in g.columns:
+            ok = g[sc.F_TIPO_QUOTA].astype(str).isin([sc.Q_SUP, sc.Q_ORLO, sc.Q_RASATURA])
+            if nome == L_QUOTE_SUPERFICIE:
+                ok |= g[sc.F_TIPO_QUOTA].isna()
+            g = g[ok]
+        if len(g):
+            out.append(shapely.get_coordinates(np.asarray(g.geometry.values), include_z=True))
+    if not out:
+        return np.zeros((0, 3))
+    P = np.vstack(out)
+    return P[np.isfinite(P).all(axis=1)]
 
 
 def georef(path):
@@ -216,6 +397,8 @@ def normalizza(spec):
     s["abbassa"] = float(s.get("abbassa") or 0.0)
     if s["tipo"] == "costante":
         s["quota"] = float(s.get("quota") or 0.0)
+    if "quote" in s:
+        s["quote"] = bool(s["quote"])
     return s
 
 

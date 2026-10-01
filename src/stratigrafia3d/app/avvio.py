@@ -3,12 +3,20 @@
 import os
 import sys
 import threading
+import time
 import webbrowser
 
 from .server import App, crea_server
 from . import dialoghi
 
 _ESTENSIONI_BINARIE = (".dll", ".exe", ".pyd")
+
+# Chiusura automatica nel ripiego sul browser (secondi). La pagina invia un battito ogni 10 s, ma i
+# browser rallentano i timer delle schede in secondo piano fino a uno al minuto: il margine è ampio.
+ATTESA_BATTITO = 150             # nessun battito da così tanto: la pagina è stata chiusa
+ATTESA_CON_MODIFICHE = 3 * 3600  # ... ma con modifiche non salvate si aspetta molto di più
+ATTESA_INIZIALE = 600            # nessuna pagina si è mai collegata
+INTERVALLO_CONTROLLO = 0.5
 
 
 def _stampa(*righe):
@@ -57,24 +65,53 @@ def _prepara_windows():
         pass
 
 
-def _attendi_fine(t, srv):
-    """Tiene vivo il server finché il processo non viene interrotto (Ctrl+C)."""
+def _pagina_chiusa(app, inizio):
+    """True se la pagina non dà più segni di vita e nessuna richiesta è in corso."""
+    attivita = getattr(app, "attivita", None)
+    if attivita is None:
+        return False
+    ultimo, in_corso = attivita.istantanea()
+    if in_corso:
+        return False                     # es. una ricostruzione lunga: mai interrompere
+    ora = time.monotonic()
+    if ultimo is None:
+        return ora - inizio > ATTESA_INIZIALE
+    modificato = bool(getattr(getattr(app, "stato", None), "modificato", False))
+    return ora - ultimo > (ATTESA_CON_MODIFICHE if modificato else ATTESA_BATTITO)
+
+
+def _attendi_fine(t, srv, app=None):
+    """Tiene vivo il server finché il processo non viene interrotto (Ctrl+C).
+
+    Con ``app`` il server si chiude anche da solo quando la pagina nel browser non c'è più
+    (nessun battito da un po' e nessuna richiesta in corso): nell'eseguibile senza console
+    altrimenti resterebbe in esecuzione per sempre.
+    """
+    inizio = time.monotonic()
     try:
         while t.is_alive():
-            t.join(0.5)          # a intervalli, così Ctrl+C viene ricevuto anche su Windows
+            t.join(INTERVALLO_CONTROLLO)  # a intervalli, così Ctrl+C viene ricevuto anche su Windows
+            if app is not None and t.is_alive() and _pagina_chiusa(app, inizio):
+                _stampa("La pagina di Stratigrafia 3D è stata chiusa: il programma termina.")
+                srv.shutdown()
+                break
     except KeyboardInterrupt:
         srv.shutdown()
 
 
-def _avvia_nel_browser(srv, t, url, browser=True):
+def _avvia_nel_browser(srv, t, url, browser=True, app=None):
     _stampa(f"Stratigrafia 3D è in esecuzione su {url}",
             "Chiudi questa finestra (o premi Ctrl+C) per terminare.")
     if browser:
+        _stampa("Senza modifiche da salvare, il programma termina da solo qualche minuto "
+                "dopo la chiusura della pagina.")
         try:
             webbrowser.open(url)
         except Exception:
             pass
-    _attendi_fine(t, srv)
+    # chiusura automatica solo se la pagina l'abbiamo aperta noi; con browser=False (riga di comando
+    # con --senza-browser) il server resta attivo finché non lo si interrompe
+    _attendi_fine(t, srv, app if browser else None)
 
 
 def _apri_finestra(url):
@@ -110,4 +147,4 @@ def avvia(progetto=None, finestra=True, porta=0, browser=True):
             else:
                 srv.shutdown()
                 return
-    _avvia_nel_browser(srv, t, url, browser)
+    _avvia_nel_browser(srv, t, url, browser, app)

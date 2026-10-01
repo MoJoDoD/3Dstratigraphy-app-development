@@ -240,6 +240,9 @@ class Foglio:
             if path not in risorse:
                 risorse[path] = openpyxl.load_workbook(path)
             self.wb = risorse[path]
+            if nome not in self.wb.sheetnames:       # es. tabelle separate dentro un foglio («foglio · titolo»)
+                raise ErroreModifica(f"Il foglio «{nome}» è stato riorganizzato durante l'importazione: "
+                                     "le modifiche vanno riportate a mano nel file d'origine")
             self.ws = self.wb[nome]
             righe = list(self.ws.iter_rows(values_only=True))
             self.intestazione = [str(c) if c is not None else "" for c in (righe[0] if righe else [])]

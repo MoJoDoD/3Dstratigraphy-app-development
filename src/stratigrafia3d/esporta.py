@@ -55,8 +55,82 @@ def mesh_unita(m):
     return mesh_chiusa(m.V2, m.F, m.top, m.bot)
 
 
+_QUALITA_VIS = {"strategia", "quote_stimate", "punti_taglio", "punti_orlo", "base", "punti_tetto", "punti_base"}
+
+
+def _quantizza(a, quant):
+    """Coordinate locali -> interi a 16 bit (passo ``quant``), limitate all'intervallo rappresentabile."""
+    return np.clip(np.round(np.asarray(a, float) / quant), 0, 65535).astype("<u2")
+
+
+class _Archivio:
+    """Elenco di dati binari senza doppioni: lo stesso contenuto (pianta, quote, contorno) si invia una
+    volta sola e le unità lo richiamano con l'indice. I riempimenti che ereditano il poligono del
+    taglio hanno la stessa triangolazione in pianta; la base di uno strato è spesso il tetto di un altro."""
+
+    def __init__(self):
+        self.voci, self._indice = [], {}
+
+    def aggiungi(self, chiave, crea):
+        k = self._indice.get(chiave)
+        if k is None:
+            k = self._indice[chiave] = len(self.voci)
+            self.voci.append(crea())
+        return k
+
+
+def _mesh_visualizzatore(scavo, quant, Z0):
+    """Mesh delle unità in forma compatta per il visualizzatore.
+
+    Ogni unità è un prisma sulla propria triangolazione in pianta (vedi ``mesh_chiusa``): si inviano
+    la pianta (XY quantizzati e triangoli, in ``piante``), le quote del tetto e della base (in ``zeta``)
+    e il visualizzatore ricostruisce tetto, base e pareti. Piante, quote e contorni uguali si inviano
+    una volta sola. Per ogni unità: ``g`` pianta, ``zt``/``zb`` quote (``zb`` assente per i tagli),
+    ``pos`` riquadro quantizzato (xyz minimi e massimi), ``o`` contorno del poligono, ``label``, ``vol``."""
+    piante, zeta, contorni = _Archivio(), _Archivio(), _Archivio()
+    poli_us, poli_usm = scavo.poligoni_us(), scavo.poligoni_usm()
+    meshes = []
+    for u, m in sorted(scavo.modello.unita.items()):
+        xy = _quantizza(np.asarray(m.V2, float).reshape(-1, 2), quant)
+        n = len(xy)
+        F = np.asarray(m.F, np.int64).reshape(-1, 3)
+        dt = "u1" if n <= 256 else ("<u2" if n <= 65536 else "<u4")
+        xb, fb = xy.tobytes(), np.ascontiguousarray(F, dt).tobytes()
+        g = piante.aggiungi((xb, fb), lambda: dict(xy=base64.b64encode(xb).decode(), f=base64.b64encode(fb).decode(),
+                                                    t=int(np.dtype(dt).itemsize)))
+        quote = [_quantizza(np.asarray(m.top, float) - Z0, quant)]
+        if m.tipo != "taglio":
+            quote.append(_quantizza(np.asarray(m.bot, float) - Z0, quant))
+        zk = [zeta.aggiungi(z.tobytes(), lambda z=z: base64.b64encode(z.tobytes()).decode()) for z in quote]
+        if n:
+            zz = np.concatenate(quote)
+            riquadro = np.r_[xy.min(0), zz.min(), xy.max(0), zz.max()]
+        else:
+            riquadro = np.zeros(6)
+        d = dict(id=int(u), kind=m.tipo, g=g, zt=zk[0], pos=_b64(riquadro, "<u2"))
+        if len(zk) > 1:
+            d["zb"] = zk[1]
+        geom = (poli_us.get(u) if m.tipo != "usm" else poli_usm.get(u))
+        if geom is not None and not geom.is_empty:
+            anelli = [np.asarray(r.coords)[:, :2] for p in getattr(geom, "geoms", [geom]) for r in [p.exterior, *p.interiors]]
+            cq = _quantizza(np.vstack(anelli), quant).tobytes()
+            lung = [len(a) for a in anelli]
+            d["o"] = contorni.aggiungi((cq, tuple(lung)), lambda: dict(xy=base64.b64encode(cq).decode(), anelli=lung))
+            c = geom.representative_point()
+            d["label"] = [round(c.x, 3), round(c.y, 3), round(float(np.max(m.top) - Z0), 3)]
+        elif n:
+            d["label"] = [round(float(m.V2[:, 0].mean()), 3), round(float(m.V2[:, 1].mean()), 3),
+                          round(float(np.max(m.top) - Z0), 3)]
+        else:
+            d["label"] = [0.0, 0.0, 0.0]
+        d["vol"] = round(m.volume(), 3)
+        meshes.append(d)
+    return meshes, piante.voci, zeta.voci, contorni.voci
+
+
 def dati_visualizzatore(scavo):
-    """Dizionario completo letto dal visualizzatore web (stessa struttura del prototipo)."""
+    """Dizionario completo letto dal visualizzatore web (stessa struttura del prototipo; le mesh in
+    forma compatta, vedi ``_mesh_visualizzatore``)."""
     if scavo.modello is None:
         raise ValueError("modello 3D non calcolato: eseguire prima la ricostruzione")
     o = scavo.origine
@@ -64,7 +138,6 @@ def dati_visualizzatore(scavo):
     rap = scavo.rapporti()
     livello = st.livelli_dal_basso(rap)
     tab = scavo.tabelle
-    meshes = []
     # coordinate intere a 16 bit: passo di 1 mm fino a 65 m di estensione, poi 2 mm, 5 mm, 1 cm...
     est = 0.0
     for m in scavo.modello.unita.values():
@@ -74,27 +147,7 @@ def dati_visualizzatore(scavo):
     xy = [m.V2 for m in scavo.modello.unita.values() if len(m.V2)]
     xy = np.vstack(xy) if xy else np.zeros((1, 2))
     estensione = [round(float(v), 2) for v in (*xy.min(0), *xy.max(0))]
-    poli_us, poli_usm = scavo.poligoni_us(), scavo.poligoni_usm()
-    for u, m in sorted(scavo.modello.unita.items()):
-        P, F = mesh_unita(m)
-        P = P.copy()
-        P[:, 2] -= Z0
-        Pq = np.clip(np.round(P / quant), 0, 65535).astype("<u2")
-        geom = (poli_us.get(u) if m.tipo != "usm" else poli_usm.get(u))
-        outline = []
-        if geom is not None:
-            for p in getattr(geom, "geoms", [geom]):
-                for ring in [p.exterior, *p.interiors]:
-                    outline.append(np.round(np.asarray(ring.coords)[:, :2], 3).ravel().tolist())
-            c = geom.representative_point()
-            lab = [round(c.x, 3), round(c.y, 3), round(float(np.max(m.top) - Z0), 3)]
-        else:
-            lab = [float(m.V2[:, 0].mean()), float(m.V2[:, 1].mean()), float(np.max(m.top) - Z0)]
-        meshes.append(dict(id=int(u), kind=m.tipo, pos=_b64(Pq, "<u2"),
-                           idx=_b64(F, "<u2" if len(P) < 65536 else "<u4"), nv=len(P), ntop=len(m.V2), nt=len(F),
-                           i32=bool(len(P) >= 65536), outline=outline, label=lab,
-                           zmin=round(float(np.min(m.bot)), 3), zmax=round(float(np.max(m.top)), 3),
-                           vol=round(m.volume(), 3), qual=m.qualita))
+    meshes, piante, zeta, contorni = _mesh_visualizzatore(scavo, quant, Z0)
     recs = {}
     for u, r in scavo.schede_us().items():
         recs[u] = _rec(r); recs[u]["_tipo"] = "US"
@@ -106,7 +159,9 @@ def dati_visualizzatore(scavo):
     for u in recs:
         recs[u]["_livello"] = int(livello.get(u, 0))
         if u in scavo.modello.unita:
-            recs[u]["_qualita"] = scavo.modello.unita[u].qualita
+            # solo le voci mostrate dal visualizzatore (affidabilità della forma)
+            qu = scavo.modello.unita[u].qualita
+            recs[u]["_qualita"] = {k: v for k, v in qu.items() if k in _QUALITA_VIS} if isinstance(qu, dict) else qu
         qq = q_per_unita.get(u, vuoto)
         if len(qq):
             if recs[u]["_tipo"] == "US":
@@ -183,7 +238,7 @@ def dati_visualizzatore(scavo):
             "immaginario" in str(info.columns[0]).lower()
     return dict(
         sito=sito, demo=bool(demo), quant=quant, estensione=estensione, origine=dict(E0=o["E0"], N0=o["N0"], Z0=Z0, crs=nome_crs(scavo.crs) if scavo.crs else ""),
-        meshes=meshes, livello_max=int(max(livello.values()) if livello else 0),
+        meshes=meshes, piante=piante, zeta=zeta, contorni=contorni, livello_max=int(max(livello.values()) if livello else 0),
         fasi=fasi, schede=recs,
         rapporti=[[int(a), d["t"], int(b)] for a, b, d in rap.grafo.edges(data=True)] +
                  [[int(a), "si lega a", int(b)] for a, b in rap.contemporanei],

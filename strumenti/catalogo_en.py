@@ -454,8 +454,8 @@ T.update({
     "i rapporti stratigrafici contengono un ciclo: esegui la verifica": "the stratigraphic relationships contain a cycle: run the check",
     # ricette
     "Framework Archaeology (Stansted, Heathrow T5)": "Framework Archaeology (Stansted, Heathrow T5)",
-    "Archivi digitali di Framework Archaeology così come si scaricano: pianta degli interventi (Stansted.shp o «T5 Volume 2.shp»), ContextData.csv e le altre tabelle CSV, il modello del terreno. Le quote delle unità non ci sono: i tagli scendono della profondità registrata dal piano di scavo, ricavato dal terreno abbassato di 30 cm (arativo) oppure, per Heathrow, dalla topografia del 1943 più il modello di troncamento. I riempimenti prendono il poligono del loro intervento. Conviene filtrare per SITECODE.":
-        "Framework Archaeology digital archives as downloaded: plan of the interventions (Stansted.shp or «T5 Volume 2.shp»), ContextData.csv and the other CSV tables, the terrain model. The units have no levels: cuts go down by the recorded depth from the excavation surface, derived from the terrain lowered by 30 cm (ploughsoil) or, for Heathrow, from the 1943 topography plus the truncation model. Fills take the polygon of their intervention. Filtering by SITECODE is advisable.",
+    "Archivi digitali di Framework Archaeology così come si scaricano: pianta degli interventi (Stansted.shp o «T5 Volume 2.shp»), ContextData.csv e le altre tabelle CSV, il modello del terreno. Le quote delle unità non ci sono: i tagli scendono della profondità registrata dal piano di scavo, ricavato dal terreno abbassato di 30 cm (arativo) oppure, per Heathrow, dalla topografia del 1943 più il modello di troncamento. I riempimenti prendono il poligono del loro intervento. A Heathrow i punti quotati (DPs.shp, quota in ZCOORD) danno il piano di scavo dove il modello di troncamento non arriva. Conviene filtrare per sito: SITECODE per la pianta degli interventi e SiteCode per DPs (due filtri, uno per layer: i nomi delle colonne sono diversi; in DPs alcuni siti hanno più valori, es. «TEC05» e «TEC05 Phase1»).":
+        "Framework Archaeology digital archives as downloaded: plan of the interventions (Stansted.shp or «T5 Volume 2.shp»), ContextData.csv and the other CSV tables, the terrain model. The units have no levels: cuts go down by the recorded depth from the excavation surface, derived from the terrain lowered by 30 cm (ploughsoil) or, for Heathrow, from the 1943 topography plus the truncation model. Fills take the polygon of their intervention. At Heathrow the spot heights (DPs.shp, level in ZCOORD) give the excavation surface where the truncation model does not reach. Filtering by site is advisable: SITECODE for the plan of the interventions and SiteCode for DPs (two filters, one per layer: the column names differ; in DPs some sites have several values, e.g. «TEC05» and «TEC05 Phase1»).",
     "pyArchInit (database SpatiaLite o esportazioni)": "pyArchInit (SpatiaLite database or exports)",
     "Database di pyArchInit per QGIS (SpatiaLite): layer pyunitastratigrafiche (limiti delle US), pyunitastratigrafiche_usm e pyarchinit_quote, tabella us_table con le schede e i rapporti scritti nel formato di pyArchInit, periodizzazione_table per le fasi (periodo + fase, ordinate per anno). Provata sul database di esempio distribuito con pyArchInit. Le unità senza quote proprie partono dalla superficie interpolata tra le quote rilevate. Se il database contiene più siti, aggiungi un filtro sul campo «sito» della scheda e su «scavo_s» del layer.":
         "pyArchInit database for QGIS (SpatiaLite): layers pyunitastratigrafiche (SU outlines), pyunitastratigrafiche_usm and pyarchinit_quote, table us_table with the records and the relationships written in pyArchInit format, periodizzazione_table for the phases (period + phase, ordered by year). Tested on the sample database distributed with pyArchInit. Units without levels of their own start from the surface interpolated between the surveyed levels. If the database holds several sites, add a filter on the «sito» field of the record and on «scavo_s» of the layer.",
@@ -504,6 +504,220 @@ T.update({
     "Impossibile aprire la finestra dell'app ({0}: {1}).": "Cannot open the app window ({0}: {1}).",
     "Stratigrafia 3D viene aperta nel browser predefinito.": "Stratigrafia 3D is opening in the default browser.",
     "{0} ({1} punti stimati)": "{0} ({1} estimated points)", "schede US «{0}»": "SU records «{0}»",
+})
+
+# ---------------------------------------------------------------- tabelle grezze (note di normalizzazione)
+T.update({
+    "{0} colonne vuote tolte": "{0} empty columns removed",
+    "Schede in blocchi etichetta/valore: {0} unità riportate su righe con {1} campi":
+        "Records in label/value blocks: {0} units laid out as rows with {1} fields",
+    "Il foglio contiene {0} tabelle separate da righe vuote: si usa «{1}»":
+        "The sheet holds {0} tables separated by empty rows: «{1}» is used",
+    "Tabella trasposta (un'unità per colonna): {0} unità riportate su righe":
+        "Transposed table (one unit per column): {0} units laid out as rows",
+    "Matrice dei rapporti: {0} rapporti riportati in elenco (US, rapporto, US correlata)":
+        "Relationship matrix: {0} relationships turned into a list (SU, relationship, related SU)",
+    "Nella matrice i segni «{0}» sono letti come «la riga copre la colonna»":
+        "In the matrix the marks «{0}» are read as «the row covers the column»",
+    "Segni della matrice non riconosciuti e ignorati: {0}": "Matrix marks not recognised and ignored: {0}",
+    "Intestazione alla riga {0}: {1} righe sopra (titoli, righe vuote) ignorate":
+        "Header on row {0}: {1} rows above (titles, empty rows) ignored",
+    "Intestazione su {0} righe: nomi uniti (es. «{1}»)": "Header on {0} rows: names joined (e.g. «{1}»)",
+    "Nomi di colonna ripuliti (spazi, a capo, colonne senza nome o doppie)":
+        "Column names cleaned up (spaces, line breaks, unnamed or duplicate columns)",
+    "{0} righe vuote tolte": "{0} empty rows removed",
+    "{0} righe che ripetono l'intestazione o il titolo tolte (salti pagina)":
+        "{0} rows repeating the header or the title removed (page breaks)",
+    "{0} righe di totale tolte": "{0} total rows removed",
+    "{0} righe di note in fondo alla tabella tolte": "{0} rows of notes at the bottom of the table removed",
+    "Tabella campo/valore: {0} unità riportate su righe con {1} campi":
+        "Field/value table: {0} units laid out as rows with {1} fields",
+    "Colonna «{0}»: valori convertiti da {1} a metri (ora «{2}»)": "Column «{0}»: values converted from {1} to metres (now «{2}»)",
+    "Colonna «{0}»: unità di misura tolte dai valori e convertite in metri":
+        "Column «{0}»: units of measurement removed from the values and converted to metres",
+    "Colonna «{0}»: numeri con la virgola decimale o i separatori delle migliaia convertiti":
+        "Column «{0}»: numbers with a decimal comma or thousands separators converted",
+    "Foglio «{0}»: {1}": "Sheet «{0}»: {1}",
+})
+
+# ---------------------------------------------------------------- vocabolario dei termini: motivi e spiegazioni
+T.update({
+    # motivo = «nome» + come è stato riconosciuto + per che cosa; poi conferme e attendibilità
+    "«{0}» è {1} per {2}": "«{0}» is {1} for {2}",
+    "«{0}» contiene «{1}», {2} per {3}": "«{0}» contains «{1}», {2} for {3}",
+    "«{0}» è parte di «{1}», {2} per {3}": "«{0}» is part of «{1}», {2} for {3}",
+    "«{0}» somiglia a «{1}», {2} per {3}": "«{0}» resembles «{1}», {2} for {3}",
+    "«{0}» ha la forma di una sigla per {1}": "«{0}» has the form of a code for {1}",
+    "un termine aggiunto dall'utente": "a term added by the user", "un termine indicato dalla ricetta": "a term given by the recipe",
+    "il nome usato da {0}": "the name used by {0}", "un'abbreviazione comune": "a common abbreviation",
+    "un termine generico": "a generic term", "un termine noto": "a known term",
+    "un termine italiano": "an Italian term", "un termine inglese": "an English term", "un termine francese": "a French term",
+    "un termine tedesco": "a German term", "un termine spagnolo": "a Spanish term", "un termine svedese": "a Swedish term",
+    "un termine olandese": "a Dutch term", "un termine {0}": "a {0} term",
+    "{0} (indizio debole)": "{0} (weak clue)",
+    "{0}; il contesto («{1}») lo conferma": "{0}; the context («{1}») confirms it",
+    "il contesto («{0}») lo conferma": "the context («{0}») confirms it",
+    "{0}; la geometria lo conferma": "{0}; the geometry confirms it", "la geometria lo conferma": "the geometry confirms it",
+    "{0} (attendibilità {1}%)": "{0} (confidence {1}%)",
+    "{0}; nel programma: «{1}»": "{0}; in the program: «{1}»", "nel programma: «{0}»": "in the program: «{0}»",
+    "{0}. Altre possibilità: {1} ({2}%)": "{0}. Other possibilities: {1} ({2}%)",
+    "{0}. Altre possibilità: {1} ({2}%), {3} ({4}%)": "{0}. Other possibilities: {1} ({2}%), {3} ({4}%)",
+    "«{0}»: nessun termine noto": "«{0}»: no known term",
+    "«{0}» è un nome noto al programma per «{1}»": "«{0}» is a name known to the program for «{1}»",
+    "i valori della colonna «{0}» («{1}», «{2}») indicano unità positive e negative":
+        "the values of column «{0}» («{1}», «{2}») indicate positive and negative units",
+    "{0}; punti senza numero di US: solo per la superficie di riferimento":
+        "{0}; points without an SU number: only for the reference surface",
+    "punti senza numero di US: solo per la superficie di riferimento": "points without an SU number: only for the reference surface",
+    # nei motivi composti questa parte va presa prima di «US {0}», che si prenderebbe tutto il resto
+    "US assegnata dalla posizione (solo dove un solo poligono contiene il punto); {0}":
+        "SU assigned from the position (only where a single polygon contains the point); {0}",
+    # errori
+    "Vocabolario dell'utente illeggibile ({0}): {1}": "User vocabulary unreadable ({0}): {1}",
+    "Espressione non valida per «{0}»: {1} ({2})": "Invalid expression for «{0}»: {1} ({2})",
+    "Concetto sconosciuto: «{0}»": "Unknown concept: «{0}»",
+    "Ambito sconosciuto: «{0}» (ammessi: {1})": "Unknown scope: «{0}» (allowed: {1})", "Ambito sconosciuto: «{0}»": "Unknown scope: «{0}»",
+    "Manca il termine da insegnare": "The term to teach is missing",
+    "Uso del layer sconosciuto: «{0}»": "Unknown layer use: «{0}»",
+    "Colonna del programma sconosciuta: «{0}»": "Unknown program column: «{0}»",
+    "Impossibile salvare il vocabolario: {0}": "Cannot save the vocabulary: {0}",
+    "un layer da non usare": "a layer not to be used",
+    # descrizioni dei concetti (vocabolario/*.json): campi della scheda
+    "i margini (limiti) dell'unità: netti, rastremati, sfumati": "the edges (boundaries) of the unit: sharp, tapering, diffuse",
+    "la definizione sintetica dell'unità": "the short definition of the unit",
+    "la descrizione dell'unità": "the description of the unit", "l'interpretazione dell'unità": "the interpretation of the unit",
+    "le note e osservazioni": "the notes and remarks", "il colore": "the colour",
+    "il colore di visualizzazione (codice esadecimale)": "the display colour (hexadecimal code)",
+    "il colore secondo le tavole Munsell": "the colour according to the Munsell charts",
+    "la composizione (componenti e inclusi)": "the composition (components and inclusions)",
+    "la consistenza (compattezza) del deposito": "the consistency (compaction) of the deposit",
+    "una data": "a date", "la data di scavo o di schedatura": "the date of excavation or recording",
+    "il responsabile della scheda (chi ha scavato o registrato)": "the person responsible for the record (who excavated or recorded it)",
+    "la classe di materiale del reperto (ceramica, metallo, osso…)": "the material class of the find (pottery, metal, bone…)",
+    "il tipo o la forma del reperto": "the type or form of the find",
+    "il numero di frammenti o di oggetti (NR)": "the number of fragments or objects (NR)",
+    "il numero minimo di individui (NMI)": "the minimum number of individuals (MNI)", "il peso": "the weight",
+    "la cassetta (contenitore di magazzino)": "the box (storage container)",
+    "le analisi previste per il campione": "the analyses planned for the sample",
+    "il file (percorso dell'immagine o del documento)": "the file (path of the image or document)",
+    "il soggetto (didascalia) della foto o del disegno": "the subject (caption) of the photo or drawing",
+    "il titolo (nome) della fase": "the title (name) of the phase",
+    # documenti
+    "i materiali (inventario dei reperti)": "the materials (inventory of the finds)", "l'inventario dei materiali": "the materials inventory",
+    "i reperti speciali (oggetti registrati singolarmente)": "the special finds (individually recorded objects)",
+    "i punti dei reperti speciali": "the special find points", "l'elenco dei reperti speciali": "the list of special finds",
+    "i campioni (prelievi per analisi)": "the samples (taken for analysis)", "il numero del campione": "the sample number",
+    "l'elenco dei campioni": "the list of samples", "i punti di prelievo dei campioni": "the sampling points",
+    "la documentazione (foto, disegni, registri)": "the documentation (photos, drawings, registers)",
+    "l'elenco della documentazione (foto, disegni)": "the list of documentation (photos, drawings)",
+    "le sezioni (linee di sezione)": "the sections (section lines)", "il nome della sezione": "the section name",
+    "le linee di sezione": "the section lines",
+    "i disegni delle sezioni (in coordinate di sezione)": "the section drawings (in section coordinates)",
+    "la griglia (quadrettatura) di scavo": "the excavation grid (squares)",
+    "un'ortofoto (immagine raddrizzata dello scavo)": "an orthophoto (rectified image of the excavation)",
+    "un modello digitale del terreno": "a digital terrain model",
+    "un modello 3D (fotogrammetria, nuvola di punti)": "a 3D model (photogrammetry, point cloud)",
+    "una tabella tecnica del database GIS (non contiene dati di scavo)": "a technical table of the GIS database (holds no excavation data)",
+    "un campo tecnico del CAD o del GIS (da ignorare)": "a technical CAD or GIS field (to be ignored)",
+    # quote
+    "le quote (altezze rilevate)": "the levels (surveyed heights)", "il valore di quota (altezza)": "the level value (height)",
+    "i punti quotati": "the spot heights", "la tabella delle quote": "the table of levels", "le quote": "the levels",
+    "il tipo di quota (superiore, inferiore, taglio…)": "the level type (top, bottom, cut…)",
+    "la quota superiore (tetto dell'unità)": "the top level (top of the unit)",
+    "la quota inferiore (base dell'unità)": "the bottom level (base of the unit)",
+    "la quota del fondo di un taglio": "the level of the bottom of a cut",
+    "la quota dell'orlo (margine superiore) di un taglio": "the level of the rim (top edge) of a cut",
+    "la quota di rasatura (cresta) di un muro": "the top level (crest) of a wall",
+    "la quota di fondazione (base) di un muro": "the foundation level (base) of a wall",
+    "i profili 3D delle US (linee delle interfacce rilevate)": "the 3D profiles of the SUs (lines of the surveyed interfaces)",
+    "le linee di fondo dei tagli (dove la parete diventa fondo)": "the base-of-slope lines of the cuts (where the side becomes the base)",
+    "i tratteggi (hachures) delle pareti dei tagli": "the hachures of the sides of the cuts",
+    "la coordinata est (X)": "the east coordinate (X)", "la coordinata nord (Y)": "the north coordinate (Y)",
+    "lo spessore medio dell'unità": "the mean thickness of the unit",
+    "lo spessore o la profondità massima (per i tagli: dalla superficie)": "the thickness or maximum depth (for cuts: from the surface)",
+    # rapporti
+    "i rapporti stratigrafici": "the stratigraphic relationships",
+    "la tabella dei rapporti stratigrafici": "the table of stratigraphic relationships",
+    "i rapporti scritti per esteso": "the relationships written out in full",
+    "il rapporto «copre» (sta sopra, è posteriore)": "the relationship «covers» (lies above, is later)",
+    "il rapporto «coperto da» (sta sotto, è anteriore)": "the relationship «covered by» (lies below, is earlier)",
+    "il rapporto «taglia»": "the relationship «cuts»", "il rapporto «tagliato da»": "the relationship «cut by»",
+    "il rapporto «riempie» (l'unità di cui è il riempimento)": "the relationship «fills» (the unit of which it is the fill)",
+    "il rapporto «riempito da»": "the relationship «filled by»", "il rapporto «si appoggia a»": "the relationship «abuts»",
+    "il rapporto «gli si appoggia»": "the relationship «abutted by»",
+    "il rapporto «si lega a» (contemporaneo, legato in costruzione)": "the relationship «bonded with» (contemporary, bonded in construction)",
+    "il rapporto «uguale a» (stessa unità con due numeri)": "the relationship «same as» (same unit with two numbers)",
+    # unità, fasi, sito
+    "l'unità stratigrafica (US)": "the stratigraphic unit (SU)", "il numero di US": "the SU number",
+    "le schede delle US": "the SU records", "le piante (poligoni) delle US": "the SU plans (polygons)", "le US": "the SUs",
+    "l'unità stratigrafica muraria (USM)": "the masonry stratigraphic unit (MSU)", "il numero di USM": "the MSU number",
+    "le schede delle USM": "the MSU records", "le piante delle murature (USM)": "the plans of the walls (MSU)",
+    "il tipo di unità (positiva o negativa)": "the unit type (positive or negative)",
+    "un'unità positiva (strato, deposito, riempimento, muratura)": "a positive unit (layer, deposit, fill, masonry)",
+    "un'unità negativa (taglio, interfaccia)": "a negative unit (cut, interface)",
+    "la categoria dell'unità (definizione generale)": "the category of the unit (general definition)",
+    "un'evidenza (feature: insieme di tagli e riempimenti, come una fossa o una buca di palo)":
+        "a feature (a group of cuts and fills, such as a pit or a posthole)",
+    "un intervento di scavo (slot, segmento o sondaggio dentro un'evidenza)":
+        "an excavation intervention (slot, segment or sondage within a feature)",
+    "un gruppo stratigrafico (insieme di US interpretate insieme)": "a stratigraphic group (SUs interpreted together)",
+    "la fase di appartenenza": "the phase it belongs to", "la tabella delle fasi (periodizzazione)": "the table of phases (periodisation)",
+    "la fase": "the phase", "il periodo (o epoca) di appartenenza": "the period (or era) it belongs to",
+    "la datazione (cronologia)": "the dating (chronology)", "la tabella delle datazioni (usata come fasi)": "the table of datings (used as phases)",
+    "l'anno iniziale della datazione": "the start year of the dating", "l'anno finale della datazione": "the end year of the dating",
+    "il sito (scavo, località)": "the site (excavation, locality)",
+    "l'area di scavo (saggio, trincea, settore)": "the excavation area (test pit, trench, sector)",
+    "il perimetro dell'area di scavo (saggio, trincea)": "the outline of the excavation area (test pit, trench)",
+    "il limite dello scavo": "the limit of excavation", "l'ambiente (vano) dell'edificio": "the room of the building",
+    "un identificativo generico di riga (poco indicativo)": "a generic row identifier (not very telling)",
+    "la geometria (forma) dell'elemento": "the geometry (shape) of the element",
+})
+
+# ---------------------------------------------------------------- importazione flessibile, insegna, chiusura automatica
+T.update({
+    "Numeri di US scritti con sigle o lettere in «{0}» (es. «{1}»): si usa il numero ({2})":
+        "SU numbers written with prefixes or letters in «{0}» (e.g. «{1}»): the number is used ({2})",
+    "{0} numeri di US scritti in modi diversi diventano una sola unità (es. «{1}» e «{2}»)":
+        "{0} SU numbers written in different ways become a single unit (e.g. «{1}» and «{2}»)",
+    "Il numero di US si ripete in «{0}» diversi: per importare un sito alla volta aggiungi un filtro su «{1}»":
+        "The SU number repeats across different «{0}» values: to import one site at a time, add a filter on «{1}»",
+    "{0} punti quotati di «{1}» usati solo per la superficie di riferimento":
+        "{0} spot heights from «{1}» used only for the reference surface",
+    "{0} punti quotati di «{1}» usati solo per la superficie di riferimento ({2} senza quota)":
+        "{0} spot heights from «{1}» used only for the reference surface ({2} without a level)",
+    "Il raster di correzione copre solo il {0} dell'area dello scavo: fuori si usano {1} quote rilevate, raccordate al suo bordo":
+        "The correction raster covers only {0} of the excavation area: outside it, {1} surveyed levels are used, blended into its edge",
+    "{0} + quote rilevate": "{0} + surveyed levels",
+    "Il foglio «{0}» è stato riorganizzato durante l'importazione: le modifiche vanno riportate a mano nel file d'origine":
+        "Sheet «{0}» was reorganised during import: the changes must be copied by hand into the source file",
+    "La pagina di Stratigrafia 3D è stata chiusa: il programma termina.": "The Stratigrafia 3D page has been closed: the program is ending.",
+    "Senza modifiche da salvare, il programma termina da solo qualche minuto dopo la chiusura della pagina.":
+        "With no changes to save, the program ends by itself a few minutes after the page is closed.",
+    "Collegamento con Stratigrafia 3D perso: il programma è stato chiuso o non risponde. Riavvialo per continuare.":
+        "Connection to Stratigrafia 3D lost: the program has been closed or is not responding. Restart it to continue.",
+    "Insegna": "Teach", "Insegna questo termine": "Teach this term",
+    "Nei prossimi archivi «{0}» sarà letto come «{1}».": "In future archives «{0}» will be read as «{1}».",
+    "Il termine si aggiunge al tuo vocabolario e la proposta viene rifatta: le altre scelte fatte a mano in questa procedura si perdono.":
+        "The term is added to your vocabulary and the proposal is redone: the other choices made by hand in this procedure are lost.",
+    "Aggiornamento della proposta…": "Updating the proposal…", "Imparato: «{0}» indica «{1}»": "Learnt: «{0}» means «{1}»",
+    "nessuna: solo per la superficie": "none: only for the surface",
+    "Ricorda che questo nome di layer indica l'uso scelto, anche nei prossimi archivi":
+        "Remember that this layer name means the chosen use, in future archives too",
+    "Ricorda che questo nome di colonna indica «{0}», anche nei prossimi archivi":
+        "Remember that this column name means «{0}», in future archives too",
+    "Preparazione delle unità… {0} di {1}": "Preparing the units… {0} of {1}",
+    "Preparazione degli spigoli… {0} di {1}": "Preparing the edges… {0} of {1}",
+})
+# il nome della colonna tra «» non si traduce da solo: una voce per ciascuna colonna della scheda proposta nell'app
+T.update({f"Ricorda che questo nome di colonna indica «{x}», anche nei prossimi archivi":
+          f"Remember that this column name means «{T[x]}», in future archives too"
+          for x in ("Numero di US", "Positiva / negativa", "Categoria", "Definizione", "Descrizione", "Interpretazione",
+                    "Spessore", "Profondità (tagli)", "Margini (netti / rastremati)", "Fase", "Data di scavo",
+                    "Datazione da (anno)", "Datazione a (anno)", "Colore (#rrggbb)")})
+T.update({
+    "Rapporti dalle colonne della scheda US ({0})": "Relationships from the columns of the SU record ({0})",
+    "Nessun rapporto stratigrafico trovato: le basi non saranno agganciate": "No stratigraphic relationships found: the bases will not be snapped",
+    "Fase composta: colonne «{0}» e «{1}» non trovate nelle schede": "Composite phase: columns «{0}» and «{1}» not found in the records",
 })
 
 if __name__ == "__main__":

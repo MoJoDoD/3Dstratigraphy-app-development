@@ -1,0 +1,1773 @@
+{
+ "//": "Vocabolario: unità stratigrafiche, tipi di unità, raggruppamenti, fasi e datazioni, sito e aree. Struttura: concetto -> {descrizione, descrizioni (per ambito), ambiti, canonico (nome nel programma per ambito), campo (solo per i valori), termini {lingua: [...]}, sistemi {sistema: [...]}, abbreviazioni, deboli, codici, pattern, esclusioni, contesti, geometrie}.",
+ "us": {
+  "descrizione": "l'unità stratigrafica (US)",
+  "descrizioni": {
+   "colonna": "il numero di US",
+   "tabella": "le schede delle US",
+   "layer": "le piante (poligoni) delle US",
+   "file": "le US"
+  },
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "file": "us",
+   "layer": "us",
+   "tabella": "US",
+   "colonna": "US"
+  },
+  "termini": {
+   "it": [
+    "us",
+    "unità stratigrafica",
+    "unità stratigrafiche",
+    "numero us",
+    "numero di us",
+    "numero dell'us",
+    "n us",
+    "n. us",
+    "nr us",
+    "num us",
+    "scheda us",
+    "schede us",
+    "schede di us",
+    "elenco us",
+    "elenco delle us",
+    "registro us",
+    "unità stratigrafica numero",
+    "strati e us",
+    "us/usm",
+    "us usm"
+   ],
+   "en": [
+    "context",
+    "contexts",
+    "context number",
+    "context no",
+    "context no.",
+    "context nr",
+    "context id",
+    "context code",
+    "context sheet",
+    "context sheets",
+    "context register",
+    "context record",
+    "context records",
+    "context list",
+    "context index",
+    "stratigraphic unit",
+    "stratigraphic units",
+    "stratigraphic unit number",
+    "su number",
+    "su no",
+    "su no.",
+    "unit number",
+    "single context"
+   ],
+   "fr": [
+    "unité stratigraphique",
+    "unités stratigraphiques",
+    "numéro d'us",
+    "numéro us",
+    "n° us",
+    "fiche us",
+    "fiches us",
+    "inventaire des us",
+    "liste des us",
+    "unité de fouille",
+    "uf"
+   ],
+   "de": [
+    "befund",
+    "befunde",
+    "befundnummer",
+    "befund nr",
+    "befund-nr",
+    "befundnr",
+    "bef. nr.",
+    "befundliste",
+    "befundkatalog",
+    "befundkartei",
+    "stratigraphische einheit",
+    "stratigrafische einheit",
+    "stratigraphische einheiten"
+   ],
+   "es": [
+    "ue",
+    "unidad estratigráfica",
+    "unidades estratigráficas",
+    "número de ue",
+    "número ue",
+    "n ue",
+    "nº ue",
+    "ficha ue",
+    "fichas ue",
+    "fichas de ue",
+    "inventario de ue"
+   ],
+   "sv": [
+    "kontext",
+    "kontexter",
+    "kontextnummer",
+    "kontext nr",
+    "kontextnr",
+    "stratigrafisk enhet",
+    "stratigrafiska enheter",
+    "kontextregister",
+    "kontextlista"
+   ],
+   "nl": [
+    "spoor",
+    "sporen",
+    "spoornummer",
+    "spoornr",
+    "spoor nr",
+    "stratigrafische eenheid",
+    "stratigrafische eenheden",
+    "sporenlijst",
+    "contextnummer"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "us_table",
+    "pyunitastratigrafiche",
+    "us_s",
+    "us_q",
+    "pyarchinit_us_view"
+   ],
+   "Framework Archaeology": [
+    "ContextData",
+    "Context Number",
+    "CONTEXT_ID",
+    "Contexts"
+   ],
+   "MoLA": [
+    "context sheet",
+    "context register",
+    "single context recording"
+   ],
+   "ADS": [
+    "context_no",
+    "cxt_no",
+    "context_number",
+    "ctx_no"
+   ],
+   "Stratigrafia 3D": [
+    "us_poligoni"
+   ]
+  },
+  "abbreviazioni": [
+   "su",
+   "ctx",
+   "cxt",
+   "ctx no",
+   "cxt no",
+   "cxt nr",
+   "us n",
+   "us nr",
+   "us no",
+   "usn",
+   "nus",
+   "n_us",
+   "num_us",
+   "su_no",
+   "su n",
+   "us_n",
+   "bef",
+   "bef nr",
+   "ue n",
+   "kont nr"
+  ],
+  "deboli": [
+   "unità",
+   "unita",
+   "unit",
+   "units",
+   "deposit",
+   "deposits",
+   "stratum",
+   "strata",
+   "schicht",
+   "lager",
+   "laag",
+   "object",
+   "objects",
+   "intrasisid",
+   "intrasis id",
+   "code",
+   "codice",
+   "schede"
+  ],
+  "pattern": [
+   "^(?:(?:n|nr|no|num|numero|number|nummer|id|cod|codice)\\s)?(?:us|su|ue|uf|ctx|cxt|context|kontext|befund|spoor)(?:\\s(?:n|nr|no|num|numero|number|nummer|id|cod|codice|#))?$"
+  ],
+  "esclusioni": [
+   "muraria",
+   "murarie",
+   "murale",
+   "muraria numero"
+  ],
+  "geometrie": [
+   "poligono"
+  ]
+ },
+ "usm": {
+  "descrizione": "l'unità stratigrafica muraria (USM)",
+  "descrizioni": {
+   "colonna": "il numero di USM",
+   "tabella": "le schede delle USM",
+   "layer": "le piante delle murature (USM)"
+  },
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "file": "usm",
+   "layer": "usm",
+   "tabella": "USM",
+   "colonna": "USM"
+  },
+  "termini": {
+   "it": [
+    "usm",
+    "unità stratigrafica muraria",
+    "unità stratigrafiche murarie",
+    "numero usm",
+    "n usm",
+    "n. usm",
+    "schede usm",
+    "scheda usm",
+    "muro",
+    "muri",
+    "muratura",
+    "murature",
+    "struttura muraria",
+    "strutture murarie",
+    "elementi murari"
+   ],
+   "en": [
+    "masonry",
+    "masonry unit",
+    "masonry units",
+    "masonry stratigraphic unit",
+    "wall",
+    "walls",
+    "wall number",
+    "standing structure",
+    "standing structures",
+    "masonry context",
+    "structural unit"
+   ],
+   "fr": [
+    "mur",
+    "murs",
+    "maçonnerie",
+    "maçonneries",
+    "unité stratigraphique murale",
+    "unité stratigraphique construite",
+    "usc",
+    "um"
+   ],
+   "de": [
+    "mauer",
+    "mauern",
+    "mauerwerk",
+    "mauerbefund",
+    "mauerbefunde",
+    "mauerzug",
+    "baubefund"
+   ],
+   "es": [
+    "uem",
+    "unidad estratigráfica muraria",
+    "unidad estratigráfica muraria",
+    "muro",
+    "muros",
+    "mampostería",
+    "fábrica",
+    "ue muraria",
+    "unidad estratigráfica construida",
+    "uec"
+   ],
+   "sv": [
+    "mur",
+    "murar",
+    "murverk",
+    "murrester"
+   ],
+   "nl": [
+    "muur",
+    "muren",
+    "metselwerk",
+    "muurwerk",
+    "funderingsmuur"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "pyunitastratigrafiche_usm",
+    "pyarchinit_usm"
+   ],
+   "Stratigrafia 3D": [
+    "usm_poligoni"
+   ]
+  },
+  "abbreviazioni": [
+   "usm n",
+   "n_usm",
+   "usm_n",
+   "num usm",
+   "msu"
+  ],
+  "deboli": [
+   "struttura",
+   "strutture",
+   "structure",
+   "structures"
+  ],
+  "pattern": [
+   "^(?:(?:n|nr|no|num|numero)\\s)?(?:usm|uem|msu|usc|uec)(?:\\s(?:n|nr|no|num|numero|id))?$"
+  ],
+  "geometrie": [
+   "poligono"
+  ]
+ },
+ "tipo": {
+  "descrizione": "il tipo di unità (positiva o negativa)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Tipo"
+  },
+  "termini": {
+   "it": [
+    "tipo us",
+    "tipo di us",
+    "tipo dell'us",
+    "tipo unità",
+    "positiva/negativa",
+    "positiva negativa",
+    "natura",
+    "natura us",
+    "natura dell'us"
+   ],
+   "en": [
+    "context type",
+    "type of context",
+    "unit type",
+    "su type",
+    "positive/negative",
+    "positive negative",
+    "deposit type",
+    "record type"
+   ],
+   "fr": [
+    "type d'us",
+    "type us",
+    "nature",
+    "nature de l'us",
+    "type d'unité"
+   ],
+   "de": [
+    "befundart",
+    "befundtyp",
+    "art des befundes",
+    "befundtypus"
+   ],
+   "es": [
+    "tipo de ue",
+    "tipo ue",
+    "naturaleza",
+    "tipo de unidad"
+   ],
+   "sv": [
+    "kontexttyp",
+    "typ av kontext",
+    "kontextkategori"
+   ],
+   "nl": [
+    "spoortype",
+    "aard spoor",
+    "aard van het spoor",
+    "spoorsoort"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "unita_tipo"
+   ],
+   "Framework Archaeology": [
+    "Context Type"
+   ]
+  },
+  "deboli": [
+   "tipo",
+   "type",
+   "typ",
+   "typus",
+   "art",
+   "aard",
+   "tipologia",
+   "kind"
+  ],
+  "contesti": [
+   "us",
+   "usm"
+  ]
+ },
+ "positiva": {
+  "descrizione": "un'unità positiva (strato, deposito, riempimento, muratura)",
+  "ambiti": [
+   "valore"
+  ],
+  "campo": "tipo",
+  "canonico": {
+   "valore": "positiva"
+  },
+  "termini": {
+   "it": [
+    "positiva",
+    "positivo",
+    "us positiva",
+    "unità positiva",
+    "strato",
+    "deposito",
+    "riempimento",
+    "accumulo",
+    "crollo",
+    "livellamento",
+    "battuto",
+    "pavimento",
+    "piano pavimentale",
+    "muratura",
+    "muro",
+    "struttura",
+    "riporto",
+    "colmata",
+    "us muraria"
+   ],
+   "en": [
+    "positive",
+    "positive unit",
+    "deposit",
+    "layer",
+    "fill",
+    "masonry",
+    "structure",
+    "timber",
+    "skeleton",
+    "wall",
+    "floor",
+    "spread",
+    "dump",
+    "make up",
+    "make-up",
+    "natural",
+    "surface deposit",
+    "dumped deposit",
+    "levelling",
+    "build-up",
+    "accumulation",
+    "collapse",
+    "destruction deposit",
+    "burial"
+   ],
+   "fr": [
+    "positif",
+    "positive",
+    "couche",
+    "dépôt",
+    "remplissage",
+    "comblement",
+    "niveau",
+    "maçonnerie",
+    "mur",
+    "sol",
+    "remblai",
+    "épandage",
+    "us positive"
+   ],
+   "de": [
+    "positiv",
+    "positivbefund",
+    "schicht",
+    "verfüllung",
+    "ablagerung",
+    "auffüllung",
+    "planierung",
+    "mauer",
+    "mauerwerk",
+    "estrich",
+    "laufhorizont",
+    "versturz"
+   ],
+   "es": [
+    "positiva",
+    "positivo",
+    "ue positiva",
+    "estrato",
+    "depósito",
+    "relleno",
+    "nivel",
+    "muro",
+    "pavimento",
+    "derrumbe",
+    "colmatación"
+   ],
+   "sv": [
+    "positiv",
+    "lager",
+    "fyllning",
+    "fyllnadslager",
+    "kulturlager",
+    "mur",
+    "golv",
+    "rasering"
+   ],
+   "nl": [
+    "positief",
+    "laag",
+    "vulling",
+    "ophoging",
+    "muur",
+    "vloer",
+    "ophogingslaag",
+    "puinlaag"
+   ]
+  },
+  "codici": [
+   "p",
+   "pos",
+   "+"
+  ]
+ },
+ "negativa": {
+  "descrizione": "un'unità negativa (taglio, interfaccia)",
+  "ambiti": [
+   "valore"
+  ],
+  "campo": "tipo",
+  "canonico": {
+   "valore": "negativa"
+  },
+  "termini": {
+   "it": [
+    "negativa",
+    "negativo",
+    "us negativa",
+    "unità negativa",
+    "taglio",
+    "tagli",
+    "interfaccia",
+    "interfaccia negativa",
+    "interfaccia di distruzione",
+    "asportazione",
+    "spoliazione",
+    "fossa di spoliazione",
+    "buca",
+    "fossa"
+   ],
+   "en": [
+    "negative",
+    "negative unit",
+    "cut",
+    "cut feature",
+    "negative feature",
+    "interface",
+    "intervention",
+    "robber trench",
+    "truncation",
+    "negative interface",
+    "cut (negative)"
+   ],
+   "fr": [
+    "négatif",
+    "négative",
+    "us négative",
+    "creusement",
+    "interface",
+    "interface négative",
+    "fait en creux",
+    "tranchée de récupération"
+   ],
+   "de": [
+    "negativ",
+    "negativbefund",
+    "eingriff",
+    "eintiefung",
+    "interface",
+    "grubeneintiefung",
+    "ausbruchgrube",
+    "schnittkante"
+   ],
+   "es": [
+    "negativa",
+    "negativo",
+    "ue negativa",
+    "corte",
+    "interfaz",
+    "interfacies",
+    "interfaz negativa",
+    "fosa de expolio"
+   ],
+   "sv": [
+    "negativ",
+    "nedgrävning",
+    "nedskärning",
+    "nedgrävningskant"
+   ],
+   "nl": [
+    "negatief",
+    "ingraving",
+    "insteek",
+    "uitgraving",
+    "uitbraaksleuf"
+   ]
+  },
+  "codici": [
+   "n",
+   "neg",
+   "-"
+  ],
+  "pattern": [
+   "\\b(?:neg\\w*|tagl\\w*|interfac\\w*)\\b"
+  ]
+ },
+ "categoria": {
+  "descrizione": "la categoria dell'unità (definizione generale)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Categoria"
+  },
+  "termini": {
+   "it": [
+    "categoria",
+    "definizione generale",
+    "tipo di unità",
+    "classe us",
+    "categoria us"
+   ],
+   "en": [
+    "category",
+    "formation category",
+    "context category",
+    "context class",
+    "deposit category"
+   ],
+   "fr": [
+    "catégorie",
+    "catégorie d'us"
+   ],
+   "de": [
+    "kategorie",
+    "befundkategorie",
+    "befundgattung"
+   ],
+   "es": [
+    "categoría",
+    "categoría de ue"
+   ],
+   "sv": [
+    "kategori",
+    "klass"
+   ],
+   "nl": [
+    "categorie",
+    "spoorcategorie"
+   ]
+  },
+  "sistemi": {
+   "Intrasis": [
+    "Class"
+   ],
+   "Framework Archaeology": [
+    "Formation Category"
+   ],
+   "pyArchInit": [
+    "formazione"
+   ]
+  },
+  "deboli": [
+   "class",
+   "klasse"
+  ],
+  "contesti": [
+   "us",
+   "usm"
+  ]
+ },
+ "evidenza": {
+  "descrizione": "un'evidenza (feature: insieme di tagli e riempimenti, come una fossa o una buca di palo)",
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "layer": "us"
+  },
+  "termini": {
+   "it": [
+    "evidenza",
+    "evidenze",
+    "numero evidenza",
+    "struttura negativa",
+    "strutture negative"
+   ],
+   "en": [
+    "feature",
+    "features",
+    "feature number",
+    "feature no",
+    "feature id",
+    "entity",
+    "entities",
+    "feature group"
+   ],
+   "fr": [
+    "fait",
+    "faits",
+    "numéro de fait",
+    "n° de fait",
+    "structure en creux",
+    "structures en creux"
+   ],
+   "de": [
+    "befundkomplex",
+    "objekt nr",
+    "struktur",
+    "strukturen"
+   ],
+   "es": [
+    "estructura",
+    "estructuras",
+    "elemento",
+    "elementos",
+    "complejo estructural"
+   ],
+   "sv": [
+    "anläggning",
+    "anläggningar",
+    "anläggningsnummer",
+    "anl nr",
+    "anr"
+   ],
+   "nl": [
+    "structuur",
+    "structuren",
+    "spoorcluster",
+    "structuurnummer"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "struttura_table",
+    "pyarchinit_strutture_ipotesi"
+   ],
+   "Framework Archaeology": [
+    "Features",
+    "Entities",
+    "Feature Number"
+   ]
+  },
+  "abbreviazioni": [
+   "feat",
+   "feat no",
+   "f no",
+   "fno"
+  ],
+  "geometrie": [
+   "poligono"
+  ],
+  "esclusioni": [
+   "entity handle"
+  ]
+ },
+ "intervento": {
+  "descrizione": "un intervento di scavo (slot, segmento o sondaggio dentro un'evidenza)",
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {},
+  "termini": {
+   "it": [
+    "intervento",
+    "interventi",
+    "numero intervento",
+    "segmento",
+    "segmenti",
+    "sezione di scavo"
+   ],
+   "en": [
+    "intervention",
+    "interventions",
+    "intervention number",
+    "intervention no",
+    "slot",
+    "slots",
+    "segment",
+    "segments",
+    "box section"
+   ],
+   "fr": [
+    "intervention",
+    "interventions",
+    "segment",
+    "segments",
+    "tranchée manuelle"
+   ],
+   "de": [
+    "eingriffsnummer",
+    "segment",
+    "schnittsegment"
+   ],
+   "es": [
+    "intervención",
+    "intervenciones",
+    "segmento"
+   ],
+   "sv": [
+    "ingrepp",
+    "segment"
+   ],
+   "nl": [
+    "interventie",
+    "segment",
+    "coupesegment"
+   ]
+  },
+  "sistemi": {
+   "Framework Archaeology": [
+    "Interventions",
+    "Intervention"
+   ]
+  }
+ },
+ "gruppo": {
+  "descrizione": "un gruppo stratigrafico (insieme di US interpretate insieme)",
+  "ambiti": [
+   "file",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {},
+  "termini": {
+   "it": [
+    "gruppo stratigrafico",
+    "gruppi stratigrafici",
+    "gruppo di us",
+    "gruppi di us",
+    "sottogruppo",
+    "complesso stratigrafico"
+   ],
+   "en": [
+    "stratigraphic group",
+    "stratigraphic groups",
+    "sg number",
+    "sg no",
+    "sg id",
+    "subgroup",
+    "sub group",
+    "subgroups",
+    "group number",
+    "land use",
+    "landuse",
+    "context group"
+   ],
+   "fr": [
+    "groupe stratigraphique",
+    "ensemble stratigraphique",
+    "groupes stratigraphiques",
+    "regroupement"
+   ],
+   "de": [
+    "befundgruppe",
+    "stratigraphische gruppe",
+    "befundgruppen",
+    "schichtpaket"
+   ],
+   "es": [
+    "grupo estratigráfico",
+    "grupos estratigráficos",
+    "agrupación estratigráfica"
+   ],
+   "sv": [
+    "kontextgrupp",
+    "stratigrafisk grupp",
+    "kontextgrupper"
+   ],
+   "nl": [
+    "spoorgroep",
+    "stratigrafische groep",
+    "sporengroep"
+   ]
+  },
+  "sistemi": {
+   "Framework Archaeology": [
+    "SGData",
+    "SG Number",
+    "SGs"
+   ],
+   "MoLA": [
+    "subgroup",
+    "group",
+    "land use"
+   ]
+  },
+  "abbreviazioni": [
+   "sg",
+   "sgn",
+   "sg_no",
+   "grp",
+   "grp no"
+  ],
+  "deboli": [
+   "gruppo",
+   "gruppi",
+   "group",
+   "groups",
+   "groupe",
+   "gruppe",
+   "grupo",
+   "grupp",
+   "groep",
+   "ensemble"
+  ],
+  "pattern": [
+   "^(?:sg|subgroup|sub group|group|gruppo|gruppe|groupe|grupo|grupp|groep)\\s(?:n|nr|no|num|number|numero|nummer|id)$"
+  ]
+ },
+ "fase": {
+  "descrizione": "la fase di appartenenza",
+  "descrizioni": {
+   "tabella": "la tabella delle fasi (periodizzazione)",
+   "colonna": "la fase"
+  },
+  "ambiti": [
+   "file",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "tabella": "Fasi",
+   "colonna": "Fase"
+  },
+  "termini": {
+   "it": [
+    "fase",
+    "fasi",
+    "periodo/fase",
+    "periodizzazione",
+    "fase iniziale",
+    "fase finale",
+    "fasi cronologiche",
+    "numero fase",
+    "fase cronologica"
+   ],
+   "en": [
+    "phase",
+    "phases",
+    "phasing",
+    "period/phase",
+    "phase number",
+    "phase id",
+    "phase no"
+   ],
+   "fr": [
+    "phase",
+    "phases",
+    "phasage",
+    "phase chronologique",
+    "phases chronologiques"
+   ],
+   "de": [
+    "phase",
+    "phasen",
+    "bauphase",
+    "siedlungsphase",
+    "nutzungsphase",
+    "horizont"
+   ],
+   "es": [
+    "fase",
+    "fases",
+    "fase cronológica",
+    "fases cronológicas"
+   ],
+   "sv": [
+    "fas",
+    "faser",
+    "bebyggelsefas",
+    "fasindelning"
+   ],
+   "nl": [
+    "fase",
+    "fasen",
+    "fases",
+    "fasering",
+    "bewoningsfase"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "periodizzazione_table",
+    "fase_iniziale",
+    "fase_finale"
+   ]
+  },
+  "pattern": [
+   "^(?:fase|phase|fas)\\s(?:n|nr|no|num|numero|number|id)$"
+  ]
+ },
+ "periodo": {
+  "descrizione": "il periodo (o epoca) di appartenenza",
+  "ambiti": [
+   "file",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "tabella": "Fasi",
+   "colonna": "Periodo"
+  },
+  "termini": {
+   "it": [
+    "periodo",
+    "periodi",
+    "periodo iniziale",
+    "periodo finale",
+    "epoca",
+    "età",
+    "orizzonte cronologico"
+   ],
+   "en": [
+    "period",
+    "periods",
+    "period number",
+    "epoch",
+    "era",
+    "cultural period"
+   ],
+   "fr": [
+    "période",
+    "périodes",
+    "époque"
+   ],
+   "de": [
+    "periode",
+    "perioden",
+    "epoche",
+    "zeitstufe",
+    "zeitabschnitt"
+   ],
+   "es": [
+    "período",
+    "periodo",
+    "períodos",
+    "época"
+   ],
+   "sv": [
+    "period",
+    "perioder",
+    "epok",
+    "tidsperiod"
+   ],
+   "nl": [
+    "periode",
+    "perioden",
+    "tijdperk"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "periodo_iniziale",
+    "periodo_finale"
+   ]
+  }
+ },
+ "datazione": {
+  "descrizione": "la datazione (cronologia)",
+  "descrizioni": {
+   "tabella": "la tabella delle datazioni (usata come fasi)"
+  },
+  "ambiti": [
+   "file",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "tabella": "Fasi",
+   "colonna": "Periodo"
+  },
+  "termini": {
+   "it": [
+    "datazione",
+    "datazioni",
+    "cronologia",
+    "datazione proposta",
+    "cronologia relativa",
+    "inquadramento cronologico"
+   ],
+   "en": [
+    "dating",
+    "datings",
+    "chronology",
+    "date range",
+    "dated",
+    "dating evidence",
+    "permitted dating",
+    "specific date",
+    "deposit date",
+    "spot date",
+    "spot dates",
+    "dates"
+   ],
+   "fr": [
+    "datation",
+    "datations",
+    "chronologie",
+    "fourchette chronologique"
+   ],
+   "de": [
+    "datierung",
+    "datierungen",
+    "zeitstellung",
+    "chronologie"
+   ],
+   "es": [
+    "datación",
+    "dataciones",
+    "cronología"
+   ],
+   "sv": [
+    "datering",
+    "dateringar",
+    "kronologi"
+   ],
+   "nl": [
+    "datering",
+    "dateringen",
+    "chronologie"
+   ]
+  },
+  "sistemi": {
+   "Framework Archaeology": [
+    "PermittedDating",
+    "SGDeposit Date",
+    "Specific Date"
+   ],
+   "pyArchInit": [
+    "datazione"
+   ]
+  }
+ },
+ "datazione_da": {
+  "descrizione": "l'anno iniziale della datazione",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Datazione da"
+  },
+  "termini": {
+   "it": [
+    "datazione da",
+    "da (anno)",
+    "da anno",
+    "anno inizio",
+    "anno iniziale",
+    "cronologia iniziale",
+    "dal",
+    "datazione iniziale",
+    "terminus post quem"
+   ],
+   "en": [
+    "from (year)",
+    "from year",
+    "start year",
+    "start date",
+    "date from",
+    "earliest date",
+    "lower date",
+    "lower date value",
+    "terminus post quem",
+    "tpq",
+    "start_year"
+   ],
+   "fr": [
+    "date de début",
+    "date début",
+    "terminus post quem",
+    "année de début"
+   ],
+   "de": [
+    "datierung von",
+    "von (jahr)",
+    "anfangsdatum",
+    "anfangsjahr",
+    "datierung ab"
+   ],
+   "es": [
+    "fecha inicial",
+    "año inicial",
+    "datación inicial",
+    "desde (año)"
+   ],
+   "sv": [
+    "från år",
+    "startår",
+    "datering från",
+    "tidigaste datering"
+   ],
+   "nl": [
+    "begindatum",
+    "beginjaar",
+    "datering van",
+    "datering vanaf"
+   ]
+  },
+  "abbreviazioni": [
+   "tpq"
+  ],
+  "deboli": [
+   "da",
+   "from",
+   "start",
+   "von",
+   "début",
+   "desde",
+   "från",
+   "vanaf",
+   "inizio"
+  ],
+  "contesti": [
+   "fase",
+   "periodo",
+   "datazione"
+  ],
+  "esclusioni": [
+   "where"
+  ]
+ },
+ "datazione_a": {
+  "descrizione": "l'anno finale della datazione",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Datazione a"
+  },
+  "termini": {
+   "it": [
+    "datazione a",
+    "a (anno)",
+    "a anno",
+    "anno fine",
+    "anno finale",
+    "cronologia finale",
+    "al",
+    "datazione finale",
+    "terminus ante quem"
+   ],
+   "en": [
+    "to (year)",
+    "to year",
+    "end year",
+    "end date",
+    "date to",
+    "latest date",
+    "upper date",
+    "upper date value",
+    "terminus ante quem",
+    "taq",
+    "end_year"
+   ],
+   "fr": [
+    "date de fin",
+    "date fin",
+    "terminus ante quem",
+    "année de fin"
+   ],
+   "de": [
+    "datierung bis",
+    "bis (jahr)",
+    "enddatum",
+    "endjahr"
+   ],
+   "es": [
+    "fecha final",
+    "año final",
+    "datación final",
+    "hasta (año)"
+   ],
+   "sv": [
+    "till år",
+    "slutår",
+    "datering till",
+    "senaste datering"
+   ],
+   "nl": [
+    "einddatum",
+    "eindjaar",
+    "datering tot"
+   ]
+  },
+  "abbreviazioni": [
+   "taq"
+  ],
+  "deboli": [
+   "a",
+   "to",
+   "end",
+   "bis",
+   "fin",
+   "hasta",
+   "till",
+   "tot",
+   "fine"
+  ],
+  "contesti": [
+   "fase",
+   "periodo",
+   "datazione"
+  ]
+ },
+ "sito": {
+  "descrizione": "il sito (scavo, località)",
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "layer": "area"
+  },
+  "termini": {
+   "it": [
+    "sito",
+    "siti",
+    "codice sito",
+    "nome sito",
+    "sigla sito",
+    "sigla scavo",
+    "località",
+    "toponimo"
+   ],
+   "en": [
+    "site",
+    "sites",
+    "site code",
+    "sitecode",
+    "site name",
+    "site id",
+    "site number"
+   ],
+   "fr": [
+    "site",
+    "sites",
+    "gisement",
+    "code site",
+    "nom du site",
+    "lieu-dit",
+    "numéro de site",
+    "code opération"
+   ],
+   "de": [
+    "fundstelle",
+    "fundort",
+    "fundplatz",
+    "grabung",
+    "maßnahme",
+    "maßnahmennummer",
+    "fundstellennummer",
+    "aktivitätsnummer"
+   ],
+   "es": [
+    "yacimiento",
+    "sitio",
+    "código de yacimiento",
+    "sitio arqueológico",
+    "nombre del yacimiento"
+   ],
+   "sv": [
+    "fornlämning",
+    "lokal",
+    "plats",
+    "raä nummer",
+    "raä-nr",
+    "raä nr",
+    "fornlämningsnummer",
+    "lämningsnummer",
+    "fornlämningsnr"
+   ],
+   "nl": [
+    "vindplaats",
+    "vindplaatsen",
+    "vindplaatsnummer",
+    "onderzoeksmeldingsnummer",
+    "projectcode"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "site_table",
+    "scavo_s"
+   ],
+   "Framework Archaeology": [
+    "SITECODE",
+    "Sites"
+   ]
+  },
+  "deboli": [
+   "scavo"
+  ]
+ },
+ "area": {
+  "descrizione": "l'area di scavo (saggio, trincea, settore)",
+  "descrizioni": {
+   "layer": "il perimetro dell'area di scavo (saggio, trincea)"
+  },
+  "ambiti": [
+   "file",
+   "layer",
+   "colonna"
+  ],
+  "canonico": {
+   "layer": "area"
+  },
+  "termini": {
+   "it": [
+    "area",
+    "aree",
+    "area di scavo",
+    "area scavo",
+    "aree di scavo",
+    "saggio",
+    "saggi",
+    "saggio di scavo",
+    "trincea",
+    "trincee",
+    "settore",
+    "settori",
+    "sondaggio",
+    "sondaggi",
+    "settore documentato"
+   ],
+   "en": [
+    "excavation area",
+    "excavation areas",
+    "trench",
+    "trenches",
+    "evaluation trench",
+    "evaluation trenches",
+    "test pit",
+    "test pits",
+    "sector",
+    "open area",
+    "excavations",
+    "excavated area",
+    "evaluation"
+   ],
+   "fr": [
+    "zone",
+    "zones",
+    "secteur",
+    "secteurs",
+    "tranchée",
+    "tranchées",
+    "sondage",
+    "sondages",
+    "zone de fouille",
+    "emprise",
+    "emprise de fouille"
+   ],
+   "de": [
+    "fläche",
+    "flächen",
+    "grabungsfläche",
+    "grabungsflächen",
+    "schnitt",
+    "schnitte",
+    "sondage",
+    "sektor",
+    "grabungsschnitt",
+    "suchschnitt",
+    "areal"
+   ],
+   "es": [
+    "área",
+    "área de excavación",
+    "sector",
+    "sectores",
+    "sondeo",
+    "sondeos",
+    "cata",
+    "catas",
+    "zanja",
+    "zanjas"
+   ],
+   "sv": [
+    "schakt",
+    "provschakt",
+    "sökschakt",
+    "yta",
+    "undersökningsyta",
+    "område",
+    "undersökningsområde"
+   ],
+   "nl": [
+    "werkput",
+    "werkputten",
+    "proefsleuf",
+    "proefsleuven",
+    "sleuf",
+    "proefput",
+    "sector",
+    "zone"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "area_s"
+   ],
+   "Framework Archaeology": [
+    "Excavations"
+   ],
+   "Stratigrafia 3D": [
+    "area_scavo"
+   ]
+  },
+  "esclusioni": [
+   "area documentata",
+   "area m",
+   "area mq",
+   "area (m2)",
+   "area cm",
+   "superficie"
+  ],
+  "geometrie": [
+   "poligono"
+  ]
+ },
+ "limite_scavo": {
+  "descrizione": "il limite dello scavo",
+  "ambiti": [
+   "file",
+   "layer"
+  ],
+  "canonico": {
+   "file": "area",
+   "layer": "area"
+  },
+  "termini": {
+   "it": [
+    "limite di scavo",
+    "limite scavo",
+    "limiti di scavo",
+    "limite dello scavo",
+    "limiti dello scavo",
+    "perimetro di scavo",
+    "perimetro scavo",
+    "perimetro dell'area"
+   ],
+   "en": [
+    "excavation limit",
+    "excavation limits",
+    "limit of excavation",
+    "loe",
+    "excavation boundary",
+    "site boundary",
+    "edge of excavation",
+    "red line boundary",
+    "redline"
+   ],
+   "fr": [
+    "limite de fouille",
+    "limites de fouille",
+    "limite d'emprise",
+    "contour de fouille"
+   ],
+   "de": [
+    "grabungsgrenze",
+    "grabungsgrenzen",
+    "schnittgrenze",
+    "flächengrenze",
+    "grabungsumriss"
+   ],
+   "es": [
+    "límite de excavación",
+    "límites de excavación",
+    "perímetro de excavación"
+   ],
+   "sv": [
+    "schaktgräns",
+    "undersökningsgräns",
+    "schaktkant",
+    "schaktgränser"
+   ],
+   "nl": [
+    "opgravingsgrens",
+    "werkputgrens",
+    "putgrens",
+    "putomtrek"
+   ]
+  },
+  "deboli": [
+   "limite",
+   "limiti",
+   "limit",
+   "limits",
+   "perimetro",
+   "perimeter"
+  ],
+  "geometrie": [
+   "poligono",
+   "linea"
+  ]
+ },
+ "ambiente": {
+  "descrizione": "l'ambiente (vano) dell'edificio",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Ambiente"
+  },
+  "termini": {
+   "it": [
+    "ambiente",
+    "vano",
+    "vani",
+    "stanza"
+   ],
+   "en": [
+    "room",
+    "rooms",
+    "space",
+    "room number"
+   ],
+   "fr": [
+    "pièce",
+    "salle",
+    "espace"
+   ],
+   "de": [
+    "raum",
+    "räume",
+    "raumnummer"
+   ],
+   "es": [
+    "habitación",
+    "estancia",
+    "ambiente"
+   ],
+   "sv": [
+    "rum"
+   ],
+   "nl": [
+    "ruimte",
+    "vertrek",
+    "kamer"
+   ]
+  }
+ },
+ "identificativo": {
+  "descrizione": "un identificativo generico di riga (poco indicativo)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "ID"
+  },
+  "deboli": [
+   "id",
+   "fid",
+   "gid",
+   "pk",
+   "pk uid",
+   "pkuid",
+   "objectid",
+   "object id",
+   "ogc fid",
+   "rowid",
+   "row id",
+   "uuid",
+   "globalid",
+   "global id",
+   "oid",
+   "n",
+   "nr",
+   "no",
+   "num",
+   "numero",
+   "number",
+   "#",
+   "chiave",
+   "key",
+   "progressivo",
+   "id_progressivo",
+   "nummer",
+   "número",
+   "numéro",
+   "nummer",
+   "lfd nr",
+   "lfd. nr."
+  ]
+ },
+ "geometria": {
+  "descrizione": "la geometria (forma) dell'elemento",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "geometry"
+  },
+  "termini": {
+   "it": [
+    "geometria",
+    "geometrie"
+   ],
+   "en": [
+    "geometry",
+    "geom",
+    "the geom",
+    "wkt",
+    "wkt geom"
+   ],
+   "fr": [
+    "géométrie"
+   ],
+   "de": [
+    "geometrie"
+   ],
+   "es": [
+    "geometría"
+   ],
+   "sv": [
+    "geometri"
+   ],
+   "nl": [
+    "geometrie"
+   ]
+  },
+  "deboli": [
+   "shape"
+  ]
+ }
+}

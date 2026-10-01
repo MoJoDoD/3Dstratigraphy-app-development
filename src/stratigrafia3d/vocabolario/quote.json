@@ -1,0 +1,1221 @@
+{
+ "//": "Vocabolario: quote (altezze), tipi di quota del motore (schema.TIPI_QUOTA), profili, linee di fondo, coordinate, spessori e profondità.",
+ "quote": {
+  "descrizione": "le quote (altezze rilevate)",
+  "descrizioni": {
+   "colonna": "il valore di quota (altezza)",
+   "layer": "i punti quotati",
+   "tabella": "la tabella delle quote",
+   "file": "le quote"
+  },
+  "ambiti": [
+   "file",
+   "layer",
+   "tabella",
+   "colonna"
+  ],
+  "canonico": {
+   "file": "quote",
+   "layer": "quote",
+   "tabella": "Quote",
+   "colonna": "quota"
+  },
+  "termini": {
+   "it": [
+    "quota",
+    "quote",
+    "quota assoluta",
+    "quote assolute",
+    "quota relativa",
+    "punti quotati",
+    "punto quotato",
+    "quote rilevate",
+    "rilievo punti",
+    "altezza",
+    "altitudine",
+    "m slm",
+    "m s.l.m.",
+    "s.l.m.",
+    "slm",
+    "metri slm",
+    "quota slm",
+    "piano quotato",
+    "quote di scavo"
+   ],
+   "en": [
+    "level",
+    "levels",
+    "spot height",
+    "spot heights",
+    "spot level",
+    "spot levels",
+    "height",
+    "heights",
+    "elevation",
+    "elevations",
+    "altitude",
+    "od",
+    "aod",
+    "m od",
+    "m aod",
+    "above ordnance datum",
+    "ordnance datum",
+    "msl",
+    "asl",
+    "above sea level",
+    "z value",
+    "z coordinate",
+    "levels register",
+    "level register",
+    "reduced level",
+    "reduced levels",
+    "rl"
+   ],
+   "fr": [
+    "cote",
+    "cotes",
+    "altitude",
+    "altimétrie",
+    "niveau ngf",
+    "ngf",
+    "z ngf",
+    "m ngf",
+    "point coté",
+    "points cotés",
+    "nivellement",
+    "cote ngf",
+    "altitude ngf"
+   ],
+   "de": [
+    "höhe",
+    "höhen",
+    "höhenpunkt",
+    "höhenpunkte",
+    "höhenwert",
+    "höhenwerte",
+    "nn",
+    "ü nn",
+    "m ü nn",
+    "ü. nn",
+    "nhn",
+    "m ü nhn",
+    "normalnull",
+    "nivellement",
+    "höhenmessung",
+    "absolute höhe",
+    "höhe über nn",
+    "höhe ü. nn",
+    "höhe nn",
+    "höhe nhn",
+    "höhe ü. nhn"
+   ],
+   "es": [
+    "cota",
+    "cotas",
+    "altura",
+    "altitud",
+    "msnm",
+    "m s.n.m.",
+    "cota absoluta",
+    "cotas absolutas",
+    "puntos acotados",
+    "nivel"
+   ],
+   "sv": [
+    "höjd",
+    "höjder",
+    "höjdvärde",
+    "höjdvärden",
+    "nivå",
+    "nivåer",
+    "möh",
+    "m ö h",
+    "rh2000",
+    "rh 2000",
+    "höjdpunkter",
+    "avvägning"
+   ],
+   "nl": [
+    "hoogte",
+    "hoogtes",
+    "hoogtemeting",
+    "hoogtemetingen",
+    "nap",
+    "m nap",
+    "m+nap",
+    "hoogtepunt",
+    "hoogtepunten",
+    "taw"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "pyarchinit_quote",
+    "pyarchinit_quote_usm",
+    "quota_q"
+   ],
+   "Stratigrafia 3D": [
+    "quote"
+   ]
+  },
+  "abbreviazioni": [
+   "z",
+   "q",
+   "h",
+   "elev",
+   "alt",
+   "ht",
+   "quot",
+   "zeta",
+   "lvl",
+   "hgt",
+   "q abs",
+   "z abs",
+   "z m"
+  ],
+  "contesti": [
+   "quote"
+  ],
+  "geometrie": [
+   "punto"
+  ]
+ },
+ "tipo_quota": {
+  "descrizione": "il tipo di quota (superiore, inferiore, taglio…)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "tipo_quota"
+  },
+  "termini": {
+   "it": [
+    "tipo quota",
+    "tipo di quota",
+    "tipo_quota",
+    "tipo punto",
+    "descrizione quota",
+    "posizione quota"
+   ],
+   "en": [
+    "level type",
+    "type of level",
+    "height type",
+    "level description",
+    "level code",
+    "spot height type"
+   ],
+   "fr": [
+    "type de cote",
+    "type de niveau",
+    "type d'altitude",
+    "nature de la cote"
+   ],
+   "de": [
+    "höhentyp",
+    "art der höhe",
+    "höhenart",
+    "höhenbezeichnung"
+   ],
+   "es": [
+    "tipo de cota",
+    "tipo cota",
+    "tipo de nivel"
+   ],
+   "sv": [
+    "höjdtyp",
+    "nivåtyp",
+    "typ av höjd"
+   ],
+   "nl": [
+    "hoogtetype",
+    "soort hoogte",
+    "type hoogte"
+   ]
+  },
+  "contesti": [
+   "quote"
+  ]
+ },
+ "sup": {
+  "descrizione": "la quota superiore (tetto dell'unità)",
+  "ambiti": [
+   "colonna",
+   "valore"
+  ],
+  "campo": "tipo_quota",
+  "canonico": {
+   "valore": "sup"
+  },
+  "termini": {
+   "it": [
+    "sup",
+    "superiore",
+    "superficie",
+    "tetto",
+    "quota superiore",
+    "q sup",
+    "q.sup",
+    "quota sup",
+    "quota max",
+    "quota massima",
+    "quota max abs",
+    "interfaccia superiore",
+    "superficie us",
+    "quota tetto",
+    "sommità strato"
+   ],
+   "en": [
+    "top",
+    "top level",
+    "top of context",
+    "upper",
+    "upper level",
+    "upper surface",
+    "surface",
+    "top height",
+    "max level",
+    "maximum level",
+    "highest level",
+    "top of deposit",
+    "top of layer",
+    "level top",
+    "top od"
+   ],
+   "fr": [
+    "sommet",
+    "niveau supérieur",
+    "surface",
+    "toit",
+    "cote supérieure",
+    "cote sommet",
+    "cote max",
+    "altitude supérieure",
+    "niveau d'apparition"
+   ],
+   "de": [
+    "oberkante",
+    "höhe ok",
+    "ok",
+    "oberfläche",
+    "obere höhe",
+    "oberkante befund",
+    "höhe oberkante",
+    "ok befund"
+   ],
+   "es": [
+    "techo",
+    "superficie",
+    "cota superior",
+    "nivel superior",
+    "cota máxima",
+    "cota de techo"
+   ],
+   "sv": [
+    "överkant",
+    "övre nivå",
+    "yta",
+    "ök",
+    "höjd överkant",
+    "överyta"
+   ],
+   "nl": [
+    "bovenkant",
+    "bovenzijde",
+    "bovenkant spoor",
+    "hoogte bovenkant",
+    "bk"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "quota_max_abs",
+    "quota_max_rel"
+   ]
+  },
+  "abbreviazioni": [
+   "qsup",
+   "q_sup",
+   "zsup",
+   "z sup",
+   "z top",
+   "ztop",
+   "z max",
+   "zmax",
+   "q max",
+   "qmax",
+   "hok"
+  ],
+  "codici": [
+   "s",
+   "su",
+   "top"
+  ],
+  "esclusioni": [
+   "superficie m",
+   "superficie mq",
+   "superficie documentata",
+   "superficie area"
+  ],
+  "contesti": [
+   "quote"
+  ]
+ },
+ "inf": {
+  "descrizione": "la quota inferiore (base dell'unità)",
+  "ambiti": [
+   "colonna",
+   "valore"
+  ],
+  "campo": "tipo_quota",
+  "canonico": {
+   "valore": "inf"
+  },
+  "termini": {
+   "it": [
+    "inf",
+    "inferiore",
+    "base",
+    "letto",
+    "quota inferiore",
+    "q inf",
+    "q.inf",
+    "quota inf",
+    "quota min",
+    "quota minima",
+    "interfaccia inferiore",
+    "base us",
+    "quota base",
+    "fondo strato"
+   ],
+   "en": [
+    "bottom",
+    "base",
+    "base level",
+    "lower",
+    "lower level",
+    "bottom level",
+    "bottom of context",
+    "min level",
+    "minimum level",
+    "lowest level",
+    "base of deposit",
+    "base of layer",
+    "level base",
+    "base od"
+   ],
+   "fr": [
+    "base",
+    "niveau inférieur",
+    "fond",
+    "cote inférieure",
+    "cote base",
+    "cote min",
+    "altitude inférieure"
+   ],
+   "de": [
+    "unterkante",
+    "höhe uk",
+    "uk",
+    "untere höhe",
+    "unterkante befund",
+    "höhe unterkante",
+    "basis",
+    "uk befund"
+   ],
+   "es": [
+    "base",
+    "cota inferior",
+    "nivel inferior",
+    "cota mínima",
+    "cota de base"
+   ],
+   "sv": [
+    "underkant",
+    "nedre nivå",
+    "höjd underkant",
+    "botten"
+   ],
+   "nl": [
+    "onderkant",
+    "onderzijde",
+    "onderkant spoor",
+    "hoogte onderkant"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "quota_min_abs",
+    "quota_min_rel"
+   ]
+  },
+  "abbreviazioni": [
+   "qinf",
+   "q_inf",
+   "zinf",
+   "z inf",
+   "z base",
+   "zbase",
+   "z min",
+   "zmin",
+   "q min",
+   "qmin",
+   "huk"
+  ],
+  "codici": [
+   "i",
+   "b",
+   "inf",
+   "bot"
+  ],
+  "contesti": [
+   "quote"
+  ]
+ },
+ "taglio": {
+  "descrizione": "la quota del fondo di un taglio",
+  "ambiti": [
+   "colonna",
+   "valore"
+  ],
+  "campo": "tipo_quota",
+  "canonico": {
+   "valore": "taglio"
+  },
+  "termini": {
+   "it": [
+    "taglio",
+    "fondo taglio",
+    "fondo",
+    "interfaccia",
+    "fondo del taglio",
+    "quota fondo",
+    "quota taglio"
+   ],
+   "en": [
+    "cut",
+    "base of cut",
+    "bottom of cut",
+    "cut base",
+    "cut bottom",
+    "base of feature"
+   ],
+   "fr": [
+    "fond de creusement",
+    "fond de fosse",
+    "fond du creusement",
+    "creusement"
+   ],
+   "de": [
+    "sohle",
+    "grubensohle",
+    "befundsohle",
+    "sohlhöhe",
+    "höhe sohle"
+   ],
+   "es": [
+    "fondo del corte",
+    "fondo de corte",
+    "base del corte",
+    "corte"
+   ],
+   "sv": [
+    "nedgrävningens botten",
+    "botten av nedgrävning",
+    "nedgrävning"
+   ],
+   "nl": [
+    "bodem ingraving",
+    "bodem spoor",
+    "onderkant ingraving"
+   ]
+  },
+  "codici": [
+   "t",
+   "c",
+   "cut"
+  ],
+  "contesti": [
+   "quote"
+  ]
+ },
+ "orlo": {
+  "descrizione": "la quota dell'orlo (margine superiore) di un taglio",
+  "ambiti": [
+   "colonna",
+   "valore"
+  ],
+  "campo": "tipo_quota",
+  "canonico": {
+   "valore": "orlo"
+  },
+  "termini": {
+   "it": [
+    "orlo",
+    "bordo",
+    "ciglio",
+    "margine",
+    "orlo taglio",
+    "ciglio del taglio",
+    "quota orlo"
+   ],
+   "en": [
+    "rim",
+    "edge",
+    "top of cut",
+    "edge of cut",
+    "lip",
+    "cut edge",
+    "cut top"
+   ],
+   "fr": [
+    "bord",
+    "rebord",
+    "haut de creusement",
+    "bord du creusement"
+   ],
+   "de": [
+    "rand",
+    "oberkante grube",
+    "grubenrand",
+    "befundrand"
+   ],
+   "es": [
+    "borde",
+    "borde del corte",
+    "labio"
+   ],
+   "sv": [
+    "kant",
+    "nedgrävningskant",
+    "överkant nedgrävning"
+   ],
+   "nl": [
+    "rand",
+    "bovenkant ingraving",
+    "insteekrand"
+   ]
+  },
+  "codici": [
+   "o",
+   "r"
+  ],
+  "contesti": [
+   "quote"
+  ]
+ },
+ "rasatura": {
+  "descrizione": "la quota di rasatura (cresta) di un muro",
+  "ambiti": [
+   "colonna",
+   "valore"
+  ],
+  "campo": "tipo_quota",
+  "canonico": {
+   "valore": "rasatura"
+  },
+  "termini": {
+   "it": [
+    "rasatura",
+    "cresta",
+    "top muro",
+    "sommità",
+    "sommità muro",
+    "quota rasatura",
+    "cresta muro",
+    "quota rasatura max",
+    "quota rasatura min"
+   ],
+   "en": [
+    "crest",
+    "top of wall",
+    "wall top",
+    "surviving top",
+    "top of masonry",
+    "wall crest"
+   ],
+   "fr": [
+    "arase",
+    "arasement",
+    "sommet du mur",
+    "arase du mur",
+    "crête"
+   ],
+   "de": [
+    "mauerkrone",
+    "abbruchkante",
+    "erhaltene oberkante",
+    "mauerkrone höhe"
+   ],
+   "es": [
+    "coronación",
+    "coronación del muro",
+    "enrase",
+    "cresta del muro"
+   ],
+   "sv": [
+    "murkrön",
+    "murkrona",
+    "bevarad överkant"
+   ],
+   "nl": [
+    "bovenkant muur",
+    "muurkruin",
+    "uitbraakniveau"
+   ]
+  },
+  "codici": [
+   "ras",
+   "cr"
+  ],
+  "contesti": [
+   "quote",
+   "usm"
+  ]
+ },
+ "fondazione": {
+  "descrizione": "la quota di fondazione (base) di un muro",
+  "ambiti": [
+   "colonna",
+   "valore"
+  ],
+  "campo": "tipo_quota",
+  "canonico": {
+   "valore": "fondazione",
+   "colonna": "Quota base usata (rilevata o stimata)"
+  },
+  "termini": {
+   "it": [
+    "fondazione",
+    "base muro",
+    "quota fondazione",
+    "quota base usata",
+    "quota base usata rilevata o stimata",
+    "risega",
+    "quota fondazione rilevata",
+    "piano di fondazione"
+   ],
+   "en": [
+    "foundation",
+    "foundation level",
+    "wall base",
+    "base of wall",
+    "offset",
+    "footing",
+    "base of foundation"
+   ],
+   "fr": [
+    "fondation",
+    "base du mur",
+    "ressaut",
+    "niveau de fondation",
+    "semelle"
+   ],
+   "de": [
+    "fundament",
+    "fundamentunterkante",
+    "mauerfuß",
+    "fundamentsohle",
+    "fundamenthöhe"
+   ],
+   "es": [
+    "cimentación",
+    "base del muro",
+    "zarpa",
+    "cimiento",
+    "nivel de cimentación"
+   ],
+   "sv": [
+    "grund",
+    "grundläggning",
+    "murfot",
+    "grundnivå"
+   ],
+   "nl": [
+    "fundering",
+    "funderingsniveau",
+    "muurvoet",
+    "onderkant fundering"
+   ]
+  },
+  "codici": [
+   "f",
+   "fond"
+  ],
+  "contesti": [
+   "quote",
+   "usm"
+  ]
+ },
+ "profili": {
+  "descrizione": "i profili 3D delle US (linee delle interfacce rilevate)",
+  "ambiti": [
+   "file",
+   "layer"
+  ],
+  "canonico": {
+   "file": "profili",
+   "layer": "profili"
+  },
+  "termini": {
+   "it": [
+    "profili",
+    "profilo",
+    "profili us",
+    "profili_us",
+    "interfacce",
+    "linee di interfaccia",
+    "linee 3d",
+    "polilinee 3d",
+    "profili delle us"
+   ],
+   "en": [
+    "profiles",
+    "profile lines",
+    "interface lines",
+    "3d lines",
+    "3d polylines",
+    "breaklines",
+    "break lines",
+    "contour lines"
+   ],
+   "fr": [
+    "profils",
+    "lignes d'interface",
+    "lignes 3d",
+    "lignes de rupture"
+   ],
+   "de": [
+    "interfacelinien",
+    "bruchkanten",
+    "3d linien",
+    "geländekanten"
+   ],
+   "es": [
+    "líneas de interfaz",
+    "líneas 3d",
+    "líneas de rotura"
+   ],
+   "sv": [
+    "brytlinjer",
+    "3d linjer",
+    "gränslinjer"
+   ],
+   "nl": [
+    "interfacelijnen",
+    "breuklijnen",
+    "3d lijnen"
+   ]
+  },
+  "deboli": [
+   "profile"
+  ],
+  "geometrie": [
+   "linea"
+  ],
+  "sistemi": {
+   "Stratigrafia 3D": [
+    "profili_us"
+   ]
+  }
+ },
+ "fondi": {
+  "descrizione": "le linee di fondo dei tagli (dove la parete diventa fondo)",
+  "ambiti": [
+   "file",
+   "layer"
+  ],
+  "canonico": {
+   "file": "fondi",
+   "layer": "fondi"
+  },
+  "termini": {
+   "it": [
+    "linee fondo",
+    "linea di fondo",
+    "linee di fondo",
+    "fondo taglio",
+    "linee_fondo",
+    "piede parete",
+    "piede della parete",
+    "fondi"
+   ],
+   "en": [
+    "base of slope",
+    "break of slope",
+    "base of cut",
+    "bottom of slope",
+    "slope base",
+    "base of slope lines"
+   ],
+   "fr": [
+    "bas de pente",
+    "rupture de pente",
+    "pied de paroi",
+    "bas de paroi"
+   ],
+   "de": [
+    "böschungsfuß",
+    "hangfuß",
+    "sohlkante",
+    "sohllinie",
+    "grubensohle linie"
+   ],
+   "es": [
+    "pie de talud",
+    "línea de fondo",
+    "base del talud"
+   ],
+   "sv": [
+    "släntfot",
+    "bottenlinje",
+    "brytlinje botten"
+   ],
+   "nl": [
+    "taludvoet",
+    "bodemlijn",
+    "onderkant talud"
+   ]
+  },
+  "geometrie": [
+   "linea"
+  ],
+  "sistemi": {
+   "Stratigrafia 3D": [
+    "linee_fondo"
+   ]
+  }
+ },
+ "tratteggi": {
+  "descrizione": "i tratteggi (hachures) delle pareti dei tagli",
+  "ambiti": [
+   "file",
+   "layer"
+  ],
+  "canonico": {
+   "file": "ignora",
+   "layer": "ignora"
+  },
+  "termini": {
+   "it": [
+    "tratteggi",
+    "tratteggio",
+    "tratteggiature"
+   ],
+   "en": [
+    "hachures",
+    "hachure",
+    "hachuring",
+    "hatching"
+   ],
+   "fr": [
+    "hachures",
+    "hachure"
+   ],
+   "de": [
+    "schraffur",
+    "schraffen",
+    "schraffuren"
+   ],
+   "es": [
+    "sombreado",
+    "rayado"
+   ],
+   "sv": [
+    "skraffering",
+    "skrafferingar"
+   ],
+   "nl": [
+    "arcering",
+    "arceringen"
+   ]
+  },
+  "geometrie": [
+   "linea"
+  ]
+ },
+ "coord_x": {
+  "descrizione": "la coordinata est (X)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "x"
+  },
+  "termini": {
+   "it": [
+    "est",
+    "coordinata x",
+    "coordinata est",
+    "coord x",
+    "x coord"
+   ],
+   "en": [
+    "easting",
+    "east",
+    "x coordinate",
+    "x coord",
+    "eastings"
+   ],
+   "fr": [
+    "coordonnée x",
+    "abscisse",
+    "x lambert"
+   ],
+   "de": [
+    "rechtswert",
+    "ostwert",
+    "x koordinate",
+    "rechts"
+   ],
+   "es": [
+    "este",
+    "coordenada x",
+    "coordenada este"
+   ],
+   "sv": [
+    "östlig koordinat",
+    "x koordinat",
+    "e koordinat"
+   ],
+   "nl": [
+    "oost",
+    "x coördinaat",
+    "x-coördinaat"
+   ]
+  },
+  "abbreviazioni": [
+   "x",
+   "e",
+   "xcoord",
+   "x m",
+   "pos x"
+  ],
+  "contesti": [
+   "quote",
+   "campioni",
+   "reperti"
+  ],
+  "geometrie": [
+   "punto"
+  ]
+ },
+ "coord_y": {
+  "descrizione": "la coordinata nord (Y)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "y"
+  },
+  "termini": {
+   "it": [
+    "nord",
+    "coordinata y",
+    "coordinata nord",
+    "coord y",
+    "y coord"
+   ],
+   "en": [
+    "northing",
+    "north",
+    "y coordinate",
+    "y coord",
+    "northings"
+   ],
+   "fr": [
+    "coordonnée y",
+    "ordonnée",
+    "y lambert"
+   ],
+   "de": [
+    "hochwert",
+    "nordwert",
+    "y koordinate",
+    "hoch"
+   ],
+   "es": [
+    "norte",
+    "coordenada y",
+    "coordenada norte"
+   ],
+   "sv": [
+    "nordlig koordinat",
+    "y koordinat",
+    "n koordinat"
+   ],
+   "nl": [
+    "noord",
+    "y coördinaat",
+    "y-coördinaat"
+   ]
+  },
+  "abbreviazioni": [
+   "y",
+   "ycoord",
+   "y m",
+   "pos y"
+  ],
+  "contesti": [
+   "quote",
+   "campioni",
+   "reperti"
+  ],
+  "geometrie": [
+   "punto"
+  ]
+ },
+ "spessore": {
+  "descrizione": "lo spessore medio dell'unità",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Spessore medio stimato (m)"
+  },
+  "termini": {
+   "it": [
+    "spessore",
+    "spessore medio",
+    "spessore medio stimato",
+    "spessore medio stimato (m)",
+    "potenza",
+    "spessore (m)",
+    "spessore (cm)",
+    "spessore stimato"
+   ],
+   "en": [
+    "thickness",
+    "average thickness",
+    "mean thickness",
+    "context thickness",
+    "deposit thickness",
+    "thickness (m)",
+    "thickness (cm)"
+   ],
+   "fr": [
+    "épaisseur",
+    "puissance",
+    "épaisseur moyenne",
+    "épaisseur (m)"
+   ],
+   "de": [
+    "mächtigkeit",
+    "stärke",
+    "dicke",
+    "schichtstärke",
+    "schichtmächtigkeit",
+    "befundmächtigkeit"
+   ],
+   "es": [
+    "espesor",
+    "potencia",
+    "grosor",
+    "espesor medio",
+    "potencia media"
+   ],
+   "sv": [
+    "tjocklek",
+    "mäktighet",
+    "lagertjocklek"
+   ],
+   "nl": [
+    "dikte",
+    "gemiddelde dikte",
+    "laagdikte"
+   ]
+  },
+  "abbreviazioni": [
+   "spess",
+   "sp",
+   "thk",
+   "thick",
+   "sp medio"
+  ],
+  "contesti": [
+   "us",
+   "usm"
+  ]
+ },
+ "profondita": {
+  "descrizione": "lo spessore o la profondità massima (per i tagli: dalla superficie)",
+  "ambiti": [
+   "colonna"
+  ],
+  "canonico": {
+   "colonna": "Spessore/profondità max (m)"
+  },
+  "termini": {
+   "it": [
+    "profondità",
+    "profondità max",
+    "profondità massima",
+    "spessore/profondità max",
+    "spessore profondità max",
+    "spessore/profondità max (m)",
+    "profondità (m)",
+    "profondità taglio",
+    "profondità max (m)"
+   ],
+   "en": [
+    "depth",
+    "max depth",
+    "maximum depth",
+    "context depth",
+    "context depth (m)",
+    "depth of cut",
+    "cut depth",
+    "depth (m)",
+    "feature depth"
+   ],
+   "fr": [
+    "profondeur",
+    "profondeur max",
+    "profondeur maximale",
+    "profondeur conservée"
+   ],
+   "de": [
+    "tiefe",
+    "maximale tiefe",
+    "max tiefe",
+    "erhaltene tiefe",
+    "befundtiefe"
+   ],
+   "es": [
+    "profundidad",
+    "profundidad máxima",
+    "profundidad conservada"
+   ],
+   "sv": [
+    "djup",
+    "maxdjup",
+    "största djup",
+    "bevarat djup"
+   ],
+   "nl": [
+    "diepte",
+    "maximale diepte",
+    "max diepte",
+    "bewaarde diepte"
+   ]
+  },
+  "sistemi": {
+   "pyArchInit": [
+    "profondita_max"
+   ],
+   "Framework Archaeology": [
+    "DEPTH"
+   ]
+  },
+  "abbreviazioni": [
+   "prof",
+   "prof max",
+   "dpth",
+   "max dpth"
+  ],
+  "contesti": [
+   "us",
+   "usm"
+  ]
+ }
+}

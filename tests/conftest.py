@@ -7,6 +7,18 @@ os.environ["S3D_LINGUA"] = "it"          # i test controllano i testi italiani, 
 warnings.filterwarnings("ignore", message=".*Axes3D.*")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def vocabolario_utente_separato(tmp_path_factory):
+    """I termini insegnati dall'utente nell'app (~/.stratigrafia3d/vocabolario.json) non cambiano i test."""
+    from stratigrafia3d import vocabolario as V
+    vecchio = V.FILE_UTENTE
+    V.FILE_UTENTE = str(tmp_path_factory.mktemp("vocabolario") / "vocabolario.json")
+    V.ricarica()
+    yield
+    V.FILE_UTENTE = vecchio
+    V.ricarica()
+
+
 @pytest.fixture(scope="session")
 def demo(tmp_path_factory):
     """Scavo dimostrativo generato una volta per tutta la sessione di test."""

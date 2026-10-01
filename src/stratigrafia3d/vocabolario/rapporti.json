@@ -1,0 +1,196 @@
+{
+ "//": "Vocabolario: rapporti stratigrafici (matrice di Harris). I valori canonici sono quelli del motore (schema.INVERSI). «>»/«sopra»/«posteriore» diventano «copre», «<»/«sotto»/«anteriore» diventano «coperto da».",
+
+ "rapporti": {
+  "descrizione": "i rapporti stratigrafici",
+  "descrizioni": {"tabella": "la tabella dei rapporti stratigrafici", "colonna": "i rapporti scritti per esteso"},
+  "ambiti": ["file", "tabella", "colonna"],
+  "canonico": {"tabella": "Rapporti", "colonna": "rapporti"},
+  "termini": {
+   "it": ["rapporti", "rapporti stratigrafici", "relazioni stratigrafiche", "sequenza stratigrafica", "matrice",
+          "matrice di harris", "diagramma stratigrafico", "rapporto stratigrafico"],
+   "en": ["relationships", "relations", "stratigraphic relationships", "stratigraphic relations", "matrix",
+          "harris matrix", "harris", "stratigraphic matrix", "matrix links", "stratigraphic links", "above below",
+          "relationship"],
+   "fr": ["relations stratigraphiques", "rapports stratigraphiques", "relations", "diagramme stratigraphique",
+          "matrice", "relation stratigraphique"],
+   "de": ["stratigraphische beziehungen", "stratigraphische relationen", "relationen", "beziehungen", "harris-matrix",
+          "harrismatrix", "stratigrafische beziehungen"],
+   "es": ["relaciones estratigráficas", "relaciones", "matriz de harris", "relación estratigráfica"],
+   "sv": ["relationer", "stratigrafiska relationer", "harrismatris", "stratigrafiska samband"],
+   "nl": ["relaties", "stratigrafische relaties", "harris matrix", "stratigrafische relatie"]
+  },
+  "sistemi": {"Intrasis": ["Relations"], "pyArchInit": ["rapporti", "rapporti2"]},
+  "deboli": ["links", "link"]
+ },
+
+ "copre": {
+  "descrizione": "il rapporto «copre» (sta sopra, è posteriore)",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "copre", "valore": "copre"},
+  "termini": {
+   "it": ["copre", "sopra", "sta sopra", "si sovrappone a", "sigilla", "oblitera", "posteriore a", "posteriore",
+          "più recente di", "è sopra"],
+   "en": ["covers", "overlies", "above", "seals", "over", "later than", "is above", "overlays", "post-dates",
+          "postdates", "lies over", "superimposed on"],
+   "fr": ["recouvre", "couvre", "scelle", "sur", "au-dessus de", "postérieur à", "est sur"],
+   "de": ["überlagert", "liegt über", "über", "bedeckt", "versiegelt", "jünger als", "überdeckt", "liegt auf"],
+   "es": ["cubre", "sella", "se superpone a", "sobre", "encima de", "posterior a", "se apoya sobre"],
+   "sv": ["överlagrar", "ovanför", "täcker", "över", "yngre än", "ligger över"],
+   "nl": ["ligt over", "bedekt", "boven", "ligt boven", "jonger dan", "dekt af"]
+  },
+  "codici": [">", "sopra", "above"]
+ },
+
+ "coperto da": {
+  "descrizione": "il rapporto «coperto da» (sta sotto, è anteriore)",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "coperto da", "valore": "coperto da"},
+  "termini": {
+   "it": ["coperto da", "coperta da", "sotto", "sta sotto", "sigillato da", "obliterato da", "anteriore a",
+          "anteriore", "più antico di", "è sotto"],
+   "en": ["covered by", "overlain by", "below", "sealed by", "under", "earlier than", "is below", "is covered by",
+          "is overlain by", "is sealed by", "pre-dates", "predates", "lies under", "underlies"],
+   "fr": ["recouvert par", "couvert par", "scellé par", "sous", "au-dessous de", "antérieur à", "est sous"],
+   "de": ["überlagert von", "wird überlagert von", "liegt unter", "unter", "bedeckt von", "versiegelt von",
+          "älter als", "überdeckt von"],
+   "es": ["cubierto por", "sellado por", "bajo", "debajo de", "anterior a", "cubierta por"],
+   "sv": ["överlagras av", "under", "täcks av", "äldre än", "ligger under"],
+   "nl": ["ligt onder", "bedekt door", "onder", "ouder dan", "afgedekt door"]
+  },
+  "codici": ["<"]
+ },
+
+ "taglia": {
+  "descrizione": "il rapporto «taglia»",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "taglia", "valore": "taglia"},
+  "termini": {
+   "it": ["taglia", "incide", "asporta"],
+   "en": ["cuts", "cuts through", "truncates", "is cutting"],
+   "fr": ["recoupe", "entaille", "perce", "coupe"],
+   "de": ["schneidet", "stört", "durchschneidet", "schneidet in"],
+   "es": ["corta", "rompe", "corta a"],
+   "sv": ["skär", "skär igenom", "skär genom"],
+   "nl": ["snijdt", "oversnijdt", "doorsnijdt", "verstoort"]
+  }
+ },
+
+ "tagliato da": {
+  "descrizione": "il rapporto «tagliato da»",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "tagliato da", "valore": "tagliato da"},
+  "termini": {
+   "it": ["tagliato da", "tagliata da", "inciso da", "asportato da"],
+   "en": ["cut by", "is cut by", "truncated by", "is truncated by"],
+   "fr": ["coupé par", "recoupé par", "entaillé par", "percé par"],
+   "de": ["geschnitten von", "gestört von", "wird geschnitten von", "durchschnitten von", "gestört durch"],
+   "es": ["cortado por", "roto por", "cortada por"],
+   "sv": ["skärs av", "skuren av", "skurs av"],
+   "nl": ["gesneden door", "oversneden door", "doorsneden door", "verstoord door"]
+  }
+ },
+
+ "riempie": {
+  "descrizione": "il rapporto «riempie» (l'unità di cui è il riempimento)",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "riempie", "valore": "riempie"},
+  "termini": {
+   "it": ["riempie", "riempimento di", "colma", "riempimento del taglio"],
+   "en": ["fills", "fill of", "filled in", "is fill of", "is a fill of", "fill of cut", "within", "contained by"],
+   "fr": ["remplit", "comble", "remplissage de", "comblement de"],
+   "de": ["verfüllt", "verfüllung von", "füllt", "verfüllung in"],
+   "es": ["rellena", "relleno de", "colmata"],
+   "sv": ["fyller", "fyllning i", "fyllning av", "fyller ut"],
+   "nl": ["vult", "vulling van", "is vulling van"]
+  },
+  "sistemi": {"Framework Archaeology": ["Fill of"]},
+  "deboli": ["parent", "padre", "parent context"]
+ },
+
+ "riempito da": {
+  "descrizione": "il rapporto «riempito da»",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "riempito da", "valore": "riempito da"},
+  "termini": {
+   "it": ["riempito da", "riempita da", "colmato da"],
+   "en": ["filled by", "filled with", "is filled by", "is filled with", "contains"],
+   "fr": ["rempli par", "comblé par", "remplie par", "comblée par"],
+   "de": ["verfüllt von", "gefüllt mit", "gefüllt von", "wird verfüllt von"],
+   "es": ["rellenado por", "colmatado por", "rellenada por", "relleno por"],
+   "sv": ["fylls av", "fylld av", "fylld med"],
+   "nl": ["gevuld door", "gevuld met", "opgevuld met"]
+  }
+ },
+
+ "si appoggia a": {
+  "descrizione": "il rapporto «si appoggia a»",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "si appoggia a", "valore": "si appoggia a"},
+  "termini": {
+   "it": ["si appoggia a", "si appoggia", "appoggia a", "si addossa a", "addossato a"],
+   "en": ["abuts", "butts", "leans against", "butts against", "abuts against", "is abutting"],
+   "fr": ["s'appuie contre", "s'appuie sur", "s'appuie à", "appuyé contre", "contre"],
+   "de": ["stößt an", "lehnt an", "angesetzt an", "stößt gegen", "angebaut an"],
+   "es": ["se apoya en", "se adosa a", "adosado a", "apoya en", "se apoya contra"],
+   "sv": ["anligger mot", "stöter mot", "ansluter till", "byggd mot"],
+   "nl": ["ligt tegen", "tegen", "aangebouwd tegen", "stoot tegen"]
+  }
+ },
+
+ "gli si appoggia": {
+  "descrizione": "il rapporto «gli si appoggia»",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "gli si appoggia", "valore": "gli si appoggia"},
+  "termini": {
+   "it": ["gli si appoggia", "gli si appoggiano", "le si appoggia", "gli si addossa"],
+   "en": ["abutted by", "butted by", "is abutted by", "is butted by", "leaned against by"],
+   "fr": ["reçoit l'appui de", "sert d'appui à", "contre lequel s'appuie"],
+   "de": ["wird angestoßen von", "an ihn stößt", "angesetzt ist"],
+   "es": ["se le apoya", "se le adosa", "recibe el apoyo de"],
+   "sv": ["anliggs av", "har anslutning från"],
+   "nl": ["wordt tegen aangebouwd door", "tegen aangebouwd"]
+  }
+ },
+
+ "si lega a": {
+  "descrizione": "il rapporto «si lega a» (contemporaneo, legato in costruzione)",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "si lega a", "valore": "si lega a"},
+  "termini": {
+   "it": ["si lega a", "si lega con", "legato a", "legato con", "si lega"],
+   "en": ["bonded with", "bonds with", "bonded to", "tied to", "bonds", "bonded", "keyed into", "tied in with"],
+   "fr": ["lié à", "chaîné avec", "chaîné à", "se lie à"],
+   "de": ["bindet ein in", "verzahnt mit", "im verband mit", "in verband mit", "bindet ein"],
+   "es": ["se une a", "trabado con", "se traba con", "se liga a"],
+   "sv": ["i förband med", "förbunden med"],
+   "nl": ["in verband met", "verbonden met", "vertand met"]
+  }
+ },
+
+ "uguale a": {
+  "descrizione": "il rapporto «uguale a» (stessa unità con due numeri)",
+  "ambiti": ["colonna", "valore"],
+  "campo": "rapporto",
+  "canonico": {"colonna": "uguale a", "valore": "uguale a"},
+  "termini": {
+   "it": ["uguale a", "uguale", "corrisponde a", "equivale a", "stesso di", "identico a"],
+   "en": ["same as", "equal to", "equals", "is same as", "equivalent to", "identical to", "same"],
+   "fr": ["égal à", "identique à", "même que", "équivalent à", "égale"],
+   "de": ["gleich", "identisch mit", "entspricht", "gleich wie", "ist gleich"],
+   "es": ["igual a", "equivale a", "idéntico a", "es igual a"],
+   "sv": ["samma som", "lika med", "identisk med"],
+   "nl": ["gelijk aan", "zelfde als", "is gelijk aan", "identiek aan"]
+  },
+  "codici": ["=", "==", "eq"]
+ }
+}

@@ -101,10 +101,44 @@ def _esamina(files):
                 abbinamento=asdict(abb))
 
 
+class Attivita:
+    """Battiti della pagina e richieste in corso: servono a chiudere il server quando la pagina non c'è più.
+
+    Nel ripiego sul browser il processo non ha una finestra propria: la pagina invia un "battito" ogni
+    pochi secondi (e ogni richiesta all'API vale come battito); finché una richiesta è in corso
+    (es. una ricostruzione lunga) il server non viene mai chiuso.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.ultimo_battito = None      # time.monotonic() dell'ultimo battito, None se mai ricevuto
+        self.in_corso = 0               # richieste HTTP in elaborazione
+
+    def battito(self):
+        with self._lock:
+            self.ultimo_battito = time.monotonic()
+
+    def inizio(self):
+        with self._lock:
+            self.in_corso += 1
+
+    def fine(self, battito=False):
+        with self._lock:
+            self.in_corso = max(0, self.in_corso - 1)
+            if battito:
+                self.ultimo_battito = time.monotonic()
+
+    def istantanea(self):
+        """(ultimo_battito, richieste_in_corso), letti insieme."""
+        with self._lock:
+            return self.ultimo_battito, self.in_corso
+
+
 class App:
     def __init__(self, progetto=None):
         self.stato = Stato()
         self.gettone = secrets.token_urlsafe(16)
+        self.attivita = Attivita()
         if progetto:
             self.apri(progetto)
 
@@ -124,6 +158,9 @@ class App:
 
     def azione(self, nome, a):
         st = self.stato
+        self.attivita.battito()          # ogni richiesta della pagina dimostra che è ancora aperta
+        if nome == "battito":
+            return {}
         if nome == "stato":
             return st.descrizione()
         if nome == "lingua":
@@ -318,6 +355,19 @@ class App:
                 prop = {x: (importa._rapporto(x) if importa._rapporto(x) in importa.RAPPORTI_COLONNE else "")
                         for x, _ in v}
             return dict(valori=v, totale=n, proposte=prop)
+        if nome == "insegna":
+            # «questo nome di layer / di colonna vuol dire…»: nel vocabolario dell'utente, poi nuova proposta
+            try:
+                concetto = importa.insegna(a.get("ambito"), a.get("termine"), a.get("valore"))
+            except (KeyError, ValueError) as e:
+                raise Errore(str(e))
+            except OSError as e:
+                raise Errore(f"Impossibile salvare il vocabolario: {e}")
+            files = [f for f in a.get("files") or [] if f]
+            mancanti = [f for f in files if not os.path.exists(f)]
+            if mancanti:
+                raise Errore("File non trovati: " + ", ".join(mancanti))
+            return dict(_esamina(files) if files else {}, concetto=concetto)
         if nome == "ricette":
             return dict(ricette=importa.ricette_pronte())
         if nome == "ricetta_applica":
@@ -411,6 +461,22 @@ def crea_server(app, porta=0):
             self.wfile.write(b)
 
         def do_GET(self):
+            app.attivita.inizio()
+            try:
+                self._get()
+            finally:
+                app.attivita.fine()
+
+        def do_POST(self):
+            app.attivita.inizio()
+            autorizzato = False
+            try:
+                autorizzato = self._post()
+            finally:
+                # anche la fine di una richiesta lunga vale come battito (solo se autorizzata)
+                app.attivita.fine(battito=autorizzato)
+
+        def _get(self):
             path = urlparse(self.path).path
             try:
                 if path in ("/", "/index.html"):
@@ -430,12 +496,15 @@ def crea_server(app, porta=0):
             except FileNotFoundError:
                 self._invia(404, "non trovato", "text/plain")
 
-        def do_POST(self):
+        def _post(self):
+            """Gestisce la richiesta; ritorna True se il gettone era valido."""
             path = urlparse(self.path).path
             if not path.startswith("/api/"):
-                return self._invia(404, "{}")
+                self._invia(404, "{}")
+                return False
             if self.headers.get("X-Gettone") != app.gettone:
-                return self._invia(403, json.dumps(dict(ok=False, errore="Accesso non autorizzato")))
+                self._invia(403, json.dumps(dict(ok=False, errore="Accesso non autorizzato")))
+                return False
             n = int(self.headers.get("Content-Length") or 0)
             try:
                 a = json.loads(self.rfile.read(n) or b"{}")
@@ -446,5 +515,6 @@ def crea_server(app, porta=0):
             except Exception as e:
                 traceback.print_exc()
                 self._invia(200, json.dumps(dict(ok=False, errore=f"Errore imprevisto: {e}"), ensure_ascii=False))
+            return True
 
     return ThreadingHTTPServer(("127.0.0.1", porta), H)

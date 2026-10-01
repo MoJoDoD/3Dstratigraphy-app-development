@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stratigrafia3d"
-version = "0.9.2"
+version = "0.9.3"
 description = "3D reconstruction of archaeological stratigraphic units from 2D excavation records (GIS + spreadsheets)"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -45,6 +45,7 @@ where = ["src"]
 "stratigrafia3d.visualizzatore" = ["*.html"]
 "stratigrafia3d.ricette" = ["*.json"]
 "stratigrafia3d.lingue" = ["*.json"]
+"stratigrafia3d.vocabolario" = ["*.json"]
 "stratigrafia3d.app" = ["statici/*.html", "statici/vendor/*", "statici/fonts/*"]
 
 [tool.pytest.ini_options]

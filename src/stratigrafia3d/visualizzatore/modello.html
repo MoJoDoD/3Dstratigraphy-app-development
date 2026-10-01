@@ -94,6 +94,13 @@ aside.list{border-right:1px solid var(--line);background:var(--panel);display:fl
 .lbl.sel{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 #labels{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px}
+/* avanzamento della costruzione delle unità: non blocca la scena, che è già utilizzabile */
+.avanz{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;display:grid;gap:6px;min-width:230px;z-index:4;
+  background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;font-size:12.5px;color:var(--muted);box-shadow:0 1px 3px #0000001a}
+.avanz[hidden]{display:none}
+.avanz span{font-variant-numeric:tabular-nums}
+.avanz i{display:block;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.avanz b{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
 
 /* --- pannello scheda --- */
 aside.panel{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
@@ -239,6 +246,7 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
       <canvas id="c3d" aria-label="Modello 3D delle unità stratigrafiche"></canvas>
       <div id="labels"></div>
       <div class="loading" id="loading">Caricamento del modello…</div>
+      <div class="avanz" id="avanz" role="status" aria-live="polite" hidden><span></span><i><b></b></i></div>
       <div class="tools">
         <div class="tool"><label for="expl">Esploso</label><input type="range" id="expl" min="0" max="0.6" step="0.01" value="0.3"><output id="explO">30 cm</output>
           <select id="explMode" aria-label="Ordine dell'esploso"><option value="fase">per fase</option><option value="lev">per sequenza</option></select></div>
@@ -361,6 +369,8 @@ const fill=new THREE.DirectionalLight(0xffffff,0.25); fill.position.set(14,8,-10
 const clipPlane=new THREE.Plane(new THREE.Vector3(-1,0,0),0);
 let clipOn=false;
 const clipArr=()=>clipOn?[clipPlane]:[];
+let SPORCO=true, CODA_NUOVE=false, durataDisegno=0, ultimoMovimento=-1e9;          // la scena va ridisegnata
+const sporca=()=>{SPORCO=true};
 
 const units={};          // id -> {grp, front, back, edges, def}
 const world=new THREE.Group(); scene.add(world);
@@ -401,37 +411,155 @@ let ORTO_TEX=null;
 if(ORTO){ ORTO_TEX=new THREE.TextureLoader().load("data:image/jpeg;base64,"+ORTO.jpeg,()=>{ if($("colMode").value==="orto") applyColors() });
   ORTO_TEX.anisotropy=renderer.capabilities.getMaxAnisotropy();
   const o=document.createElement("option"); o.value="orto"; o.textContent="ortofoto"; $("colMode").insertBefore(o,$("colMode").options[1]) }
-D.meshes.forEach(m=>{
-  const P=new Uint16Array(b64(m.pos)), I=m.i32?new Uint32Array(b64(m.idx)):new Uint16Array(b64(m.idx));
-  const pos=new Float32Array(P.length);
-  for(let i=0;i<P.length;i+=3){pos[i]=P[i]*QU-CX;pos[i+1]=P[i+2]*QU;pos[i+2]=-(P[i+1]*QU-CY)}
+// ------------------------------------------------------------ unità: geometrie costruite a blocchi
+// Dati compatti (esporta.py): ogni unità è un prisma sulla propria triangolazione in pianta. Le piante
+// (XY e triangoli) e le quote (tetto, base) sono in elenchi senza doppioni: i riempimenti che ereditano
+// il poligono del taglio condividono la pianta, e anche l'indice dei triangoli sulla scheda video.
+// Si crea subito un gruppo vuoto per unità (elenco, scheda, Harris, etichette funzionano da subito);
+// le mesh si costruiscono poche alla volta tra un fotogramma e l'altro, con l'avanzamento a schermo.
+const PIANTE=D.piante||[], ZETA=D.zeta||[], PC=[], ZC=new Map();
+function pianta(k){
+  if(PC[k]) return PC[k];
+  const p=PIANTE[k], xy=new Uint16Array(b64(p.xy)), raw=b64(p.f);
+  const F=p.t===1?new Uint8Array(raw):p.t===4?new Uint32Array(raw):new Uint16Array(raw);
+  const n=xy.length/2, nf=F.length/3;
+  // spigoli usati da un solo triangolo (bordo, orientati come nel triangolo) e da due (interni)
+  const visti=new Map(), interni=[];
+  for(let t=0;t<nf;t++) for(let e=0;e<3;e++){
+    const a=F[t*3+e], b=F[t*3+(e+1)%3], key=a<b?a*n+b:b*n+a, v=visti.get(key);
+    if(v===undefined) visti.set(key,t*3+e);
+    else{ if(v>=0) interni.push(a,b,(v/3)|0,t); visti.set(key,-1) } }
+  const bordo=[];
+  visti.forEach(v=>{ if(v>=0){const t=(v/3)|0,e=v%3; bordo.push(F[t*3+e],F[t*3+(e+1)%3])} });
+  // vertici di bordo dove la parete gira di più di 32°: spigoli verticali
+  const succ=new Map(), prec=new Map(); for(let i=0;i<bordo.length;i+=2){succ.set(bordo[i],bordo[i+1]);prec.set(bordo[i+1],bordo[i])}
+  const angoli=[];
+  succ.forEach((j,v)=>{const h=prec.get(v); if(h===undefined) return;
+    const ax=xy[2*v]-xy[2*h], ay=xy[2*v+1]-xy[2*h+1], bx=xy[2*j]-xy[2*v], by=xy[2*j+1]-xy[2*v+1], la=Math.hypot(ax,ay), lb=Math.hypot(bx,by);
+    if(la&&lb&&(ax*bx+ay*by)/(la*lb)<=COS_SPIGOLO) angoli.push(v)});
+  return PC[k]={xy,F,n,nf,bordo:Uint32Array.from(bordo),interni:Uint32Array.from(interni),angoli:Uint32Array.from(angoli),idx:{}};
+}
+const COS_SPIGOLO=Math.cos(32*Math.PI/180);    // come EdgesGeometry(g,32)
+function zeta(k){ let a=ZC.get(k); if(!a){a=new Uint16Array(b64(ZETA[k])); ZC.set(k,a)} return a }
+// indice dei triangoli, condiviso dalle unità con la stessa pianta: tetto, base rovesciata, pareti (come mesh_chiusa)
+function indice(P,chiusa){
+  const key=chiusa?"c":"t"; if(P.idx[key]) return P.idx[key];
+  const {F,n,nf,bordo}=P, nb=bordo.length/2, nv=chiusa?2*n+4*nb:n, len=chiusa?nf*6+nb*6:nf*3;
+  const a=nv>65535?new Uint32Array(len):new Uint16Array(len);
+  a.set(F);
+  if(chiusa){ let o=nf*3;
+    for(let t=0;t<nf;t++){a[o++]=F[t*3+2]+n;a[o++]=F[t*3+1]+n;a[o++]=F[t*3]+n}
+    for(let e=0;e<nb;e++){const k=2*n+4*e; a[o++]=k;a[o++]=k+1;a[o++]=k+2;a[o++]=k;a[o++]=k+2;a[o++]=k+3} }
+  return P.idx[key]=new THREE.BufferAttribute(a,1);
+}
+// posizioni nella scena (x, quota, -y): tetto, base, pareti con vertici propri (spigoli netti)
+function posizioni(P,zt,zb){
+  const {xy,n,bordo}=P, nb=bordo.length/2, nv=zb?2*n+4*nb:n, pos=new Float32Array(nv*3);
+  for(let i=0;i<n;i++){const x=xy[2*i]*QU-CX, z=-(xy[2*i+1]*QU-CY), j=3*i; pos[j]=x;pos[j+1]=zt[i]*QU;pos[j+2]=z;
+    if(zb){const k=3*(n+i); pos[k]=x;pos[k+1]=zb[i]*QU;pos[k+2]=z}}
+  if(zb) for(let e=0;e<nb;e++){const i=bordo[2*e], j=bordo[2*e+1], o=3*(2*n+4*e);
+    pos.copyWithin(o,3*i,3*i+3); pos.copyWithin(o+3,3*(n+i),3*(n+i)+3); pos.copyWithin(o+6,3*(n+j),3*(n+j)+3); pos.copyWithin(o+9,3*j,3*j+3)}
+  return pos;
+}
+// spigoli come EdgesGeometry(g,32), calcolati sulla pianta: contorno del tetto e della base,
+// pieghe del tetto e della base oltre 32°, spigoli verticali dove la parete gira
+function spigoli(U){
+  const P=pianta(U.def.g), pos=U.front.geometry.attributes.position.array, {F,n,nf,bordo,interni,angoli}=P, chiusa=!U.cut;
+  const out=[], seg=(a,b)=>out.push(pos[3*a],pos[3*a+1],pos[3*a+2],pos[3*b],pos[3*b+1],pos[3*b+2]);
+  const nfac=new Float32Array(nf*3);
+  const pieghe=off=>{
+    for(let t=0;t<nf;t++){const a=3*(F[t*3]+off), b=3*(F[t*3+1]+off), c=3*(F[t*3+2]+off);
+      const ux=pos[b]-pos[a], uy=pos[b+1]-pos[a+1], uz=pos[b+2]-pos[a+2], vx=pos[c]-pos[a], vy=pos[c+1]-pos[a+1], vz=pos[c+2]-pos[a+2];
+      let x=uy*vz-uz*vy, y=uz*vx-ux*vz, z=ux*vy-uy*vx; const l=Math.hypot(x,y,z)||1; nfac[3*t]=x/l;nfac[3*t+1]=y/l;nfac[3*t+2]=z/l}
+    for(let i=0;i<interni.length;i+=4){const s=3*interni[i+2], t=3*interni[i+3];
+      if(nfac[s]*nfac[t]+nfac[s+1]*nfac[t+1]+nfac[s+2]*nfac[t+2]<=COS_SPIGOLO) seg(interni[i]+off,interni[i+1]+off)}};
+  pieghe(0);
+  for(let i=0;i<bordo.length;i+=2) seg(bordo[i],bordo[i+1]);
+  if(chiusa){ pieghe(n);
+    for(let i=0;i<bordo.length;i+=2){const a=bordo[i], b=bordo[i+1];
+      if(pos[3*a+1]!==pos[3*(n+a)+1]||pos[3*b+1]!==pos[3*(n+b)+1]) seg(a+n,b+n)}
+    for(let i=0;i<angoli.length;i++){const v=angoli[i]; if(pos[3*v+1]!==pos[3*(n+v)+1]) seg(v,v+n)} }
+  return new Float32Array(out);
+}
+
+// materiali condivisi: uno per colore e stato (normale, trasparente, selezionata), non uno per unità
+const MATF=new Map(), MATB=new Map(), MATE=new Map(), MAT0=new THREE.MeshBasicMaterial(), MAT0L=new THREE.LineBasicMaterial();
+function matFronte(col,cut,st,orto,acc){
+  const k=col+"|"+(cut?1:0)+st+(orto?1:0)+(st===2?acc:""); let M=MATF.get(k); if(M) return M;
+  const on=st===2, ghost=st===1;
+  M=new THREE.MeshStandardMaterial({color:orto?0xffffff:col,map:orto?ORTO_TEX:null,roughness:.92,metalness:0,side:cut?THREE.DoubleSide:THREE.FrontSide,
+    transparent:cut||ghost,opacity:cut?(on?.6:(ghost?.12:.28)):(ghost?.16:1),depthWrite:!(cut||ghost),clippingPlanes:clipArr(),
+    polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,emissive:new THREE.Color(on?acc:"#000"),emissiveIntensity:on?.55:0});
+  MATF.set(k,M); return M;
+}
+function matRetro(col){ // faccia interna piatta: appare come campitura quando si seziona
+  let M=MATB.get(col); if(!M){M=new THREE.MeshBasicMaterial({color:new THREE.Color(col).multiplyScalar(.9),side:THREE.BackSide,clippingPlanes:clipArr()}); MATB.set(col,M)} return M }
+function matSpigoli(st,cut,acc){
+  const k=st+(cut?"t":"u")+(st===2?acc:""); let M=MATE.get(k); if(M) return M;
+  const on=st===2, ghost=st===1;
+  M=new THREE.LineBasicMaterial({color:on?acc:0x1c2226,transparent:true,opacity:on?.95:(ghost?.07:(cut?.55:.28)),clippingPlanes:clipArr()});
+  MATE.set(k,M); return M;
+}
+let EDGES_ON=true;
+// stato grafico di un'unità (colore, selezione, trasparenza, spigoli): unico punto in cui si assegnano i materiali
+function contesto(){ return {orto:$("colMode").value==="orto"&&!!ORTO_TEX, acc:css("--accent")||"#c4321c"} }
+function applicaStato(U,u,c){
+  const on=u===selected, ghost=GHOST && selected!=null && !on && !clipOn, st=on?2:ghost?1:0;
+  if(U.front) U.front.material=matFronte(U.col,U.cut,st,c.orto&&!U.cut&&U.inOrto,c.acc);
+  if(U.back){ U.back.material=matRetro(U.col); U.back.visible=!ghost }
+  if(U.edges){ U.edges.material=matSpigoli(st,U.cut,c.acc); U.edges.visible=EDGES_ON }
+}
+function costruisci(U){
+  if(U.front||U.vuota) return;
+  const m=U.def, P=pianta(m.g), pos=posizioni(P,zeta(m.zt),U.cut?null:zeta(m.zb));
   const g=new THREE.BufferGeometry();
   g.setAttribute("position",new THREE.BufferAttribute(pos,3));
-  let inOrto=false;
-  if(ORTO){ const E=ORTO.estensione, uv=new Float32Array(P.length/3*2); let dentro=0;
-    for(let i=0,j=0;i<P.length;i+=3,j+=2){uv[j]=(P[i]*QU-E[0])/(E[2]-E[0]); uv[j+1]=(P[i+1]*QU-E[1])/(E[3]-E[1]);
-      if(uv[j]>=0&&uv[j]<=1&&uv[j+1]>=0&&uv[j+1]<=1) dentro++}
-    inOrto=dentro>P.length/3*0.5;            // l'immagine copre almeno metà dell'unità
+  if(ORTO){ const E=ORTO.estensione, nv=pos.length/3, uv=new Float32Array(nv*2); let dentro=0;
+    for(let i=0;i<nv;i++){const x=pos[3*i]+CX, y=CY-pos[3*i+2]; uv[2*i]=(x-E[0])/(E[2]-E[0]); uv[2*i+1]=(y-E[1])/(E[3]-E[1]);
+      if(uv[2*i]>=0&&uv[2*i]<=1&&uv[2*i+1]>=0&&uv[2*i+1]<=1) dentro++}
+    U.inOrto=dentro>nv*0.5;            // l'immagine copre almeno metà dell'unità
     g.setAttribute("uv",new THREE.BufferAttribute(uv,2)) }
-  g.setIndex(new THREE.BufferAttribute(I,1));
+  g.setIndex(indice(P,!U.cut));
   g.computeVertexNormals(); g.computeBoundingSphere();
-  const grp=new THREE.Group(); grp.userData.id=m.id;
-  const isCut=m.kind==="taglio";
-  const col=new THREE.Color(colorFor(m.id));
-  const front=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:col,roughness:.92,metalness:0,side:isCut?THREE.DoubleSide:THREE.FrontSide,
-      transparent:isCut,opacity:isCut?.28:1,depthWrite:!isCut,clippingPlanes:[],polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}));
-  front.userData.id=m.id; grp.add(front);
-  let back=null;
-  if(!isCut){ // faccia interna piatta: appare come campitura quando si seziona
-    back=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:col.clone().multiplyScalar(.9),side:THREE.BackSide,clippingPlanes:[]}));
-    grp.add(back);
-  }
-  const eg=new THREE.EdgesGeometry(g,32);
-  const edges=new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0x1c2226,transparent:true,opacity:isCut?.55:.28,clippingPlanes:[]}));
-  grp.add(edges);
-  world.add(grp);
-  units[m.id]={grp,front,back,edges,def:m,visible:true,cut:isCut,extra:[],inOrto};
+  U.front=new THREE.Mesh(g,MAT0); U.front.userData.id=m.id; U.grp.add(U.front);
+  if(!U.cut){ U.back=new THREE.Mesh(g,MAT0); U.grp.add(U.back) }
+  applicaStato(U,m.id,contesto());
+}
+function costruisciSpigoli(U){
+  if(U.edges||!U.front) return;
+  const g=new THREE.BufferGeometry(); g.setAttribute("position",new THREE.BufferAttribute(spigoli(U),3));
+  U.edges=new THREE.LineSegments(g,MAT0L); U.grp.add(U.edges);
+  applicaStato(U,U.def.id,contesto());
+}
+D.meshes.forEach(m=>{
+  const grp=new THREE.Group(); grp.userData.id=m.id; world.add(grp);
+  const b=new Uint16Array(b64(m.pos));     // riquadro quantizzato: xyz minimi e massimi
+  const box=new THREE.Box3(new THREE.Vector3(b[0]*QU-CX,b[2]*QU,-(b[4]*QU-CY)),new THREE.Vector3(b[3]*QU-CX,b[5]*QU,-(b[1]*QU-CY)));
+  units[m.id]={grp,front:null,back:null,edges:null,def:m,visible:true,cut:m.kind==="taglio",extra:[],inOrto:false,col:colorFor(m.id),box,
+    vuota:!(b[3]>b[0]||b[4]>b[1])};
 });
+// riquadro di un'unità nella scena (con esploso ed esagerazione verticale), anche prima che sia costruita
+function boxUnita(U){ return U.box.clone().applyMatrix4(U.grp.matrixWorld) }
+// coda di costruzione: le unità più estese prima (la forma dello scavo compare subito)
+const CODA=[]; let codaI=0, codaTot=0, codaFatte=0, codaSpigoli=false, ultimoDisegno=0;
+function accoda(lista){ if(!lista.length) return; if(!codaTot) codaSpigoli=lista.every(U=>U.front);
+  lista.forEach(U=>CODA.push(U)); codaTot+=lista.length; mostraAvanzamento() }
+function lavora(budget){
+  const t0=performance.now();
+  while(codaI<CODA.length && performance.now()-t0<budget){
+    const U=CODA[codaI++]; costruisci(U); if(EDGES_ON) costruisciSpigoli(U); codaFatte++ }
+  if(codaI>=CODA.length){ CODA.length=0; codaI=0; codaTot=0; codaFatte=0; ZC.clear(); SPORCO=true }
+  else CODA_NUOVE=true;
+  mostraAvanzamento();
+}
+function mostraAvanzamento(){
+  const el=$("avanz"); if(!el) return;
+  if(!codaTot){ el.hidden=true; return }
+  el.hidden=false;
+  el.firstChild.textContent=codaSpigoli?T("Preparazione degli spigoli… {0} di {1}",codaFatte.toLocaleString(LOC),codaTot.toLocaleString(LOC))
+    :T("Preparazione delle unità… {0} di {1}",codaFatte.toLocaleString(LOC),codaTot.toLocaleString(LOC));
+  el.lastChild.firstChild.style.width=(100*codaFatte/codaTot).toFixed(1)+"%";
+}
 
 // quote, profili, reperti agganciati alle rispettive unità (seguono l'esploso)
 (function overlays(){
@@ -504,7 +632,7 @@ function applyLayout(){
     U.grp.scale.y=VE; U.grp.position.y=explIndex(+u)*GAP;
   });
   ref.scale.y=VE; M3D.scale.y=VE;
-  updateVisibility();
+  updateVisibility(); sporca();
 }
 function updateVisibility(){
   const removed=[];
@@ -516,6 +644,7 @@ function updateVisibility(){
     if(U.cut && !$("oCut").matches('[aria-pressed="true"]')) vis=vis && (+u===selected);
     U.grp.visible=vis; U.visible=vis;
   });
+  sporca();
   const lab=$("excO"); lab.textContent=EXC===0?"nessuno":EXC+"/"+EXCMAX;
   const note=$("excNote");
   if(EXC>0){ removed.sort((a,b)=>(TOPD[a]-TOPD[b])||a-b);
@@ -524,32 +653,20 @@ function updateVisibility(){
   syncTree();
 }
 function applyColors(){
-  const orto=$("colMode").value==="orto"&&ORTO_TEX;
-  Object.entries(units).forEach(([u,U])=>{const c=new THREE.Color(colorFor(+u));
-    const M=U.front.material, conMappa=orto&&!U.cut&&U.inOrto;
-    if((M.map!=null)!==!!conMappa){ M.map=conMappa?ORTO_TEX:null; M.needsUpdate=true }
-    M.color.copy(conMappa?new THREE.Color(0xffffff):c); if(U.back) U.back.material.color.copy(c.clone().multiplyScalar(.9))});
-  buildLegend(); syncTree(true);
+  Object.entries(units).forEach(([u,U])=>{U.col=colorFor(+u)});
+  highlight(); buildLegend(); syncTree(true);
 }
 function applyClip(){
-  Object.values(units).forEach(U=>{
-    [U.front,U.back,U.edges,...U.extra].forEach(o=>{if(o&&o.material) {o.material.clippingPlanes=clipArr(); o.material.needsUpdate=true}});
-  });
-  M3D.children.forEach(o=>{o.material.clippingPlanes=clipArr(); o.material.needsUpdate=true});
+  const tutti=[...MATF.values(),...MATB.values(),...MATE.values()];
+  Object.values(units).forEach(U=>U.extra.forEach(o=>{if(o.material) tutti.push(o.material)}));
+  M3D.children.forEach(o=>tutti.push(o.material));
+  new Set(tutti).forEach(m=>{m.clippingPlanes=clipArr(); m.needsUpdate=true});
+  sporca();
 }
 function highlight(){
-  Object.entries(units).forEach(([u,U])=>{
-    const on=+u===selected;
-    const ghost=GHOST && selected!=null && !on && !clipOn;
-    const fm=U.front.material;
-    fm.transparent=U.cut||ghost; fm.opacity=U.cut?(on?.6:(ghost?.12:.28)):(ghost?.16:1); fm.depthWrite=!(U.cut||ghost);
-    if(U.back) U.back.visible=!ghost;
-    fm.needsUpdate=true;
-    U.front.material.emissive=new THREE.Color(on?css("--accent")||"#c4321c":"#000");
-    U.front.material.emissiveIntensity=on?.55:0;
-    U.edges.material.color.set(on?(css("--accent")||"#c4321c"):"#1c2226");
-    U.edges.material.opacity=on?.95:(ghost?.07:(U.cut?.55:.28));
-  });
+  const c=contesto();
+  Object.entries(units).forEach(([u,U])=>applicaStato(U,+u,c));
+  sporca();
   // il rilievo 3D non deve nascondere l'unità scelta
   const g=GHOST && selected!=null && !clipOn;
   M3D.children.forEach(o=>{const m=o.material; m.transparent=g; m.opacity=g?.18:1; m.depthWrite=!g; m.needsUpdate=true});
@@ -788,7 +905,9 @@ function renderScheda(){
 
 // ------------------------------------------------------------ selezione / camera
 function select(u,focus){
-  selected=u; highlight();
+  selected=u;
+  if(u!=null&&units[u]){ costruisci(units[u]); if(EDGES_ON) costruisciSpigoli(units[u]) }    // subito, senza attendere la coda
+  highlight();
   if(u!=null){ if(hidden.has(u)) hidden.delete(u); if(removedAt(u)){EXC=TOPD[u];$("exc").value=EXC} }
   if(isolated && u==null) isolated=false;
   updateVisibility(); renderScheda(); renderHarrisSel(); renderSezSel();
@@ -804,7 +923,7 @@ function flyTo(target,pos){
 }
 function focusUnit(u){
   const U=units[u]; if(!U) return;
-  const box=new THREE.Box3().setFromObject(U.front);
+  world.updateMatrixWorld(true); const box=boxUnita(U);
   const c=box.getCenter(new THREE.Vector3()), r=Math.max(1.2,box.getSize(new THREE.Vector3()).length()*.8);
   const dir=camera.position.clone().sub(controls.target).normalize();
   flyTo(c,c.clone().add(dir.multiplyScalar(r*3.2)));
@@ -814,11 +933,11 @@ function focusRS(id){
   if(!obj) return; $("oRS").setAttribute("aria-pressed","true"); overlayToggle();
   const p=obj.getWorldPosition(new THREE.Vector3()); const dir=camera.position.clone().sub(controls.target).normalize();
   flyTo(p,p.clone().add(dir.multiplyScalar(3.2)));
-  const s=obj.scale.x; let n=0; const pulse=setInterval(()=>{obj.scale.setScalar(n%2?s:s*2.2); if(++n>6){clearInterval(pulse);obj.scale.setScalar(s)}},180);
+  const s=obj.scale.x; let n=0; const pulse=setInterval(()=>{obj.scale.setScalar(n%2?s:s*2.2); sporca(); if(++n>6){clearInterval(pulse);obj.scale.setScalar(s)}},180);
 }
 function viewFor(){
   world.updateMatrixWorld(true);            // le posizioni dell'esploso non sono ancora state disegnate
-  const box=new THREE.Box3(); Object.values(units).forEach(U=>{if(U.grp.visible) box.expandByObject(U.front)});
+  const box=new THREE.Box3(); Object.values(units).forEach(U=>{if(U.grp.visible&&!U.vuota) box.union(boxUnita(U))});
   if(box.isEmpty()) box.set(new THREE.Vector3(-10,0,-8),new THREE.Vector3(10,3,8));
   const c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
   // scavi piccoli: inquadratura larga come nel prototipo; aree grandi: più vicini (la vista obliqua le accorcia)
@@ -836,7 +955,7 @@ function pick(ev){
   const r=canvas.getBoundingClientRect();
   mouse.set(((ev.clientX-r.left)/r.width)*2-1,-((ev.clientY-r.top)/r.height)*2+1);
   ray.setFromCamera(mouse,camera);
-  const objs=Object.values(units).filter(U=>U.grp.visible).map(U=>U.front);
+  const objs=Object.values(units).filter(U=>U.grp.visible&&U.front).map(U=>U.front);
   const hits=ray.intersectObjects(objs,false);
   for(const h of hits){ if(clipOn && clipPlane.distanceToPoint(h.point)<0) continue;
     const id=h.object.userData.id; if(units[id].cut && hits.some(o=>!units[o.object.userData.id].cut && o.distance<h.distance+0.5)) continue; return id }
@@ -856,24 +975,31 @@ canvas.addEventListener("pointerleave",()=>tip.hidden=true);
 const labEl={};
 Object.entries(units).forEach(([u,U])=>{const d=document.createElement("div");d.className="lbl";d.textContent=(S[u]?._tipo==="USM"?"USM ":"")+u;$("labels").appendChild(d);labEl[u]=d});
 const tmpV=new THREE.Vector3();
+// le etichette si aggiornano solo quando la scena viene ridisegnata; le sovrapposizioni si cercano
+// in una griglia di celle grandi quanto un'etichetta (non confrontando ogni etichetta con tutte le altre)
+const LAB_ORD=Object.keys(units).map(Number);
 function drawLabels(){
   const on=$("oLbl").getAttribute("aria-pressed")==="true";
   const w=canvas.clientWidth,h=canvas.clientHeight;
-  const placed=[];
-  const order=Object.entries(units).sort((a,b)=>(+b[0]===selected)-(+a[0]===selected));
-  order.forEach(([u,U])=>{
-    const el=labEl[u];
-    if(!on||!U.grp.visible){el.style.display="none";return}
+  const celle=new Map(), LW=46, LH=17;
+  const libero=(px,py)=>{const cx=Math.floor(px/LW), cy=Math.floor(py/LH);
+    for(let i=cx-1;i<=cx+1;i++) for(let j=cy-1;j<=cy+1;j++){const L=celle.get(i*100003+j); if(L) for(let k=0;k<L.length;k+=2) if(Math.abs(L[k]-px)<LW&&Math.abs(L[k+1]-py)<LH) return false}
+    const key=cx*100003+cy; (celle.get(key)||celle.set(key,[]).get(key)).push(px,py); return true};
+  const vis=(el,v)=>{ if(el._v!==v){el._v=v; el.style.display=v?"":"none"} };
+  const una=u=>{
+    const el=labEl[u], U=units[u];
+    if(!on||!U.grp.visible){vis(el,false);return}
     const L=U.def.label; tmpV.set(L[0]-CX,L[2]*VE+U.grp.position.y,-(L[1]-CY));
-    if(clipOn && clipPlane.distanceToPoint(tmpV)<0){el.style.display="none";return}
+    if(clipOn && clipPlane.distanceToPoint(tmpV)<0){vis(el,false);return}
     tmpV.project(camera);
-    if(tmpV.z>1){el.style.display="none";return}
+    if(tmpV.z>1||tmpV.x<-1.2||tmpV.x>1.2||tmpV.y<-1.2||tmpV.y>1.2){vis(el,false);return}
     const px=(tmpV.x+1)/2*w, py=(1-tmpV.y)/2*h;
-    if(placed.some(([x,y])=>Math.abs(x-px)<46&&Math.abs(y-py)<17)){el.style.display="none";return}
-    placed.push([px,py]);
-    el.style.display=""; el.style.left=px+"px"; el.style.top=py+"px";
-    el.classList.toggle("sel",+u===selected);
-  });
+    if(!libero(px,py)){vis(el,false);return}
+    vis(el,true); el.style.left=px+"px"; el.style.top=py+"px";
+    const s=u===selected; if(el._s!==s){el._s=s; el.classList.toggle("sel",s)}
+  };
+  if(selected!=null&&units[selected]) una(selected);
+  LAB_ORD.forEach(u=>{ if(u!==selected) una(u) });
 }
 
 // ------------------------------------------------------------ sezione (piano)
@@ -986,7 +1112,10 @@ $("clipFlip").onclick=()=>{clipSign*=-1;setClip()};
 $("colMode").onchange=()=>{applyColors(); renderHarris(); if(!$("pSez").hidden) renderSez()};
 function overlayToggle(){
   const q=$("oQ").getAttribute("aria-pressed")==="true", p=$("oP").getAttribute("aria-pressed")==="true", rs=$("oRS").getAttribute("aria-pressed")==="true", ed=$("oEdge").getAttribute("aria-pressed")==="true";
-  Object.values(units).forEach(U=>{U.edges.visible=ed; U.extra.forEach(o=>{const k=o.userData.kind; o.visible=k==="quote"?q:k==="profilo"?p:rs})});
+  EDGES_ON=ed;
+  Object.values(units).forEach(U=>{if(U.edges) U.edges.visible=ed; U.extra.forEach(o=>{const k=o.userData.kind; o.visible=k==="quote"?q:k==="profilo"?p:rs})});
+  // spigoli costruiti solo quando servono: alla prima accensione, per le unità già pronte
+  if(ed) accoda(Object.values(units).filter(U=>U.front&&!U.edges));
   M3D.visible=$("oM3D").getAttribute("aria-pressed")==="true";
   updateVisibility();
 }
@@ -997,15 +1126,29 @@ addEventListener("keydown",e=>{
   if(!$("lb").hidden){ if(e.key==="Escape") chiudiLB(); else if(e.key==="ArrowLeft") apriLB(lbI-1); else if(e.key==="ArrowRight") apriLB(lbI+1); return }
   if(e.key!=="Escape") return; if(editU!=null){editU=null;renderScheda()} else select(null)});
 
-function resize(){ const w=stage.clientWidth,h=stage.clientHeight; if(!w||!h) return; $("legend").style.visibility=w<720?"hidden":""; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix() }
+function resize(){ const w=stage.clientWidth,h=stage.clientHeight; if(!w||!h) return; $("legend").style.visibility=w<720?"hidden":""; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); sporca() }
 new ResizeObserver(resize).observe(stage);
 const needle=$("needle");
-function loop(t){ requestAnimationFrame(loop); if(anim) anim(t); controls.update(); renderer.render(scene,camera); drawLabels();
+// si ridisegna solo quando qualcosa cambia (camera, stato, costruzione), non a ogni fotogramma
+controls.addEventListener("change",()=>{SPORCO=true; ultimoMovimento=performance.now()});
+["input","change","click","keydown","pointerup"].forEach(t=>addEventListener(t,sporca,true));
+THREE.DefaultLoadingManager.onLoad=sporca; THREE.DefaultLoadingManager.onProgress=sporca;   // texture caricate
+function loop(t){ requestAnimationFrame(loop);
+  if(CODA.length) lavora(t-ultimoMovimento<600?8:30);     // meno lavoro per fotogramma mentre si ruota la vista
+  // durante la costruzione si ridisegna ogni tanto (le unità compaiono a gruppi), subito se l'utente muove la vista
+  // l'intervallo cresce se il disegno è lento (molte unità, scheda video debole): la costruzione non rallenta
+  if(CODA_NUOVE && t-ultimoDisegno>=Math.max(250,6*durataDisegno)) SPORCO=true;
+  if(anim){ anim(t); SPORCO=true }
+  if(controls.update()) SPORCO=true;
+  if(!SPORCO) return;
+  SPORCO=false; CODA_NUOVE=false; ultimoDisegno=t;
+  const r0=performance.now(); renderer.render(scene,camera); drawLabels(); durataDisegno=performance.now()-r0;
   needle.setAttribute("transform",`rotate(${(-controls.getAzimuthalAngle()*180/Math.PI).toFixed(1)})`) }
 
 buildTree(); buildLegend(); renderScheda(); renderHarris(); applyLayout(); overlayToggle(); resize();
 {const [t,p]=viewFor(); controls.target.copy(t); camera.position.copy(p)}
 $("loading").remove();
+accoda(Object.values(units).filter(U=>!U.vuota).sort((a,b)=>{const ea=a.box.max.x-a.box.min.x+a.box.max.z-a.box.min.z, eb=b.box.max.x-b.box.min.x+b.box.max.z-b.box.min.z; return eb-ea}));
 requestAnimationFrame(loop);
 // all'apertura: l'unità e la vista di prima (dopo una ricostruzione nell'app), altrimenti
 // la scheda dell'unità con più materiali, come esempio

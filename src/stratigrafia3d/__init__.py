@@ -10,7 +10,7 @@ Uso tipico::
     s.salva("scavo.scavo")
     esporta.visualizzatore(s, "index.html")
 """
-__version__ = "0.9.2"
+__version__ = "0.9.3"
 
 import warnings as _w
 # un .scavo è un GeoPackage con un'estensione propria: GDAL lo segnala, ma è voluto

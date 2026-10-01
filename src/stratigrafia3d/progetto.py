@@ -248,14 +248,26 @@ class Scavo:
             g = self.layers.get(sc.L_AREA)
             g = g if g is not None and not g.empty else self.layers.get(sc.L_US)
             corr = spec.get("correzione")
-            if corr:
+            # quote rilevate del piano di scavo: completano la correzione fuori dalla sua copertura
+            # e, con "quote": true, adattano la superficie dove sono fitte
+            from .superficie import punti_rilevati
+            punti = punti_rilevati(self) if (corr or spec.get("quote")) else None
+            adatta = bool(spec.get("quote")) and punti is not None and len(punti) > 0
+            if corr or adatta:
                 from .superficie import combina
-                c = Raster.leggi(corr) if isinstance(corr, str) else corr
+                c = (Raster.leggi(corr) if isinstance(corr, str) else corr) if corr else None
                 b = g.total_bounds if g is not None and len(g) else None
-                if b is None:
+                if b is None and c is not None:
                     raise ValueError("serve la pianta delle unità per sommare il raster di correzione")
-                r = combina(r, c, *b)
-                spec["copertura_correzione"] = round(r.copertura, 3)
+                if b is None:
+                    b = [*punti[:, :2].min(0), *punti[:, :2].max(0)]
+                r = combina(r, c, *b, punti=punti, adatta=adatta)
+                if c is not None:
+                    spec["copertura_correzione"] = round(r.copertura, 3)
+                for k in ("punti_correzione", "punti_adattamento"):
+                    spec.pop(k, None)
+                    if getattr(r, k, 0):
+                        spec[k] = int(getattr(r, k))
             elif g is not None and len(g):
                 r = r.ritaglia(*g.total_bounds)
             self.raster_superficie = r
