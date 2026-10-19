@@ -96,7 +96,7 @@ def applica_modifica(scavo, unita, campi=None, aggiungi=(), togli=()):
     i = riga[0]
     voci, ricostruire = [], set()
     for campo, valore in (campi or {}).items():
-        if campo in (idc, sc.C_US, sc.C_USM) or campo.startswith("_"):
+        if campo in (idc, sc.C_US, sc.C_USM, "Sigla") or campo.startswith("_"):     # la sigla viene dal numero
             continue
         if campo in NUMERICI:
             valore = _numero(valore)
@@ -367,8 +367,24 @@ def _testo_csv(v):
 # ---------------------------------------------------------------------------------------------- riscrittura
 def riscrivi(scavo, copie=COPIE):
     """Scrive nei file d'origine le modifiche non ancora scritte. Ritorna un resoconto:
-    {"scritte": n, "saltate": [(voce, motivo)], "file": [...], "copie": [...]}."""
+    {"scritte": n, "saltate": [(voce, motivo)], "file": [...], "copie": [...]}. Con le unità numerate per
+    classe («A1», «B1») si scrivono le sigle, non i numeri interni."""
+    from . import sigle as sg
+    abb = scavo.abbinamento
+    with sg.usa(sg.Codifica.da_dict(getattr(abb, "sigle", None)) if abb is not None else None):
+        return _riscrivi(scavo, copie)
+
+
+def _scritto(n):
+    """Valore da scrivere nel file d'origine per l'unità ``n``: la sigla se c'è («B1»), altrimenti il numero."""
+    from . import sigle as sg
+    cod = sg.attiva()
+    return (cod.sigla(n) or n) if cod is not None and n is not None else n
+
+
+def _riscrivi(scavo, copie=COPIE):
     from .importa import _intero, _norm, _vocabolario, _rapporti_da_testo, _rapporto
+    from . import sigle as sg
     abb = scavo.abbinamento
     if abb is None:
         raise ErroreModifica("Il progetto non ricorda da quali file viene: riscrittura impossibile")
@@ -493,15 +509,21 @@ def riscrivi(scavo, copie=COPIE):
                 return w.capitalize() if all(str(g)[:1].isupper() for g in esistenti) else w
         return t
 
+    cod = sg.attiva()
+
     def lista_numeri(testo):
         if _vuoto(testo):
             return []
+        if cod is not None:
+            return cod.nel_testo(testo)[0]
         # «1002, 1003», «1002; 1003», ma anche «10.0» scritto da un foglio di calcolo
         return [int(float(x)) for x in re.findall(r"\d+(?:\.\d+)?", str(testo)) if float(x).is_integer()]
 
     def scrivi_lista(vecchio, numeri):
         sep = ";" if (isinstance(vecchio, str) and ";" in vecchio and "," not in vecchio) else ","
-        return (sep + " ").join(str(n) for n in numeri) if numeri else None
+        altre = cod.nel_testo(vecchio)[1] if cod is not None and not _vuoto(vecchio) else []   # «GR2»: stanze
+        voci = [str(_scritto(n)) for n in numeri] + altre
+        return (sep + " ").join(voci) if voci else None
 
     for m in attese:
         if m["tipo"] not in ("rapporto+", "rapporto-"):
@@ -519,7 +541,7 @@ def riscrivi(scavo, copie=COPIE):
                     f = foglio(e["foglio"])
                     k = riga_di(f, e.get("colonna_unita") or idc_us, x)
                     if aggiungi:
-                        f.imposta(k, e["colonna"], y)
+                        f.imposta(k, e["colonna"], _scritto(y))
                     elif _intero(f.valore(k, e["colonna"])) == y:
                         f.imposta(k, e["colonna"], None)
                     else:
@@ -532,7 +554,7 @@ def riscrivi(scavo, copie=COPIE):
                 f = foglio(r["foglio"])
                 ca, ct, cb = r["colonne"]
                 if aggiungi:
-                    f.aggiungi({ca: a, ct: parola(t, [x.get(ct) for x in f.righe.values()]), cb: b})
+                    f.aggiungi({ca: _scritto(a), ct: parola(t, [x.get(ct) for x in f.righe.values()]), cb: _scritto(b)})
                     fatto = True
                 else:
                     via = [k for k, x in f.righe.items()

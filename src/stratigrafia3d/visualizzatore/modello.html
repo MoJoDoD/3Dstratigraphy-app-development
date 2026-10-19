@@ -351,6 +351,8 @@ const DOCU={}; D.documentazione.forEach(r=>{if(r["US/USM"]) (DOCU[r["US/USM"]]??
 const faseOf=u=>S[u]?.Fase ?? 0;
 const catOf=u=>S[u]?.Categoria ?? "";
 const defOf=u=>S[u]?.Definizione ?? "";
+// nome da mostrare: la sigla («A1», «B12») per le unità numerate per classe, altrimenti il numero
+const ETI=u=>S[u]?.Sigla?String(S[u].Sigla):((S[u]?._tipo==="USM"?"USM ":"")+u);
 
 // ------------------------------------------------------------ three.js
 const canvas=$("c3d"), stage=$("stage");
@@ -681,7 +683,7 @@ function buildTree(){
     const F=FASI[f]||{Titolo:"Fase "+f}; const list=byF[f].sort((a,b)=>a-b);
     const d=document.createElement("div"); d.className="phase";
     d.innerHTML=`<div class="phase-h"><input type="checkbox" checked aria-label="Mostra fase ${f}" data-f="${f}"><i class="sw" style="background:${PH_COL[f]}"></i><b>${f} · ${esc(F.Titolo)}</b><small>${F["Da (anno)"]!=null?esc(fmtY(F["Da (anno)"]))+"–"+esc(fmtY(F["A (anno)"])):""}</small></div>`+
-      list.map(u=>`<div class="unit" data-u="${u}"><input type="checkbox" checked aria-label="Mostra ${u}" data-u="${u}"><i class="c${S[u].Tipo==="negativa"?" neg":""}" data-c="${u}"></i><span class="n">${S[u]._tipo==="USM"?"USM ":""}${u}</span><span class="d">${esc(defOf(u))}</span></div>`).join("");
+      list.map(u=>`<div class="unit" data-u="${u}"><input type="checkbox" checked aria-label="Mostra ${u}" data-u="${u}"><i class="c${S[u].Tipo==="negativa"?" neg":""}" data-c="${u}"></i><span class="n">${esc(ETI(u))}</span><span class="d">${esc(defOf(u))}</span></div>`).join("");
     t.appendChild(d);
   });
   t.addEventListener("change",e=>{
@@ -699,7 +701,7 @@ function syncTree(colors){
   if(colors) document.querySelectorAll("[data-c]").forEach(i=>{if(!i.classList.contains("neg")) i.style.background=colorFor(+i.dataset.c)});
 }
 $("q").addEventListener("input",()=>{const v=$("q").value.trim().toLowerCase();
-  document.querySelectorAll(".unit").forEach(r=>{const u=r.dataset.u;r.hidden=v&&!(u.includes(v)||defOf(+u).toLowerCase().includes(v)||catOf(+u).toLowerCase().includes(v))});
+  document.querySelectorAll(".unit").forEach(r=>{const u=r.dataset.u;r.hidden=v&&!(u.includes(v)||String(S[+u]?.Sigla||"").toLowerCase().includes(v)||defOf(+u).toLowerCase().includes(v)||catOf(+u).toLowerCase().includes(v))});
   document.querySelectorAll(".phase").forEach(p=>p.hidden=![...p.querySelectorAll(".unit")].some(r=>!r.hidden))});
 $("q").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=[...document.querySelectorAll(".unit")].find(r=>!r.hidden); if(r) select(+r.dataset.u,true)}});
 $("btnAll").onclick=()=>{hidden.clear();isolated=false;EXC=0;$("exc").value=0;updateVisibility();renderScheda()};
@@ -722,7 +724,7 @@ function buildLegend(){
 // ------------------------------------------------------------ scheda
 function relHTML(u){
   const R=REL[u]||{};
-  const btn=x=>`<button class="ulink" data-go="${x}">${S[x]?._tipo==="USM"?"USM ":""}${x}</button>`;
+  const btn=x=>`<button class="ulink" data-go="${x}">${esc(ETI(x))}</button>`;
   const rows=REL_ORDER.filter(k=>R[k]&&R[k].length).map(k=>`<dt>${k}</dt><dd>${[...new Set(R[k])].sort((a,b)=>a-b).map(btn).join("")}</dd>`);
   const DD=DEDOTTI[u];
   if(DD){ if(DD.sopra.length) rows.push(`<dt title="Ordine dei riempimenti dedotto dal programma, non registrato">coperto da <i>(dedotto)</i></dt><dd>${DD.sopra.map(btn).join("")}</dd>`);
@@ -772,12 +774,12 @@ function renderModifica(){
   const rel=[];
   Object.entries(REL[u]||{}).forEach(([t,bs])=>[...new Set(bs)].forEach(b=>rel.push([t,b])));
   rel.sort((x,y)=>REL_ORDER.indexOf(x[0])-REL_ORDER.indexOf(y[0])||x[1]-y[1]);
-  P.innerHTML=`<div class="sh"><div class="num">${isM?"<small style='font-size:14px'>USM</small> ":""}${u}</div><div class="kind">Modifica della scheda</div><h2>${esc(s.Definizione)}</h2></div>
+  P.innerHTML=`<div class="sh"><div class="num">${S[u]?.Sigla?esc(S[u].Sigla):(isM?"<small style='font-size:14px'>USM</small> ":"")+u}</div><div class="kind">Modifica della scheda</div><h2>${esc(s.Definizione)}</h2></div>
     <p class="note" style="margin-top:0">Le modifiche restano nel progetto e si possono scrivere nei file d'origine con «Scrivi nei file».</p>
     <div class="ed">${base.map(campo).join("")}</div>
     ${altri.length?`<details class="sec"><summary>Altri campi <small>${altri.length}</small></summary><div class="sec-b"><div class="ed">${altri.map(k=>campo([k])).join("")}</div></div></details>`:""}
     <details class="sec" open><summary>Rapporti stratigrafici</summary><div class="sec-b">
-      <div class="edrel" id="edRel">${rel.map(([t,b],i)=>`<span class="rp" data-i="${i}">${esc(t)} <b>${b}</b><button aria-label="Togli ${esc(t)} ${b}" data-via="${i}">×</button></span>`).join("")||'<span class="muted">Nessun rapporto.</span>'}</div>
+      <div class="edrel" id="edRel">${rel.map(([t,b],i)=>`<span class="rp" data-i="${i}">${esc(t)} <b>${esc(ETI(b))}</b><button aria-label="Togli ${esc(t)} ${b}" data-via="${i}">×</button></span>`).join("")||'<span class="muted">Nessun rapporto.</span>'}</div>
       <div class="edadd"><select id="edT">${REL_ORDER.map(t=>`<option>${t}</option>`).join("")}</select>
         <input id="edB" size="7" inputmode="numeric" placeholder="US"><button class="ulink" id="edAdd">Aggiungi</button></div>
       <div class="edrel" id="edNuovi"></div></div></details>
@@ -785,7 +787,7 @@ function renderModifica(){
     <div class="edbar"><button id="edNo">Annulla</button><button class="pri" id="edOk">Salva</button></div>`;
   const togli=new Set(), aggiungi=[];
   P.querySelectorAll("[data-via]").forEach(b=>b.onclick=()=>{const i=+b.dataset.via; togli.has(i)?togli.delete(i):togli.add(i); b.parentElement.classList.toggle("via",togli.has(i))});
-  const nuovi=()=>{$("edNuovi").innerHTML=aggiungi.map(([t,b],i)=>`<span class="rp">+ ${esc(t)} <b>${b}</b><button data-n="${i}" aria-label="Annulla">×</button></span>`).join("");
+  const nuovi=()=>{$("edNuovi").innerHTML=aggiungi.map(([t,b],i)=>`<span class="rp">+ ${esc(t)} <b>${esc(ETI(b))}</b><button data-n="${i}" aria-label="Annulla">×</button></span>`).join("");
     $("edNuovi").querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{aggiungi.splice(+b.dataset.n,1);nuovi()})};
   $("edAdd").onclick=()=>{const b=parseInt($("edB").value,10); if(!Number.isFinite(b)){$("edB").focus();return}
     if(!S[b]){errore(`L'unità ${b} non è nel progetto`);return}
@@ -875,7 +877,7 @@ function renderScheda(){
     "Quota min (m)","Quota max (m)","Spessore/profondità max (m)","Spessore medio stimato (m)","Stato scavo",
     "Settore documentato","Data scavo","Responsabile"]);
   const altri=Object.entries(s).filter(([k,v])=>!k.startsWith("_")&&!MOSTRATI.has(k)&&v!=null&&String(v).trim()!=="");
-  P.innerHTML=`<div class="sh"><div class="num">${isM?"<small style='font-size:14px'>USM</small> ":""}${u}</div><div class="kind">${isM?"Unità muraria":("US "+esc(s.Tipo))} · ${esc(s.Categoria)}</div><h2>${esc(s.Definizione)}</h2></div>
+  P.innerHTML=`<div class="sh"><div class="num">${S[u]?.Sigla?esc(S[u].Sigla):(isM?"<small style='font-size:14px'>USM</small> ":"")+u}</div><div class="kind">${isM?"Unità muraria":("US "+esc(s.Tipo))} · ${esc(s.Categoria)}</div><h2>${esc(s.Definizione)}</h2></div>
     <div class="chips"><span class="chip"><i style="background:${PH_COL[s.Fase]}"></i>Fase ${s.Fase} · ${esc(F?.Titolo)}</span>${F?.Periodo?`<span class="chip">${esc(F.Periodo)}</span>`:""}${dat&&!dat.startsWith("—")?`<span class="chip">${esc(dat)}</span>`:""}${!isM&&s["Colore Munsell"]?`<span class="chip"><i style="background:${esc(s["Colore HEX"])};border-radius:2px"></i>${esc(s["Colore Munsell"])}</span>`:""}</div>
     <div class="acts"><button id="aFocus">Centra</button><button id="aGhost" aria-pressed="${GHOST}" title="Rende semitrasparenti le altre unità">Trasparenza</button><button id="aIso" aria-pressed="${isolated}">Isola</button><button id="aHide">Nascondi</button><button id="aClip">Sezione qui</button>${INAPP?`<button id="aEdit" title="Modifica la scheda e i rapporti">Modifica</button>`:""}<button id="aClose">Chiudi</button></div>
     <details class="sec" open><summary>Descrizione</summary><div class="sec-b">
@@ -968,12 +970,12 @@ const tip=$("tip");
 canvas.addEventListener("pointermove",e=>{ if(e.buttons) {tip.hidden=true;return}
   const id=pick(e); if(id==null){tip.hidden=true;canvas.style.cursor="";return}
   const r=stage.getBoundingClientRect(); tip.hidden=false; tip.style.left=(e.clientX-r.left)+"px"; tip.style.top=(e.clientY-r.top)+"px";
-  tip.textContent=(S[id]._tipo==="USM"?"USM ":"US ")+id+" · "+defOf(id); canvas.style.cursor="pointer"});
+  tip.textContent=(S[id].Sigla?S[id].Sigla:(S[id]._tipo==="USM"?"USM ":"US ")+id)+" · "+defOf(id); canvas.style.cursor="pointer"});
 canvas.addEventListener("pointerleave",()=>tip.hidden=true);
 
 // ------------------------------------------------------------ etichette
 const labEl={};
-Object.entries(units).forEach(([u,U])=>{const d=document.createElement("div");d.className="lbl";d.textContent=(S[u]?._tipo==="USM"?"USM ":"")+u;$("labels").appendChild(d);labEl[u]=d});
+Object.entries(units).forEach(([u,U])=>{const d=document.createElement("div");d.className="lbl";d.textContent=ETI(u);$("labels").appendChild(d);labEl[u]=d});
 const tmpV=new THREE.Vector3();
 // le etichette si aggiornano solo quando la scena viene ridisegnata; le sovrapposizioni si cercano
 // in una griglia di celle grandi quanto un'etichetta (non confrontando ogni etichetta con tutte le altre)
@@ -1049,7 +1051,7 @@ function renderHarris(){
     s+=`<path class="${DED.has(a+">"+b)?"hded":"hedge"}" d="M${x1+W/2},${y1+Hh} V${my} H${x2+W/2} V${y2}"/>`});
   H.same.forEach(([a,b])=>{if(!P[a]||!P[b]) return; const [x1,y1]=P[a],[x2,y2]=P[b]; s+=`<line class="hsame" x1="${x1+W/2}" y1="${y1+Hh/2}" x2="${x2+W/2}" y2="${y2+Hh/2}"/>`});
   nodi.forEach(n=>{const [x,y]=P[n.id]; const s_=S[n.id]; const neg=s_?.Tipo==="negativa", m=s_?._tipo==="USM";
-    s+=`<g class="hnode" data-h="${n.id}" tabindex="0"><title>${esc(n.id+" "+(defOf(n.id)||""))}</title><rect x="${x}" y="${y}" width="${W}" height="${Hh}" rx="${m?0:(neg?12:3)}" fill="${colorFor(n.id)}" fill-opacity=".35" ${neg?'stroke-dasharray="3 2"':""}/><text x="${x+W/2}" y="${y+Hh/2+4}" text-anchor="middle">${m?"M ":""}${n.id}</text></g>`});
+    s+=`<g class="hnode" data-h="${n.id}" tabindex="0"><title>${esc(ETI(n.id)+" "+(defOf(n.id)||""))}</title><rect x="${x}" y="${y}" width="${W}" height="${Hh}" rx="${m?0:(neg?12:3)}" fill="${colorFor(n.id)}" fill-opacity=".35" ${neg?'stroke-dasharray="3 2"':""}/><text x="${x+W/2}" y="${y+Hh/2+4}" text-anchor="middle">${S[n.id]?.Sigla?esc(S[n.id].Sigla):(m?"M ":"")+n.id}</text></g>`});
   s+="</svg>";
   const titolo=g!=null?`<p class="note" style="margin-top:0"><b>${nodi.length} unità collegate</b>${GR[g]&&GR[g].rows?` su ${GR[g].rows} livelli`:""}.</p>`:"";
   $("pHarris").innerHTML=barra+nota+titolo+`<div class="hwrap">${s}</div>`;
@@ -1078,7 +1080,7 @@ function renderSez(){
   for(let x=Math.ceil(x0);x<=x1;x+=1){s+=`<text class="axt" x="${X(x)}" y="${Hh-8}" text-anchor="middle">${x}</text>`}
   polys.forEach(p=>{let d="";for(let i=0;i<p.c.length;i+=2)d+=(i?"L":"M")+X(p.c[i]).toFixed(1)+","+Y(p.c[i+1]).toFixed(1);
     const isM=S[p.us]?._tipo==="USM";
-    s+=`<path class="spoly" data-s="${p.us}" d="${d}Z" fill="${colorFor(p.us)}" ${isM?'fill-opacity=".85"':""}><title>${isM?"USM ":"US "}${p.us} · ${esc(defOf(p.us))}</title></path>`});
+    s+=`<path class="spoly" data-s="${p.us}" d="${d}Z" fill="${colorFor(p.us)}" ${isM?'fill-opacity=".85"':""}><title>${S[p.us]?.Sigla?esc(S[p.us].Sigla):(isM?"USM ":"US ")+p.us} · ${esc(defOf(p.us))}</title></path>`});
   const done=new Set();
   polys.forEach(p=>{ if(done.has(p.us)) return; let best=null,ba=0;
     polys.filter(q=>q.us===p.us).forEach(q=>{let a=0;for(let i=0;i<q.c.length-2;i+=2)a+=q.c[i]*q.c[i+3]-q.c[i+2]*q.c[i+1];a=Math.abs(a/2);if(a>ba){ba=a;best=q}});

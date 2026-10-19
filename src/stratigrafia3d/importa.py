@@ -26,6 +26,7 @@ from shapely.geometry import Point, Polygon, MultiPolygon, LineString
 from shapely.ops import unary_union
 
 from . import schema as sc
+from . import sigle as sg
 from . import tabelle_grezze as tg
 from . import vocabolario as V
 from .superficie import L_QUOTE_SUPERFICIE
@@ -78,6 +79,10 @@ RAPPORTI_INGLESE = {
     "abuts": "si appoggia a", "butts": "si appoggia a", "abutted by": "gli si appoggia", "butted by": "gli si appoggia",
     "bonded with": "si lega a", "bonds with": "si lega a", "bonded to": "si lega a", "tied to": "si lega a",
     "same as": "uguale a", "equal to": "uguale a", "equals": "uguale a",
+    # forme in -ing usate come intestazioni di colonna («Covering», «Filling», «Cutting», «Abutting»)
+    "covering": "copre", "overlying": "copre", "sealing": "copre", "cutting": "taglia", "filling": "riempie",
+    "abutting": "si appoggia a", "butting": "si appoggia a", "leaning against": "si appoggia a",
+    "bonding with": "si lega a",
 }
 # fogli con nomi inglesi -> foglio e colonne attesi dal visualizzatore
 FOGLI_ALIAS = {
@@ -241,9 +246,13 @@ def _rapporto_colonna(nome, voc=None, contesto=None):
 
 
 def _intero(v):
-    """Numero di US da un valore qualsiasi: 1005, '1005', 'US 1005', 'US_1005', 1005.0."""
+    """Numero di US da un valore qualsiasi: 1005, '1005', 'US 1005', 'US_1005', 1005.0. Con le sigle di
+    classe attive (``sigle.attiva``) «A1» e «B1» danno numeri diversi e le sigle sconosciute («GR2») None."""
     if v is None:
         return None
+    cod = sg.attiva()
+    if cod is not None and isinstance(v, str):
+        return cod.codice(v)
     if isinstance(v, (int, np.integer)):
         return int(v)
     if isinstance(v, (float, np.floating)):
@@ -936,6 +945,9 @@ class RuoloLayer:
     motivo: str = ""
     # quote: punti usati solo per la superficie di riferimento, senza US (layer «quote_superficie»)
     solo_superficie: bool = False
+    # un'unità per file: il numero (interno) viene dal nome del layer («B12.shp»); i campi numerano le pietre
+    unita_nome: int = None
+    classe_reperto: str = None     # reperti: classe dal nome del file («BON», «LTA», «CHA»…)
 
 
 @dataclass
@@ -978,6 +990,10 @@ class Abbinamento:
     # cartelle e zip esaminati (inventario compatto): {"radici", "voci": [...], "riepilogo", "note"}; None
     # se si sono indicati solo file. Le voci servono a collegare foto e disegni alle unità.
     inventario: dict = None
+    # unità numerate per classe («A1», «B1»): {"classi": {"A": 1000, "B": 2000}, "passo": 1000} (vedi sigle.py)
+    sigle: dict = None
+    # classi di sigla che sono unità murarie (USM): es. ["B"] a Ba'ja (A = strati, B = murature)
+    classi_murarie: list = field(default_factory=list)
 
     def a_json(self):
         return json.dumps(asdict(self), ensure_ascii=False, indent=1)
@@ -1108,9 +1124,57 @@ def _ruolo_da_nome(nome, geometria=None):
     return r, trovati[r]
 
 
+# sigle delle classi di reperti nei nomi dei file di punti (registrazione per classi, comune negli scavi del
+# Vicino Oriente e non solo): «BJ081026_LTA.csv», «2210_CHA.csv», «ALL_UBRs.shp». Valore: (ruolo, descrizione)
+CLASSI_REPERTI = {
+    "bon": ("reperti", "ossa animali"), "bone": ("reperti", "ossa animali"), "bones": ("reperti", "ossa animali"),
+    "lta": ("reperti", "industria litica"), "lit": ("reperti", "industria litica"),
+    "lithic": ("reperti", "industria litica"), "lithics": ("reperti", "industria litica"),
+    "flint": ("reperti", "selce"), "cha": ("reperti", "carboni"), "charcoal": ("reperti", "carboni"),
+    "gro": ("reperti", "macine e pestelli"), "gs": ("reperti", "macine e pestelli"),
+    "orn": ("reperti", "ornamenti"), "ornament": ("reperti", "ornamenti"), "bra": ("reperti", "BRA"),
+    "ubr": ("reperti", "UBR"), "u.br": ("reperti", "UBR"), "pou": ("reperti", "POU"), "bto": ("reperti", "BTO"),
+    "sto": ("reperti", "pietre"), "var": ("reperti", "varia"), "pla": ("reperti", "PLA"),
+    "mco": ("reperti", "MCO"), "mct": ("reperti", "MCT"), "ocr": ("reperti", "ocra"), "cla": ("reperti", "argilla"),
+    "she": ("reperti", "conchiglie"), "shell": ("reperti", "conchiglie"), "pot": ("reperti", "ceramica"),
+    "cer": ("reperti", "ceramica"), "pottery": ("reperti", "ceramica"), "fau": ("reperti", "fauna"),
+    "sed": ("campioni", "campioni di sedimento"), "c14": ("campioni", "campioni per C14"),
+    "sample": ("campioni", "campioni"), "samples": ("campioni", "campioni"),
+}
+# punti d'appoggio della fotogrammetria (target, mire, marker): non sono quote delle unità
+_TARGET_RE = re.compile(r"^(mire|mira\w*|target|targets|gcp|gcps|marker|markers|fotogramm\w*|photogramm\w*|geo\d+|"
+                        r"tblu|trosso|punto rosso|chk|checkpoint\w*)$")
+
+
+def classe_punti(nome):
+    """(ruolo, parola, motivo) per i file di punti riconoscibili dal nome: target della fotogrammetria
+    («…_MIRE.csv») da non usare come quote, e classi di reperti («…_LTA.csv») come reperti; None altrimenti."""
+    base = os.path.basename(str(nome)).lower()
+    e = os.path.splitext(base)[1]
+    if e in (".csv", ".txt", ".shp", ".gpkg", ".geojson", ".json", ".xlsx", ".xls", ".dxf", ".dbf", ".tsv"):
+        base = base[:-len(e)]          # «BJ25.0110_BON»: il punto non è un'estensione
+    parole = [t.strip(".") for t in re.split(r"[^a-z0-9.]+", base) if t.strip(".")]
+    for t in parole + [" ".join(parole[i:i + 2]) for i in range(len(parole) - 1)]:
+        if _TARGET_RE.match(t):
+            return "ignora", t, f"«{t}»: punti d'appoggio della fotogrammetria (target), non quote delle unità"
+    for t in parole:
+        k = t if t in CLASSI_REPERTI else (t[:-1] if t.endswith("s") and t[:-1] in CLASSI_REPERTI else None)
+        if k is None and "." in t:
+            k = t if t in CLASSI_REPERTI else None
+        if k:
+            ruolo, descr = CLASSI_REPERTI[k]
+            return ruolo, k, f"«{t.upper()}»: {'reperti' if ruolo == 'reperti' else 'campioni'} ({descr}) " \
+                             "dal nome del file"
+    return None
+
+
 def _ruolo_proposto(nome, geometria=None, voc=None):
     """(ruolo, parola, motivo): prima il vocabolario (in più lingue, con la geometria come indizio), poi le
     parole del programma. ``motivo`` è la spiegazione del vocabolario, None se decide il ripiego."""
+    if geometria == "punto":
+        k = classe_punti(nome)
+        if k is not None:
+            return k
     voc = voc or V.vocabolario()
     testo = re.sub(r"\s*·\s*(poligono|linea|punto|testo|misto|nessuna)$", "", str(nome)).replace("#", " ")
     contesto = {"geometria": geometria} if geometria in ("poligono", "linea", "punto") else None
@@ -1347,7 +1411,9 @@ def _note_identificativi(df, col):
         return out
     parti = tg.separa_identificativo(v)
     composti = parti[(parti["prefisso"].notna() | parti["suffisso"].notna()) & parti["numero"].notna()]
-    if len(composti):
+    if len(composti) and sg.attiva() is not None:
+        pass        # sigle di classe: la nota è già in _attiva_sigle (A1 e B1 restano distinte)
+    elif len(composti):
         i = composti.index[0]
         out.append(f"Numeri di US scritti con sigle o lettere in «{col}» (es. «{v.loc[i]}»): "
                    f"si usa il numero ({int(composti.loc[i, 'numero'])})")
@@ -1380,7 +1446,218 @@ def _note_identificativi(df, col):
     return out
 
 
+def _etichetta_unita(u):
+    """«B12» se le sigle di classe sono attive, altrimenti «US 12»."""
+    cod = sg.attiva()
+    s = cod.sigla(u) if cod else None
+    return s or f"US {u}"
+
+
+def _quota_note(serie, noti):
+    """Frazione dei valori (distinti) di un campo che sono unità note."""
+    v = {_intero(x) for x in serie.dropna()}
+    v.discard(None)
+    return len(v & noti) / len(v) if v else 0.0
+
+
+def _pietre(g):
+    """Vero se i poligoni sono le pietre di una muratura disegnate una per una: almeno tre, piccoli."""
+    try:
+        if len(g) < 3:
+            return False
+        gg = g
+        if g.crs is not None and g.crs.is_geographic:
+            gg = g.to_crs(g.estimate_utm_crs())
+        aree = gg.geometry.area.dropna()
+        return len(aree) >= 3 and float(aree.median()) < 1.0
+    except Exception:
+        return False
+
+
+# nomi delle versioni corrette di un disegno («B3giusto», «B4_corretto», «muro_def»)
+_VERSIONE_BUONA = re.compile(r"(giust|corrett|correct|definitiv|def\b|final|fixed|ok\b|nuov|new\b|rev\b|rivist)", re.I)
+# descrizioni di unità murarie / architettoniche
+_PAROLE_MURO = re.compile(r"(^|[^a-z])(wall|walls|muro|muri|muratur|mur |murs|mauer|masonry|architect|architett|"
+                          r"pavement|pavimentaz|floor|threshold|soglia|pillar|pilastr|buttress|stair|scala in pietra|"
+                          r"terrace wall|partition|tramezz|stone row|filare)", re.I)
+
+
+def _unita_per_file(abb, tabs):
+    """Layer con un'unità per file: versioni corrette («B3giusto» al posto di «B3») e classi murarie (USM).
+
+    Una classe di sigla è muraria se i suoi layer sono pietre disegnate una per una, o se le descrizioni
+    delle sue unità parlano di muri e architetture (Ba'ja: A = strati, B = murature)."""
+    per_file = [r for r in abb.layers if r.unita_nome is not None and r.ruolo in ("us", "usm")]
+    if not per_file:
+        return
+    # versioni: se c'è un disegno «corretto» della stessa unità, gli altri si tralasciano
+    gruppi = {}
+    for r in per_file:
+        gruppi.setdefault(r.unita_nome, []).append(r)
+    for u, rs in gruppi.items():
+        if len(rs) < 2:
+            continue
+        buoni = [r for r in rs if _VERSIONE_BUONA.search(re.sub(r"^[A-Za-z]{0,4}[.\-_ ]?\d+", "", r.layer))]
+        if buoni and len(buoni) < len(rs):
+            for r in rs:
+                if r not in buoni:
+                    r.ruolo = "ignora"
+                    r.motivo += f"; versione precedente di «{buoni[0].layer}»"
+            abb.note.append(f"{_etichetta_unita(u)}: usato il disegno «{buoni[0].layer}», tralasciato "
+                            + ", ".join(f"«{r.layer}»" for r in rs if r not in buoni))
+        else:
+            abb.note.append(f"{_etichetta_unita(u)} è disegnata in {len(rs)} file "
+                            f"({', '.join(r.layer for r in rs)}): i poligoni si uniscono")
+    per_file = [r for r in per_file if r.ruolo != "ignora"]
+    pietre = {id(r) for r in per_file if "pietre disegnate" in r.motivo}
+    cod = sg.attiva()
+    if cod is None:
+        for r in per_file:
+            if id(r) in pietre and r.ruolo == "us":
+                r.ruolo = "usm"
+                r.motivo += ": unità muraria"
+        return
+    # classi murarie: dai disegni (pietre) e dalle descrizioni delle schede
+    murarie = set(abb.classi_murarie or [])
+    per_classe = {}
+    for r in per_file:
+        per_classe.setdefault(cod.classe(r.unita_nome), []).append(r)
+    for c, rs in per_classe.items():
+        n_p = sum(id(r) in pietre for r in rs)
+        if c and n_p >= 2 and n_p >= 0.5 * len(rs):
+            murarie.add(c)
+    descr = {}
+    if abb.foglio_us in tabs:
+        df = tabs[abb.foglio_us]
+        idc = abb.colonne_us.get(sc.C_US)
+        cols = [abb.colonne_us.get(k) for k in ("Definizione", "Descrizione", sc.C_CATEGORIA, "Interpretazione")]
+        cols = [c for c in cols if c and c in df.columns]
+        if idc in df.columns and cols:
+            for _, x in df.iterrows():
+                u = _intero(x[idc])
+                c = cod.classe(u) if u is not None else None
+                if c:
+                    testo = " ".join(str(x[k]) for k in cols if not pd.isna(x[k]))
+                    descr.setdefault(c, []).append(bool(_PAROLE_MURO.search(testo.lower())))
+    # dalle descrizioni: una classe che parla di muri molto più delle altre (gli strati citano spesso i muri
+    # vicini: «sediment near wall B2»)
+    quota = {c: float(np.mean(v)) for c, v in descr.items() if len(v) >= 3}
+    for c, f in quota.items():
+        altre = [x for k, x in quota.items() if k != c]
+        if f >= 0.6 and f >= 2 * max(altre + [0.1]):
+            murarie.add(c)
+    nuove = sorted(murarie - set(abb.classi_murarie or []))
+    abb.classi_murarie = sorted(murarie)
+    if nuove:
+        abb.note.append(f"Classe {', '.join(nuove)}: unità murarie (USM) — muri disegnati pietra per pietra "
+                        "o descritti come murature")
+    for r in per_file:
+        if cod.classe(r.unita_nome) in murarie and r.ruolo == "us":
+            r.ruolo = "usm"
+            r.motivo += ": unità muraria"
+
+
+def imposta_classi_murarie(abb, classi):
+    """Indica a mano quali classi di sigla sono unità murarie (es. ["B"]): i loro layer diventano USM e le
+    schede vanno tra le USM. Le altre classi tornano US."""
+    abb.classi_murarie = sorted({str(c).strip().upper() for c in classi if str(c).strip()})
+    cod = sg.Codifica.da_dict(abb.sigle)
+    if cod is None:
+        return abb
+    for r in abb.layers:
+        if r.unita_nome is None or r.ruolo not in ("us", "usm"):
+            continue
+        r.ruolo = "usm" if cod.classe(r.unita_nome) in abb.classi_murarie else "us"
+    return abb
+
+
+def _crs_di_lavoro(layers_info):
+    """Il sistema di riferimento più usato tra i layer, preferendo quelli proiettati (in metri) ai geografici:
+    un solo layer in gradi non deve portare tutto lo scavo in gradi."""
+    from collections import Counter
+    conta = Counter(li.crs for li in layers_info if li.crs)
+    if not conta:
+        return None
+
+    def geografico(c):
+        try:
+            from pyproj import CRS
+            return CRS.from_user_input(c).is_geographic
+        except Exception:
+            return False
+    proiettati = [c for c, _ in conta.most_common() if not geografico(c)]
+    return proiettati[0] if proiettati else conta.most_common(1)[0][0]
+
+
+def _note_crs(layers_info, crs):
+    """Note sui sistemi di riferimento: layer in sistemi diversi (riproiettati) e zona UTM sbagliata."""
+    note = []
+    altri = sorted({li.crs for li in layers_info if li.crs and li.crs != crs})
+    if crs and altri:
+        n = sum(1 for li in layers_info if li.crs and li.crs != crs)
+        note.append(f"{n} layer in altri sistemi di riferimento ({', '.join(altri[:4])}): riproiettati in {crs}")
+    if not crs:
+        return note
+    try:
+        from pyproj import CRS, Transformer, Proj
+        c = CRS.from_user_input(crs)
+        utm = c.utm_zone
+        if not utm:
+            return note
+        punti = []
+        for li in layers_info:
+            if li.crs == crs:
+                try:
+                    b = pyogrio.read_info(li.sorgente, layer=li.layer).get("total_bounds")
+                    if b is not None and np.all(np.isfinite(b)):
+                        punti.append(((b[0] + b[2]) / 2, (b[1] + b[3]) / 2))
+                except Exception:
+                    pass
+        if not punti:
+            return note
+        x, y = np.median(np.array(punti), axis=0)
+        lon, lat = Transformer.from_crs(c, 4326, always_xy=True).transform(x, y)
+        zona = int(utm[:-1])
+        meridiano = -183 + 6 * zona
+        if not np.isfinite(lon) or abs(lon - meridiano) <= 4.5:
+            return note
+        giusta = int((lon + 180) // 6) + 1
+        emisfero = "N" if lat >= 0 else "S"
+        epsg = (32600 if emisfero == "N" else 32700) + giusta
+        f = Proj(c).get_factors(lon, lat)
+        note.append(f"Le coordinate sono in UTM zona {utm} ma lo scavo è a {lon:.2f}° di longitudine, cioè nella "
+                    f"zona {f'{giusta}{emisfero}'} (EPSG:{epsg}): forse il GPS era impostato sulla zona sbagliata. "
+                    f"I dati restano coerenti tra loro, ma in questa zona le distanze orizzontali risultano "
+                    f"{(f.meridional_scale - 1) * 100:+.1f}% e il nord è ruotato di {f.meridian_convergence:.1f}°; "
+                    f"le quote no. Per misure e volumi esatti conviene riproiettare i dati in EPSG:{epsg}")
+    except Exception:
+        pass
+    return note
+
+
 def proponi(files, termini=None, scelte=None):
+    """Abbinamento proposto per i file indicati (vedi ``_proponi``). Le sigle di classe trovate nelle schede
+    («A1», «B1») valgono solo durante la proposta e restano in ``abb.sigle``."""
+    tok = sg.imposta(None)
+    try:
+        return _proponi(files, termini, scelte)
+    finally:
+        sg.ripristina(tok)
+
+
+def _attiva_sigle(abb, valori):
+    """Se nelle schede lo stesso numero compare con classi diverse («A1», «B1»), attiva la codifica."""
+    cod = sg.Codifica.da_valori(valori)
+    abb.sigle = cod.a_dict() if cod else None
+    sg.imposta(cod)
+    if cod:
+        es = ", ".join(f"{c}{1}→{b + 1}" for c, b in list(cod.classi.items())[:3])
+        abb.note.append(f"Unità numerate per classe ({', '.join(cod.classi)}): lo stesso numero con lettere "
+                        f"diverse indica unità diverse; le sigle restano come etichette (numeri interni: {es})")
+    return cod
+
+
+def _proponi(files, termini=None, scelte=None):
     """Abbinamento proposto per i file indicati, con il motivo di ogni scelta. ``termini`` aggiunge
     termini al vocabolario per questa proposta ({concetto: [nomi]}).
 
@@ -1420,6 +1697,7 @@ def proponi(files, termini=None, scelte=None):
             if fus and abb.tabella is None:
                 spieg.update(sp)
                 abb.tabella, abb.foglio_us = f, fus
+                _attiva_sigle(abb, list(t[fus][cus].dropna()) + (list(t[fusm][cusm].dropna()) if fusm else []))
                 abb.colonne_us = _colonne_scheda(t[fus], cus, sc.C_US, voc, fus, spieg)
                 noti |= {_intero(v) for v in t[fus][cus].dropna()}
                 if fusm:
@@ -1506,10 +1784,25 @@ def proponi(files, termini=None, scelte=None):
         if motivo_voc and motivo and motivo[0] == motivo_voc:
             spieg[f"layer:{li.layer}"] = motivo_voc
         r.ruolo = ruolo
+        if ruolo in ("reperti", "campioni") and li.geometria == "punto":
+            k = classe_punti(nome) or classe_punti(li.layer)
+            if k is not None:
+                r.classe_reperto = k[1].upper()
         if ruolo in ("us", "usm") and li.ha_z:
             r.quote_vertici = True
             motivo.append("quote dai vertici 3D")
-        if ruolo in ("us", "usm", "quote", "profili", "reperti", "campioni", "sezioni_disegno"):
+        if ruolo in ("us", "usm") and noti and li.geometria == "poligono":
+            # un'unità per file («B12.shp», «GR6.A66.shp»): il numero è nel nome, i campi numerano le pietre
+            dal_nome = sg.unita_nel_nome(li.layer, None, noti)
+            if len(dal_nome) == 1:
+                campo_c, _, _ = _campo_unita(g, noti, voc)
+                if not campo_c or _quota_note(g[campo_c], noti) < 0.5:
+                    r.unita_nome = dal_nome[0]
+                    motivo.append(f"un'unità per file: {_etichetta_unita(dal_nome[0])} dal nome «{li.layer}»")
+                    if _pietre(g):
+                        motivo.append(f"{len(g)} pietre disegnate una per una")
+        if ruolo in ("us", "usm", "quote", "profili", "reperti", "campioni", "sezioni_disegno") and \
+                r.unita_nome is None:
             campo, punti, motivo_campo = _campo_unita(g, noti, voc)
             if campo:
                 r.campo_unita = campo
@@ -1550,8 +1843,9 @@ def proponi(files, termini=None, scelte=None):
             r.campo_sezione = next((low[a] for a in ALIAS_SEZIONE if a in low), None)
         r.motivo = "; ".join(motivo)
         abb.layers.append(r)
-    crs = [li.crs for li in layers_info if li.crs]
-    abb.crs = crs[0] if crs else None
+    _unita_per_file(abb, tabs)
+    abb.crs = _crs_di_lavoro(layers_info)
+    abb.note.extend(_note_crs(layers_info, abb.crs))
     # CSV con geometrie senza un foglio di schede riconosciuto: le sue colonne sono le schede
     if abb.tabella is None:
         for r in abb.layers:
@@ -2586,6 +2880,17 @@ def _leggi_rapporti(abb, tabs, note):
         return r if r in RAPPORTI_COLONNE else None
 
     righe, ignoti = [], set()
+    non_unita = set()        # sigle di classi che non sono unità («GR2»: una stanza) citate nei rapporti
+    cod = sg.attiva()
+
+    def unita_in(v):
+        if isinstance(v, (int, float, np.integer, np.floating)):
+            return [_intero(v)]
+        if cod is not None:
+            u, altre = cod.nel_testo(v)
+            non_unita.update(altre)
+            return u
+        return [int(b) for b in re.findall(r"\d+", str(v))]
     r = abb.rapporti or {"modo": "nessuno"}
     idcol = abb.colonne_us.get(sc.C_US)
     if r.get("modo") == "foglio" and r.get("foglio") in tabs:
@@ -2611,9 +2916,7 @@ def _leggi_rapporti(abb, tabs, note):
                 v = x[col]
                 if rel is None or v is None or (isinstance(v, float) and np.isnan(v)):
                     continue
-                numeri = [_intero(v)] if isinstance(v, (int, float, np.integer, np.floating)) else \
-                    [int(b) for b in re.findall(r"\d+", str(v))]
-                righe.extend((ua, rel, b) for b in numeri if b is not None)
+                righe.extend((ua, rel, b) for b in unita_in(v) if b is not None)
     elif r.get("modo") == "testo" and r.get("foglio") in tabs:
         src = tabs[r["foglio"]]
         cu = r.get("colonna_unita") or idcol
@@ -2643,6 +2946,9 @@ def _leggi_rapporti(abb, tabs, note):
     if ignoti:
         note.append("Rapporti non riconosciuti e ignorati: " + ", ".join(sorted(ignoti)[:12]) +
                     " (si possono tradurre nel vocabolario dei rapporti)")
+    if non_unita:
+        note.append(f"{len(non_unita)} riferimenti nei rapporti non sono unità (stanze, aree…: "
+                    f"{', '.join(sorted(non_unita)[:8])}{'…' if len(non_unita) > 8 else ''}): non creano rapporti")
     return righe
 
 
@@ -3111,6 +3417,146 @@ def _punti_superficie(g, r, abb, note, voc=None):
 
 
 def applica(abb, log=None):
+    """Costruisce uno Scavo canonico applicando l'abbinamento (con le sigle di classe, se ci sono)."""
+    with sg.usa(sg.Codifica.da_dict(abb.sigle)):
+        return _applica(abb, log)
+
+
+def _etichette_sigle(s, abb, note):
+    """Colonna «Sigla» nelle schede (A1, B12…) e unità delle classi murarie spostate tra le USM."""
+    cod = sg.Codifica.da_dict(abb.sigle)
+    if cod is None:
+        return
+    murarie = set(abb.classi_murarie or [])
+    df = s.tabelle.get(sc.S_US)
+    if df is not None and murarie:
+        sposta = df[sc.C_US].map(lambda u: cod.classe(u) in murarie)
+        if sposta.any():
+            usm = df[sposta].rename(columns={sc.C_US: sc.C_USM})
+            prima = s.tabelle.get(sc.S_USM)
+            if prima is not None and len(prima):
+                usm = pd.concat([prima, usm[~usm[sc.C_USM].isin(prima[sc.C_USM])]], ignore_index=True)
+            s.tabelle[sc.S_USM] = usm
+            s.tabelle[sc.S_US] = df = df[~sposta].copy()
+            note.append(f"{int(sposta.sum())} unità delle classi {', '.join(sorted(murarie))} tra le USM")
+        if sc.L_US in s.layers:
+            g = s.layers[sc.L_US]
+            m = g[sc.F_US].map(lambda u: cod.classe(u) in murarie)
+            if m.any():
+                gm = g[m].rename(columns={sc.F_US: sc.F_USM})
+                if sc.L_USM in s.layers:
+                    gm = pd.concat([s.layers[sc.L_USM], gm], ignore_index=True)
+                s.layers[sc.L_USM] = gpd.GeoDataFrame(gm, geometry="geometry", crs=g.crs)
+                s.layers[sc.L_US] = g[~m]
+    for nome, col in ((sc.S_US, sc.C_US), (sc.S_USM, sc.C_USM)):
+        t = s.tabelle.get(nome)
+        if t is not None and col in t.columns:
+            t = t.copy()
+            sig = t[col].map(cod.sigla)
+            if "Sigla" in t.columns:
+                t["Sigla"] = t["Sigla"].where(t["Sigla"].notna(), sig)
+            else:
+                t.insert(1, "Sigla", sig)
+            s.tabelle[nome] = t
+
+
+_NOMI_ID_REPERTO = ("name", "nome", "id", "code", "codice", "rs", "n", "numero", "number", "find", "find no",
+                    "inv", "inv #", "inventario", "label", "point", "punto", "pt")
+
+
+def _colonna_nome(df):
+    """Colonna con il nome dei punti o dei reperti («NAME», «ID», «Code»…), o None."""
+    for c in df.columns:
+        if c != "geometry" and _norm(c) in _NOMI_ID_REPERTO and df[c].notna().any():
+            return c
+    return None
+
+
+def _tabella_dai_punti(s, ruolo, tabs, note):
+    """Reperti e campioni rilevati come punti -> righe dei fogli «Reperti_speciali» / «Campioni» (con E, N,
+    quota), così il visualizzatore li mostra accanto alla loro unità. L'US viene dal campo del layer o, se
+    manca, da una tabella (inventario dei reperti) che riporta lo stesso nome con la sua US."""
+    g = s.layers[NOME_LAYER[ruolo]]
+    if g is None or not len(g):
+        return
+    cn = _colonna_nome(g)
+    nomi = [str(v).strip() if cn and not pd.isna(v) else f"{k or ruolo.upper()}{i + 1}"
+            for i, (v, k) in enumerate(zip(g[cn] if cn else [None] * len(g), g.get("_classe", [None] * len(g))))]
+    us = list(g[sc.F_US]) if sc.F_US in g.columns else [None] * len(g)
+    # US dagli inventari: stessa sigla del reperto, colonna US
+    mancano = [i for i, u in enumerate(us) if u is None or (isinstance(u, float) and np.isnan(u))]
+    if mancano:
+        chiavi = {_norm(n) for n in nomi}
+        mappa = {}
+        for nome_t, t in tabs.items():
+            ci = _colonna_nome(t)
+            cu = next((c for c in t.columns if _norm(c) in ("us", "context", "su", "us_id", "unit")), None)
+            if ci is None or cu is None:
+                continue
+            v = t[[ci, cu]].dropna()
+            comuni = v[v[ci].map(lambda x: _norm(x) in chiavi)]
+            if len(comuni) >= max(1, 0.05 * len(chiavi)):
+                for a, b in zip(comuni[ci], comuni[cu]):
+                    u = _intero(b)
+                    if u is not None:
+                        mappa.setdefault(_norm(a), u)
+        trovate = 0
+        for i in mancano:
+            u = mappa.get(_norm(nomi[i]))
+            if u is not None:
+                us[i] = u
+                trovate += 1
+        if trovate:
+            note.append(f"{ruolo.capitalize()}: US di {trovate} punti dagli inventari (stesso nome del reperto)")
+    descr = {k: d for k, (_, d) in CLASSI_REPERTI.items()}
+    righe = []
+    for geom, nome, u, k in zip(g.geometry, nomi, us, g.get("_classe", [None] * len(g))):
+        if geom is None or geom.is_empty:
+            continue
+        z = geom.z if geom.has_z else None
+        if z is None or not np.isfinite(z):
+            continue            # senza quota il punto non si può collocare in 3D
+        uu = None if u is None or (isinstance(u, float) and np.isnan(u)) else int(u)
+        base = {"US": uu, "E (m)": round(float(geom.x), 3), "N (m)": round(float(geom.y), 3),
+                "Quota (m)": round(float(z), 3)}
+        if ruolo == "reperti":
+            righe.append({"RS": nome, **base, "Oggetto": descr.get(str(k or "").lower(), k or ""),
+                          "Materiale": k or "", "Descrizione": ""})
+        else:
+            righe.append({"Campione": nome, **base, "Tipo": descr.get(str(k or "").lower(), k or ""),
+                          "Analisi": ""})
+    if not righe:
+        return
+    nome_t = sc.S_RS if ruolo == "reperti" else sc.S_CAMPIONI
+    nuovo = pd.DataFrame(righe)
+    prima = s.tabelle.get(nome_t)
+    s.tabelle[nome_t] = nuovo if prima is None or not len(prima) else pd.concat([prima, nuovo], ignore_index=True)
+    con_us = sum(r["US"] is not None for r in righe)
+    note.append(f"{len(righe)} {'reperti' if ruolo == 'reperti' else 'campioni'} rilevati come punti "
+                f"({con_us} con la loro US)")
+
+
+def _colonne_uniche(df):
+    """Colonne che differiscono solo per maiuscole o spazi («NAME» e «name», da file diversi) unite in una:
+    il GeoPackage non le distingue."""
+    gruppi = {}
+    for c in df.columns:
+        gruppi.setdefault(str(c).strip().lower(), []).append(c)
+    doppie = {k: v for k, v in gruppi.items() if len(v) > 1}
+    if not doppie:
+        return df
+    df = df.copy()
+    for k, cols in doppie.items():
+        tieni = cols[0]
+        for c in cols[1:]:
+            if c == "geometry" or tieni == "geometry":
+                continue
+            df[tieni] = df[tieni].where(df[tieni].notna(), df[c])
+            df = df.drop(columns=[c])
+    return df
+
+
+def _applica(abb, log=None):
     """Costruisce uno Scavo canonico applicando l'abbinamento."""
     from .progetto import Scavo, _sha256
     log = log or (lambda *a: None)
@@ -3144,7 +3590,9 @@ def applica(abb, log=None):
             # punti che danno solo la forma della superficie di riferimento: nessuna US da assegnare
             raccolti.setdefault("quote_superficie", []).append(_punti_superficie(g, r, abb, note, voc))
             continue
-        if r.campo_unita:
+        if r.unita_nome is not None:
+            unita = [int(r.unita_nome)] * len(g)
+        elif r.campo_unita:
             unita = [_intero(v) for v in g[r.campo_unita]]
         elif r.testi_unita:
             unita = _unita_da_testi(g, r.sorgente, r.testi_unita)
@@ -3238,6 +3686,9 @@ def applica(abb, log=None):
             out = g.drop(columns=["_u"])
             if r.campo_unita and r.ruolo in ("reperti", "campioni"):
                 out[sc.F_US] = g._u.values
+            if r.ruolo in ("reperti", "campioni"):
+                out["_classe"] = r.classe_reperto
+                out["_file"] = r.layer
             if r.ruolo == "area":
                 out = out[out.geometry.notna()]
                 out["geometry"] = [Polygon(x.exterior) if x.geom_type == "Polygon" else x for x in out.geometry]
@@ -3248,7 +3699,7 @@ def applica(abb, log=None):
         raccolti.setdefault(r.ruolo, []).append(out)
 
     for ruolo, gl in raccolti.items():
-        g = pd.concat(gl, ignore_index=True)
+        g = _colonne_uniche(pd.concat(gl, ignore_index=True))
         s.layers[NOME_LAYER[ruolo]] = gpd.GeoDataFrame(g, geometry="geometry", crs=gl[0].crs)
     s.crs = crs
     # limiti di scavo molto più ampi delle US (un intero cantiere): si tiene la parte che serve
@@ -3380,6 +3831,18 @@ def applica(abb, log=None):
     elif poli_usm and sc.S_USM not in s.tabelle:
         s.tabelle[sc.S_USM] = pd.DataFrame({sc.C_USM: sorted(poli_usm)})
 
+    for ruolo in ("reperti", "campioni"):
+        if NOME_LAYER[ruolo] in s.layers:
+            _tabella_dai_punti(s, ruolo, tabs, note)
+    _etichette_sigle(s, abb, note)
+    df = s.tabelle[sc.S_US]
+    if sc.L_US not in s.layers and sc.L_USM in s.layers and len(s.layers[sc.L_USM]):
+        # solo murature disegnate (gli strati hanno solo schede o modelli del terreno): layer US vuoto
+        s.layers[sc.L_US] = gpd.GeoDataFrame({sc.F_US: pd.Series([], dtype=int)}, geometry=[],
+                                             crs=s.layers[sc.L_USM].crs)
+        note.append("Nessuna pianta di US: si ricostruiscono le murature; gli strati restano nelle schede "
+                    "e nel diagramma di Harris")
+
     # ------------------------------------------------ rapporti: senza doppioni, senza autoriferimenti
     tutte = set(df[sc.C_US]) | (set(s.tabelle[sc.S_USM][sc.C_USM]) if sc.S_USM in s.tabelle else set())
     auto = [x for x in righe if x[0] == x[2]]
@@ -3502,6 +3965,22 @@ def applica(abb, log=None):
         s.imposta_superficie({"tipo": "nessuna"})
         raster_fonte = corr_fonte = None
 
+    # unità senza quote e nessuna superficie (murature disegnate in 2D, modelli del terreno assenti): una
+    # superficie piana alla quota mediana dei punti rilevati, invece di fermare l'importazione
+    if (s.parametri.superficie or {}).get("tipo") in (None, "nessuna") and sc.L_QUOTE in s.layers and \
+            len(s.layers[sc.L_QUOTE]):
+        try:
+            from .stima import stima_quote
+            senza = sorted(u for u, x in stima_quote(s).strategia.items() if x == "nessuna")
+            if senza:
+                zq = [p.z for p in s.layers[sc.L_QUOTE].geometry if p is not None and p.has_z]
+                zm = round(float(np.median(zq)), 2)
+                s.imposta_superficie({"tipo": "costante", "quota": zm, "abbassa": 0.0})
+                note.append(f"{len(senza)} unità senza quote: partono da una superficie piana a {zm} m (quota "
+                            "mediana dei punti rilevati); con un modello del terreno il risultato è più fedele")
+        except Exception as e:
+            note.append(f"Superficie di ripiego non impostata: {e}")
+
     # ------------------------------------------------ ortofoto
     orto_fonte = None
     if abb.ortofoto:
@@ -3558,7 +4037,11 @@ def applica(abb, log=None):
                                                                      ("tabella" if p in (abb.tabelle_extra or []) else "gis")),
                                sha256=_sha256(p), dimensione=os.path.getsize(p), importato=now))
     base = next((x.sorgente for x in abb.layers if x.ruolo == "us"), fonti[0] if fonti else "scavo")
-    s.meta = dict(creato=now, modificato=now, nome=os.path.splitext(os.path.basename(base))[0])
+    nome = os.path.splitext(os.path.basename(base))[0]
+    radici = (abb.inventario or {}).get("radici") or []
+    if len(radici) == 1 and os.path.isdir(radici[0]):
+        nome = os.path.basename(os.path.normpath(radici[0])) or nome     # una cartella: il suo nome
+    s.meta = dict(creato=now, modificato=now, nome=nome)
     s.abbinamento = abb
     s.note_importazione = abb.note + note
     s.registra("importazione", dict(file=[os.path.basename(p) for p in fonti], note=note))

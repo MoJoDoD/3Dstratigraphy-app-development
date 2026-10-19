@@ -13,7 +13,7 @@ def _stampa_problemi(problemi):
         print("Nessun problema trovato.")
         return 0
     for p in problemi:
-        u = list(p.unita)
+        u = list(getattr(p, "etichette", None) or p.unita)
         elenco = (": " + ", ".join(map(str, u[:12])) + (f" … (+{len(u) - 12})" if len(u) > 12 else "")) if u else ""
         print(f"  [{p.livello}] {p.messaggio}{elenco}")
     err = sum(p.livello == "errore" for p in problemi)
@@ -190,6 +190,9 @@ def cmd_importa(a):
             print("  ", n)
     else:
         abb = importa.proponi(a.file, scelte=scelte or None)          # file, cartelle e archivi zip
+        if getattr(a, "classi_murarie", None):
+            importa.imposta_classi_murarie(abb, [c for x in a.classi_murarie for c in x.split(",")])
+            abb.note.append(f"Classi murarie (USM) indicate: {', '.join(abb.classi_murarie)}")
         ricetta = a.ricetta or a.profilo       # con i file indicati il profilo vale come ricetta
         if ricetta:
             abb, note = importa.applica_ricetta(abb, _carica_ricetta(importa, ricetta))
@@ -321,6 +324,8 @@ def main(argv=None):
     im.add_argument("--ricetta", help="applica una ricetta: pronta (es. framework_archaeology) o file JSON")
     im.add_argument("--salva-profilo"); im.add_argument("-o", "--output", help="crea il progetto .scavo")
     im.add_argument("--forza", action="store_true")
+    im.add_argument("--classi-murarie", action="append", metavar="SIGLE",
+                    help="classi di sigla che sono unità murarie (es. B, se A sono gli strati e B i muri)")
     im.add_argument("--quota-superficie", type=float, help="superficie di riferimento piana a questa quota (m)")
     im.add_argument("--abbassa", type=float, help="abbassa la superficie di riferimento (es. arativo asportato, m)")
     im.add_argument("--escludi", action="append", metavar="FILE",

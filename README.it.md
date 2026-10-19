@@ -36,7 +36,21 @@ CSV di punti, Excel o CSV delle schede. Riconoscono da soli:
 - i rapporti in un foglio a sé o nelle colonne della scheda ("Copre", "Tagliato da"…);
 - US negative dalla parola "taglio", spessori in centimetri, USM nello stesso foglio delle US;
 - archivi in inglese: context register (Context, Type, Thickness…), rapporti "fills", "covers",
-  "cut by"…, livelli "top/bottom/cut/rim", fogli Phases, Finds, Samples, Documentation.
+  "cut by", "Covering", "Abutting"…, livelli "top/bottom/cut/rim", fogli Phases, Finds, Samples,
+  Documentation;
+- unità **numerate per classe** ("A1" e "B1" sono unità diverse, per esempio A = strati e B = murature).
+  Le sigle restano come etichette nelle schede, nel Harris, negli elaborati e quando si riscrivono i
+  file d'origine. I codici di stanze o aree nei rapporti ("GR2") non diventano unità;
+- **un'unità per file** ("B12.shp", "GR6.A66.shp"), con le pietre di un muro disegnate una per una.
+  Le classi disegnate pietra per pietra, o descritte come muri, diventano USM (con `--classi-murarie B`
+  si indicano a mano). Le versioni corrette ("B3giusto") sostituiscono quelle vecchie;
+- layer in **sistemi di riferimento diversi**, riproiettati in quello più usato. Se il GPS era impostato
+  sulla zona UTM sbagliata, un avviso spiega di quanto risultano distorte le distanze;
+- nei punti della stazione totale, le **classi di reperti** dal nome del file ("…_LTA.csv",
+  "…_BON.csv"), collegate alla loro US tramite l'inventario. I **target della fotogrammetria**
+  ("…_MIRE.csv") non vengono presi per quote;
+- nelle cartelle, si mettono da parte le copie ("- Copia", "(2)"), i risultati di altri programmi
+  (cartelle "run_…") e le versioni più vecchie della stessa tabella delle schede.
 
 ## Ricette di importazione
 

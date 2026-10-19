@@ -84,7 +84,8 @@ def _parametri(s):
 
 
 def _problemi(s):
-    return [dict(livello=p.livello, codice=p.codice, messaggio=p.messaggio, unita=list(p.unita)) for p in s.verifica()]
+    return [dict(livello=p.livello, codice=p.codice, messaggio=p.messaggio, unita=list(p.unita),
+                 etichette=list(p.etichette or p.unita)) for p in s.verifica()]
 
 
 # ---------------------------------------------------------------------- cartelle e inventario
