@@ -32,7 +32,7 @@
   "termini": {
    "it": ["copre", "sopra", "sta sopra", "si sovrappone a", "sigilla", "oblitera", "posteriore a", "posteriore",
           "più recente di", "è sopra"],
-   "en": ["covers", "overlies", "above", "seals", "over", "later than", "is above", "overlays", "post-dates",
+   "en": ["covers", "covering", "overlying", "sealing", "overlies", "above", "seals", "over", "later than", "is above", "overlays", "post-dates",
           "postdates", "lies over", "superimposed on"],
    "fr": ["recouvre", "couvre", "scelle", "sur", "au-dessus de", "postérieur à", "est sur"],
    "de": ["überlagert", "liegt über", "über", "bedeckt", "versiegelt", "jünger als", "überdeckt", "liegt auf"],
@@ -70,7 +70,7 @@
   "canonico": {"colonna": "taglia", "valore": "taglia"},
   "termini": {
    "it": ["taglia", "incide", "asporta"],
-   "en": ["cuts", "cuts through", "truncates", "is cutting"],
+   "en": ["cuts", "cutting", "cuts through", "truncates", "is cutting"],
    "fr": ["recoupe", "entaille", "perce", "coupe"],
    "de": ["schneidet", "stört", "durchschneidet", "schneidet in"],
    "es": ["corta", "rompe", "corta a"],
@@ -102,7 +102,7 @@
   "canonico": {"colonna": "riempie", "valore": "riempie"},
   "termini": {
    "it": ["riempie", "riempimento di", "colma", "riempimento del taglio"],
-   "en": ["fills", "fill of", "filled in", "is fill of", "is a fill of", "fill of cut", "within", "contained by"],
+   "en": ["fills", "filling", "fill of", "filled in", "is fill of", "is a fill of", "fill of cut", "within", "contained by"],
    "fr": ["remplit", "comble", "remplissage de", "comblement de"],
    "de": ["verfüllt", "verfüllung von", "füllt", "verfüllung in"],
    "es": ["rellena", "relleno de", "colmata"],
@@ -136,7 +136,7 @@
   "canonico": {"colonna": "si appoggia a", "valore": "si appoggia a"},
   "termini": {
    "it": ["si appoggia a", "si appoggia", "appoggia a", "si addossa a", "addossato a"],
-   "en": ["abuts", "butts", "leans against", "butts against", "abuts against", "is abutting"],
+   "en": ["abuts", "abutting", "butting", "butts", "leans against", "leaning against", "butts against", "abuts against", "is abutting"],
    "fr": ["s'appuie contre", "s'appuie sur", "s'appuie à", "appuyé contre", "contre"],
    "de": ["stößt an", "lehnt an", "angesetzt an", "stößt gegen", "angebaut an"],
    "es": ["se apoya en", "se adosa a", "adosado a", "apoya en", "se apoya contra"],
@@ -168,7 +168,7 @@
   "canonico": {"colonna": "si lega a", "valore": "si lega a"},
   "termini": {
    "it": ["si lega a", "si lega con", "legato a", "legato con", "si lega"],
-   "en": ["bonded with", "bonds with", "bonded to", "tied to", "bonds", "bonded", "keyed into", "tied in with"],
+   "en": ["bonded with", "bonding with", "bonds with", "bonded to", "tied to", "bonds", "bonded", "keyed into", "tied in with"],
    "fr": ["lié à", "chaîné avec", "chaîné à", "se lie à"],
    "de": ["bindet ein in", "verzahnt mit", "im verband mit", "in verband mit", "bindet ein"],
    "es": ["se une a", "trabado con", "se traba con", "se liga a"],

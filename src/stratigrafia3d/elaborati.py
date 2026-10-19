@@ -34,6 +34,13 @@ def _schede(scavo):
             **{u: ("USM", r) for u, r in scavo.schede_usm().items()}}
 
 
+def _nome(et, u, tipo=None):
+    """Nome dell'unità negli elaborati: la sigla («B12») se le unità sono numerate per classe."""
+    if u in et:
+        return et[u]
+    return f"{tipo} {u}" if tipo else str(u)
+
+
 def _fase(r):
     try:
         v = float(r.get(sc.C_FASE))
@@ -74,6 +81,7 @@ def tabella_volumi(scavo):
     schede = _schede(scavo)
     poli = {**scavo.poligoni_us(), **scavo.poligoni_usm()}
     o = scavo.origine
+    et = scavo.etichette()
     righe = []
     for u, m in sorted(scavo.modello.unita.items()):
         tipo, r = schede.get(u, ("US", {}))
@@ -82,7 +90,8 @@ def tabella_volumi(scavo):
         vol = m.volume() if m.tipo != "taglio" else float("nan")
         spess = (np.asarray(m.top) - np.asarray(m.bot))
         righe.append({
-            "Unità": u, "Tipo": "USM" if tipo == "USM" else ("taglio" if m.tipo == "taglio" else "US"),
+            "Unità": u, **({"Sigla": et.get(u)} if et else {}),
+            "Tipo": "USM" if tipo == "USM" else ("taglio" if m.tipo == "taglio" else "US"),
             "Definizione": r.get("Definizione") if hasattr(r, "get") else None,
             "Fase": _fase(r) if len(r) else None,
             "Area in pianta (m²)": round(area, 3),
@@ -281,6 +290,7 @@ def _esc(t):
 def sezioni_svg(scavo, sezioni, percorso, scala=50, esagerazione=1.0):
     """Disegno delle sezioni in un unico SVG, una sotto l'altra. ``sezioni``: [(nome, a, b)] reali.
     ``scala``: 1:scala (mm sulla carta)."""
+    et = scavo.etichette()
     k = 1000.0 / scala                      # mm di carta per metro
     _ = _traduttore()
     calcolate = []
@@ -330,12 +340,12 @@ def sezioni_svg(scavo, sezioni, percorso, scala=50, esagerazione=1.0):
             for g in t["linee"]:
                 pts = " L".join(f"{X(x):.2f},{Y(y):.2f}" for x, y in g.coords)
                 out.append(f'<path d="M{pts}" fill="none" stroke="#111" stroke-width="0.35" stroke-dasharray="1.2 0.8">'
-                           f'<title>{_esc(_("US {0} (taglio)", t["unita"]))}</title></path>')
+                           f'<title>{_esc(_("US {0} (taglio)", _nome(et, t["unita"])))}</title></path>')
         for t in tagli:                      # etichette sopra i colori
             for g in t["aree"]:
                 if g.area * k * k * esagerazione > 20:
                     c = g.representative_point()
-                    out.append(f'<text x="{X(c.x):.2f}" y="{Y(c.y) + 0.9:.2f}" font-size="2.4" text-anchor="middle">{t["unita"]}</text>')
+                    out.append(f'<text x="{X(c.x):.2f}" y="{Y(c.y) + 0.9:.2f}" font-size="2.4" text-anchor="middle">{_esc(_nome(et, t["unita"]))}</text>')
         # scala grafica: 1 m
         out.append(f'<line x1="{X(0):.2f}" x2="{X(1):.2f}" y1="{y0 + h - 4:.2f}" y2="{y0 + h - 4:.2f}" stroke="#000" stroke-width="0.6"/>'
                    f'<text x="{X(1) + 2:.2f}" y="{y0 + h - 3:.2f}" font-size="2.4">1 m</text>')
@@ -350,6 +360,7 @@ def sezioni_svg(scavo, sezioni, percorso, scala=50, esagerazione=1.0):
 def pianta_svg(scavo, percorso, scala=200, fasi=None):
     """Piante per fase in un unico SVG: un riquadro per fase, dalla più recente, con il limite dello
     scavo e i numeri delle unità. ``fasi``: elenco delle fasi da disegnare (tutte se None)."""
+    et = scavo.etichette()
     schede = _schede(scavo)
     poli = {**scavo.poligoni_us(), **scavo.poligoni_usm()}
     if not poli:
@@ -413,17 +424,17 @@ def pianta_svg(scavo, percorso, scala=200, fasi=None):
             neg = str(r.get(sc.C_TIPO, "")).lower() == "negativa" if len(r) else False
             if neg:
                 out.append(f'<path d="{tracciato(poli[u])}" fill="none" stroke="#111" stroke-width="0.3" '
-                           f'stroke-dasharray="1 0.7"><title>{_esc(_(tipo + " {0}", u))}</title></path>')
+                           f'stroke-dasharray="1 0.7"><title>{_esc(et[u] if u in et else _(tipo + " {0}", u))}</title></path>')
             else:
                 out.append(f'<path d="{tracciato(poli[u])}" fill="{colore_unita(scavo, u, schede)}" fill-opacity="0.8" '
-                           f'stroke="#222" stroke-width="0.2" fill-rule="evenodd"><title>{_esc(_(tipo + " {0}", u))}</title></path>')
+                           f'stroke="#222" stroke-width="0.2" fill-rule="evenodd"><title>{_esc(et[u] if u in et else _(tipo + " {0}", u))}</title></path>')
         visti = []
         for u in sorted(per_fase[f], key=lambda u: -poli[u].area):
             c = poli[u].representative_point()
             if poli[u].area * k * k < 6 or any(abs(c.x - a) * k < 6 and abs(c.y - b) * k < 2.5 for a, b in visti):
                 continue
             visti.append((c.x, c.y))
-            out.append(f'<text x="{X(c.x):.2f}" y="{Y(c.y) + 0.8:.2f}" font-size="2.2" text-anchor="middle">{u}</text>')
+            out.append(f'<text x="{X(c.x):.2f}" y="{Y(c.y) + 0.8:.2f}" font-size="2.2" text-anchor="middle">{_esc(_nome(et, u))}</text>')
         out.append("</g>")
     m = 5 if scala >= 100 else 1
     out.append(f'<line x1="10" x2="{10 + k * m:.2f}" y1="{H - 8:.2f}" y2="{H - 8:.2f}" stroke="#000" stroke-width="0.6"/>'
@@ -488,6 +499,7 @@ def _aci(hx):
 def pianta_dxf(scavo, percorso):
     """Poligoni delle unità in coordinate reali, un layer per fase (e uno per i tagli), con i numeri.
     Le quote del tetto ricostruito sono nei vertici (polilinee 3D) quando il modello c'è."""
+    et = scavo.etichette()
     schede = _schede(scavo)
     poli = {**scavo.poligoni_us(), **scavo.poligoni_usm()}
     o = scavo.origine
@@ -512,12 +524,13 @@ def pianta_dxf(scavo, percorso):
                 cc = np.asarray(ring.coords)[:-1]
                 dxf.polilinea(lay, [(x + o["E0"], y + o["N0"]) for x, y in cc[:, :2]], chiusa=True)
         c = g.representative_point()
-        dxf.testo(dxf.layer(_("NUMERI"), "#000000"), c.x + o["E0"], c.y + o["N0"], _("USM {0}", u) if tipo == "USM" else u)
+        dxf.testo(dxf.layer(_("NUMERI"), "#000000"), c.x + o["E0"], c.y + o["N0"], et[u] if u in et else (_("USM {0}", u) if tipo == "USM" else u))
     return dxf.salva(percorso)
 
 
 def sezioni_dxf(scavo, sezioni, percorso, distanza=2.0):
     """Sezioni come disegno 2D: x = distanza lungo la sezione, y = quota; una sotto l'altra."""
+    et = scavo.etichette()
     dxf = _DXF()
     _ = _traduttore()
     schede = _schede(scavo)
@@ -541,7 +554,7 @@ def sezioni_dxf(scavo, sezioni, percorso, distanza=2.0):
                 for ring in [g.exterior, *g.interiors]:
                     dxf.polilinea(lay, [(x, y + dy) for x, y in list(ring.coords)[:-1]], chiusa=True)
                 c = g.representative_point()
-                dxf.testo(dxf.layer(_("NUMERI"), "#000000"), c.x, c.y + dy, t["unita"], h=0.12)
+                dxf.testo(dxf.layer(_("NUMERI"), "#000000"), c.x, c.y + dy, _nome(et, t["unita"]), h=0.12)
             for g in t["linee"]:
                 dxf.polilinea(lay, [(x, y + dy) for x, y in g.coords], chiusa=False)
         dxf.polilinea(dxf.layer(_("RIFERIMENTI"), "#808080"), [(0, z1 + dy + 0.3), (L, z1 + dy + 0.3)], chiusa=False)

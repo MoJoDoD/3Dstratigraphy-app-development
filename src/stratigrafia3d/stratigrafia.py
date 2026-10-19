@@ -70,9 +70,10 @@ class Problema:
     codice: str
     messaggio: str
     unita: tuple = ()
+    etichette: tuple = ()     # sigle da mostrare al posto dei numeri interni («B1» per 2001)
 
     def __str__(self):
-        u = f" [{', '.join(map(str, self.unita))}]" if self.unita else ""
+        u = f" [{', '.join(map(str, self.etichette or self.unita))}]" if self.unita else ""
         return f"{self.livello.upper():7s} {self.codice}: {self.messaggio}{u}"
 
 

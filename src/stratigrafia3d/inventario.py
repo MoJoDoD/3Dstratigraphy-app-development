@@ -617,6 +617,8 @@ def ruolo_layer(nome, geometria, ha_z=False, campi=()):
     p = 0.9 if motivo_voc else (0.7 if parola else 0.0)
     motivo = motivo_voc or (f"il nome contiene «{parola}»" if parola else "")
     if ruolo == "ignora":
+        if "fotogrammetria" in (motivo or ""):
+            return None, max(p, 0.6), motivo
         return None, max(p, 0.6), (motivo + ": " if motivo else "") + "layer di servizio (griglia, tratteggi…)"
     cu = _campo_unita(campi) if geometria in ("poligono", "punto", "linea") else None
     if geometria == "poligono":
@@ -880,6 +882,17 @@ def _ruolo_tabella(nome, df):
     if conta["gruppo"] and not us_cols:
         punti["gruppi"] += 0.25
         motivo_col("gruppi", "colonna dei gruppi stratigrafici")
+    # inventario dei reperti con coordinate: nome del reperto, X, Y (Z) e US (Ba'ja: BJ_COORDINATED_LTA.xlsx)
+    low = {_norm(c): c for c in cols}
+    nome_r = next((low[k] for k in ("name", "nome", "id", "find", "find no", "rs", "code", "codice") if k in low), None)
+    x_r = next((low[k] for k in ("x", "e", "est", "easting") if k in low), None)
+    y_r = next((low[k] for k in ("y", "n", "nord", "northing") if k in low), None)
+    us_r = us_cols[0] if us_cols else next((low[k] for k in ("us", "context", "su") if k in low), None)
+    if nome_r and x_r and y_r and us_r and _numerica(df[x_r]) and _numerica(df[y_r]):
+        punti["materiali"] += 0.55
+        motivo_col("materiali", f"inventario dei reperti con coordinate e US (colonne «{nome_r}», «{x_r}», "
+                                f"«{y_r}», «{us_r}»): collega i punti dei reperti alla loro unità")
+        punti["schede_us"] = min(punti.get("schede_us", 0), 0)
     if punti.get("schede_us", 0) > 0 and not us_cols:
         punti["schede_us"] -= 0.25                 # «ContextSections», «ContextPlans»: il nome non basta
     det = dict(colonne=cols[:60], colonne_riconosciute={c: k for c, k in concetti.items() if k != "us_rif"})
@@ -1244,6 +1257,96 @@ def _togli_doppioni(voci, note):
                     "più scavi: controlla quali usare")
 
 
+# «BJ2610 - Copia.csv», «Copy of x.shp», «x (2).xlsx», «x - Kopie»
+_COPIA_RE = re.compile(r"(\s*[-_]\s*(copia|copie|copy|kopie|copie de)(\s*\(\d+\))?$|\s+\(\d+\)$|"
+                       r"^(copia di|copy of|copie de|kopie von)\s+)", re.I)
+# cartelle con i risultati di un programma: «run_20261008_164419», «output_2025…», «diagnostics»
+_DERIVATI_RE = re.compile(r"(^|/)((run|output|outputs|risultati|results|export|elaborazione)[_\-]?\d{6,}[\w\-]*|"
+                          r"diagnostics|diagnostica|renderer_test)(/|$)", re.I)
+# nomi di copie di sicurezza o versioni superate
+_VECCHIA_RE = re.compile(r"(^|[^a-z])(bcp|bck|bak|backup|old|vecchi[oa]?|obsolet\w*|prova|test)([^a-z]|$)", re.I)
+_RUOLI_STRATIGRAFIA = {"schede_us", "schede_usm", "rapporti"}
+
+
+def _copie_e_derivati(voci, note):
+    """Copie fatte a mano («- Copia», «(2)») accanto all'originale, risultati di programmi (cartelle «run_…»)
+    quando ci sono anche i dati d'origine, e versioni più vecchie della stessa tabella delle schede."""
+    per_cartella = defaultdict(dict)
+    for v in voci:
+        if v["categoria"] in CATEGORIE_DATI:
+            d = os.path.dirname(v["relativo"])
+            per_cartella[d][(os.path.splitext(v["nome"])[0].lower(), v["estensione"])] = v
+    copie = 0
+    for d, nomi in per_cartella.items():
+        for (base, ext), v in nomi.items():
+            if not v["usa"]:
+                continue
+            orig = _COPIA_RE.sub("", os.path.splitext(v["nome"])[0]).strip().lower()
+            if orig != base and (orig, ext) in nomi:
+                o = nomi[(orig, ext)]
+                v["usa"] = False
+                v["destinazione"] = NON_USATO
+                v["motivo"] = f"copia di «{o['nome']}» (si usa l'originale); " + v["motivo"]
+                v["dettagli"]["doppione_di"] = o["percorso"]
+                copie += 1
+    if copie:
+        note.append(f"{copie} copie fatte a mano («- Copia», «(2)»…) accanto all'originale: non usate")
+    # risultati di programmi (matrix elaborati, diagnostiche) se ci sono i dati d'origine
+    derivati = [v for v in voci if v["usa"] and v["categoria"] in CATEGORIE_DATI and _DERIVATI_RE.search(
+        "/" + v["relativo"].replace("\\", "/"))]
+    origine = [v for v in voci if v["usa"] and v.get("ruolo") in _RUOLI_STRATIGRAFIA and v not in derivati]
+    if derivati and origine:
+        for v in derivati:
+            v["usa"] = False
+            v["destinazione"] = NON_USATO
+            v["motivo"] = "risultato di un programma (cartella di elaborazione): si usano i dati d'origine; " + \
+                v["motivo"]
+        cartelle = sorted({_DERIVATI_RE.search("/" + v["relativo"].replace("\\", "/")).group(2) for v in derivati})
+        note.append(f"{len(derivati)} file in cartelle di elaborazione ({', '.join(cartelle[:3])}"
+                    f"{'…' if len(cartelle) > 3 else ''}): risultati di programmi, non usati al posto dei dati "
+                    "d'origine")
+    # più versioni della tabella delle schede: la più recente e completa, le altre restano disponibili
+    schede = [v for v in voci if v["usa"] and v.get("ruolo") == "schede_us" and v["categoria"] == "tabella"]
+    if len(schede) > 1:
+        def colonne(v):
+            c = v["dettagli"].get("colonne")
+            if c:
+                return {_norm(x) for x in c}
+            try:
+                import pandas as pd
+                return {_norm(x) for x in pd.read_excel(v["percorso"], nrows=0).columns} \
+                    if v["estensione"] in (".xlsx", ".xlsm", ".xls", ".ods") else set()
+            except Exception:
+                return set()
+
+        def mtime(v):
+            try:
+                return os.path.getmtime(v["percorso"])
+            except OSError:
+                return 0.0
+        # nomi da copia di sicurezza in fondo; poi la più recente (all'ora: copie fatte insieme valgono uguale),
+        # la meno profonda nelle cartelle, la più grande
+        schede.sort(key=lambda v: (bool(_VECCHIA_RE.search(os.path.splitext(v["nome"])[0])),
+                                   -round(mtime(v) / 3600), v["relativo"].count("/"), -(v.get("dimensione") or 0)))
+        scelta = schede[0]
+        cs = colonne(scelta)
+        tolte = []
+        for v in schede[1:]:
+            if _chiave_nome(v["nome"]) == _chiave_nome(scelta["nome"]) and v.get("dimensione") == scelta.get("dimensione"):
+                continue            # copia identica: la gestisce _togli_doppioni («copia di…»)
+            cv = colonne(v)
+            if cs and cv and len(cs & cv) >= 0.7 * min(len(cs), len(cv)):
+                v["usa"] = False
+                v["destinazione"] = NON_USATO
+                v["motivo"] = f"versione precedente delle schede di «{scelta['relativo']}» (si usa quella, la più " \
+                              "recente); " + v["motivo"]
+                tolte.append(v["relativo"])
+        if tolte:
+            altre = ", ".join(f"«{x}»" for x in tolte[:3]) + ("…" if len(tolte) > 3 else "")
+            note.append(f"Schede US in {len(tolte) + 1} versioni: si usa «{scelta['relativo']}» (la più recente), "
+                        f"non {altre}")
+
+
 _FIGURA_FILE_RE = re.compile(r"^(fig|figure|figura|tav|tavola|plate|abb)[\s_.\-]*\d+", re.I)
 
 
@@ -1378,6 +1481,7 @@ def esamina_cartella(percorsi, profondita_max=8, limite_file=20000):
     _figure_pubblicazione(voci)
     _ipotesi_deboli(voci)
     note = list(racc.note)
+    _copie_e_derivati(voci, note)
     _togli_doppioni(voci, note)
     for v in voci:
         v.pop("_contenitore", None)

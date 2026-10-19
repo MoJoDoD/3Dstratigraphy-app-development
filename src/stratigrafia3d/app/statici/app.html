@@ -902,7 +902,7 @@ function mostraProblemi(r){
     if(p.codice==="escluse") h+=`<div class="corr"><button class="btn" data-includi>Reincludi tutte</button></div>`;
     else if(p.unita.length && ESCLUDIBILI.has(p.codice)) h+=`<div class="corr"><button class="btn" data-escludi="${p.unita.join(",")}">Escludi ${p.unita.length===1?"questa unità":"queste "+p.unita.length+" unità"} dal 3D</button></div>`;
     return h };
-  $("prob").innerHTML=r.problemi.length?r.problemi.map(p=>`<div class="pr"><span class="pill ${p.livello}">${p.livello}</span><div><p>${esc(p.messaggio)}</p>${p.unita.length?elenco(p.unita):""}${azioni(p)}</div></div>`).join(""):
+  $("prob").innerHTML=r.problemi.length?r.problemi.map(p=>`<div class="pr"><span class="pill ${p.livello}">${p.livello}</span><div><p>${esc(p.messaggio)}</p>${p.unita.length?elenco(p.etichette||p.unita):""}${azioni(p)}</div></div>`).join(""):
     `<div class="pr"><span class="pill ok">ok</span><p>Nessun problema: i dati sono pronti per la ricostruzione.</p></div>`;
   $("n4").textContent=err.length?"Ricostruisci comunque →":"Ricostruisci il 3D →";
   $("n4").dataset.forza=err.length?"1":"";

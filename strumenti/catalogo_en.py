@@ -1024,6 +1024,69 @@ for _ci, _ce in _CODE:
     T.update({_numerati("{} per " + d + " (indizio debole)", _ci): _numerati("{} for " + T[d] + " (weak clue)", _ce)
               for d in _DESCRIZIONI})
 
+# ---------------------------------------------------------------- unità numerate per classe, un'unità per file,
+# sistemi di riferimento, reperti e target nei punti della stazione totale (0.11)
+T.update({
+    "Unità numerate per classe ({0}): lo stesso numero con lettere diverse indica unità diverse; le sigle restano "
+    "come etichette (numeri interni: {1})":
+        "Units numbered by class ({0}): the same number with different letters means different units; the codes "
+        "are kept as labels (internal numbers: {1})",
+    "{0}: usato il disegno «{1}», tralasciato {2}": "{0}: drawing «{1}» used, {2} left out",
+    "{0} è disegnata in {1} file ({2}): i poligoni si uniscono": "{0} is drawn in {1} files ({2}): the polygons are merged",
+    "Classe {0}: unità murarie (USM) — muri disegnati pietra per pietra o descritti come murature":
+        "Class {0}: masonry units (MSU) — walls drawn stone by stone or described as masonry",
+    "{0} layer in altri sistemi di riferimento ({1}): riproiettati in {2}":
+        "{0} layers in other coordinate systems ({1}): reprojected to {2}",
+    "Le coordinate sono in UTM zona {0} ma lo scavo è a {1}° di longitudine, cioè nella zona {2} (EPSG:{3}): forse "
+    "il GPS era impostato sulla zona sbagliata. I dati restano coerenti tra loro, ma in questa zona le distanze "
+    "orizzontali risultano {4}% e il nord è ruotato di {5}°; le quote no. Per misure e volumi esatti conviene "
+    "riproiettare i dati in EPSG:{6}":
+        "The coordinates are in UTM zone {0} but the excavation is at longitude {1}°, i.e. in zone {2} (EPSG:{3}): "
+        "the GPS was probably set to the wrong zone. The data remain consistent with each other, but in this zone "
+        "horizontal distances come out {4}% and north is rotated by {5}°; levels are not affected. For exact "
+        "measurements and volumes, reproject the data to EPSG:{6}",
+    "{0} riferimenti nei rapporti non sono unità (stanze, aree…: {1}): non creano rapporti":
+        "{0} references in the relationships are not units (rooms, areas…: {1}): they create no relationships",
+    "Reperti: US di {0} punti dagli inventari (stesso nome del reperto)":
+        "Finds: SU of {0} points from the inventories (same find name)",
+    "Campioni: US di {0} punti dagli inventari (stesso nome del reperto)":
+        "Samples: SU of {0} points from the inventories (same find name)",
+    "{0} reperti rilevati come punti ({1} con la loro US)": "{0} finds surveyed as points ({1} with their SU)",
+    "{0} campioni rilevati come punti ({1} con la loro US)": "{0} samples surveyed as points ({1} with their SU)",
+    "{0} unità delle classi {1} tra le USM": "{0} units of classes {1} moved to the MSUs",
+    "Nessuna pianta di US: si ricostruiscono le murature; gli strati restano nelle schede e nel diagramma di Harris":
+        "No SU plans: the masonry is rebuilt; the layers stay in the records and in the Harris matrix",
+    "{0} unità senza quote: partono da una superficie piana a {1} m (quota mediana dei punti rilevati); con un "
+    "modello del terreno il risultato è più fedele":
+        "{0} units without levels: they start from a flat surface at {1} m (median level of the surveyed points); "
+        "a terrain model gives a more faithful result",
+    "Superficie di ripiego non impostata: {0}": "Fallback surface not set: {0}",
+    "Classi murarie (USM) indicate: {0}": "Masonry classes (MSU) set: {0}",
+    "{0} copie fatte a mano («- Copia», «(2)»…) accanto all'originale: non usate":
+        "{0} hand-made copies («- Copy», «(2)»…) next to the original: not used",
+    "{0} file in cartelle di elaborazione ({1}): risultati di programmi, non usati al posto dei dati d'origine":
+        "{0} files in processing folders ({1}): outputs of other programs, not used instead of the source data",
+    "Schede US in {0} versioni: si usa «{1}» (la più recente), non {2}":
+        "SU records in {0} versions: «{1}» is used (the most recent), not {2}",
+    "copia di «{0}» (si usa l'originale); {1}": "copy of «{0}» (the original is used); {1}",
+    "risultato di un programma (cartella di elaborazione): si usano i dati d'origine; {0}":
+        "output of a program (processing folder): the source data are used; {0}",
+    "versione precedente delle schede di «{0}» (si usa quella, la più recente); {1}":
+        "earlier version of the records in «{0}» (that one is used, the most recent); {1}",
+    "«{0}»: punti d'appoggio della fotogrammetria (target), non quote delle unità":
+        "«{0}»: photogrammetry control points (targets), not unit levels",
+    "«{0}»: reperti ({1}) dal nome del file": "«{0}»: finds ({1}) from the file name",
+    "«{0}»: campioni ({1}) dal nome del file": "«{0}»: samples ({1}) from the file name",
+    "inventario dei reperti con coordinate e US (colonne «{0}», «{1}», «{2}», «{3}»): collega i punti dei reperti "
+    "alla loro unità":
+        "finds inventory with coordinates and SU (columns «{0}», «{1}», «{2}», «{3}»): links the find points to "
+        "their unit",
+    "ossa animali": "animal bones", "industria litica": "lithics", "selce": "flint", "carboni": "charcoal",
+    "macine e pestelli": "grinding stones", "ornamenti": "ornaments", "pietre": "stones", "varia": "miscellaneous",
+    "ocra": "ochre", "argilla": "clay", "conchiglie": "shells", "ceramica": "pottery", "fauna": "fauna",
+    "campioni di sedimento": "sediment samples", "campioni per C14": "C14 samples", "campioni": "samples",
+})
+
 if __name__ == "__main__":
     qui = os.path.dirname(os.path.abspath(__file__))
     dest = os.path.join(qui, "..", "src", "stratigrafia3d", "lingue", "en.json")

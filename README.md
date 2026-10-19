@@ -23,6 +23,12 @@ It runs offline on your own computer, as a desktop app or from the command line.
   ("fills", "cut by", "Context Number"...). Import **recipes** save every choice, so the same kind of
   archive can be imported again in one step. Recipes for **Framework Archaeology** (Stansted,
   Heathrow T5) and **pyArchInit** are included.
+
+  It also handles archives numbered **by class**, where A1 and B1 are different units (for example
+  A = layers, B = walls). It handles **one unit per file** as well ("B12.shp", with the stones of a
+  wall drawn one by one), and layers saved in different coordinate systems. Find classes and
+  photogrammetry targets are recognised in total-station point files. Copies and the outputs of other
+  programs left in a folder are set aside.
 - **Reconstructs with whatever data exist.** Units with surveyed levels are interpolated by kriging.
   Where only depths and thicknesses were recorded, units are built down from a reference surface (a
   terrain model, a constant level or the surveyed levels) and stacked in stratigraphic order. Every

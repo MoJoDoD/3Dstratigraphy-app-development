@@ -328,8 +328,33 @@ class Scavo:
         return st.da_tabella(df, unita)
 
     # ------------------------------------------------------------------ controlli
+    def etichette(self):
+        """Sigle delle unità numerate per classe ({2001: "B1"}), dalla colonna «Sigla» delle schede."""
+        out = {}
+        for nome, col in ((sc.S_US, sc.C_US), (sc.S_USM, sc.C_USM)):
+            df = self.tabelle.get(nome)
+            if df is not None and "Sigla" in df.columns and col in df.columns:
+                for u, e in zip(df[col], df["Sigla"]):
+                    if pd.notna(u) and pd.notna(e) and str(e).strip():
+                        out[int(u)] = str(e).strip()
+        return out
+
+    def etichetta(self, u):
+        """Nome dell'unità da mostrare: la sigla («B1») se c'è, altrimenti il numero."""
+        return self.etichette().get(int(u), str(u))
+
     def verifica(self):
-        """Controlla dati e rapporti prima della ricostruzione. Ritorna una lista di Problema."""
+        """Controlla dati e rapporti prima della ricostruzione. Ritorna una lista di Problema, con le sigle
+        delle unità in ``etichette`` quando le unità sono numerate per classe («A1», «B1»)."""
+        out = self._verifica()
+        et = self.etichette()
+        if et:
+            for p in out:
+                p.etichette = tuple(et.get(int(u), str(u)) if isinstance(u, (int, np.integer)) else str(u)
+                                    for u in p.unita)
+        return out
+
+    def _verifica(self):
         out = []
         for n in sc.LAYER_OBBLIGATORI:
             if n not in self.layers:
