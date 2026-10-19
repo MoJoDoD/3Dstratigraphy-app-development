@@ -163,6 +163,21 @@ e per confrontare il modello con le sezioni rilevate.
   richiesta tutto il diagramma. L'ordine dei riempimenti dedotto dal programma è tratteggiato a
   puntini, e nella scheda compare come «copre (dedotto)».
 
+- **Ortofoto delle unità**: un'unità che ha una propria ortofoto (stesso nome del suo DEM, es.
+  "G2_A16_ortho_2409.tif") la usa come texture. L'ortofoto generale più estesa copre le altre unità.
+  Con le fotografie delle unità, la vista parte già in modalità ortofoto.
+- **Vista adatta ai dati**: senza fasi, l'elenco si raggruppa per stanza o locus ("Room/Space") e
+  l'esploso parte da 0. Con dislivelli di metri non c'è esagerazione verticale. Senza colori in scheda,
+  gli strati hanno un tono per posizione nella sequenza (chiaro = recente).
+
+**Archivi grandi**: modelli OBJ da centinaia di MB (letti a blocchi, semplificati con un budget di
+triangoli comune, quelli fuori dall'area delle unità esclusi), DEM e ortofoto al millimetro (letti già
+ridotti, senza mai tenere in memoria l'immagine intera). I risultati restano in una cache
+(`~/.stratigrafia3d/cache`), quindi una nuova importazione dello stesso archivio non decodifica di nuovo
+i file pesanti. Per riconoscere i file d'origine cambiati, quelli grandi si confrontano per dimensione,
+inizio e fine. Le cartelle di OneDrive "solo online" vanno rese disponibili sul computer, altrimenti
+ogni lettura le scarica.
+
 Aree grandi (oltre 65 m) e centinaia di unità sono gestite; `strumenti/caso_studio_stansted.py`
 ricava un caso studio in inglese dall'archivio aperto di Framework Archaeology (Stansted): senza
 quote, con profondità, spessori e un modello del terreno.

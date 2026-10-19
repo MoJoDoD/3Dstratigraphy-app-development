@@ -247,6 +247,8 @@ def dati_visualizzatore(scavo):
         profili=profili, sezioni=sezioni, sez_draw=sez_draw, limiti=limiti, harris=st.harris(rap, dedotti=scavo.modello.dedotti),
         dedotti=[[int(a), int(b)] for a, b in scavo.modello.dedotti],
         ortofoto=_ortofoto(scavo),
+        ortofoto_unita=_ortofoto_unita(scavo),
+        rilievo=_rilievo(scavo, estensione),
         modelli3d=_modelli3d(scavo),
     )
 
@@ -264,6 +266,29 @@ def _modelli3d(scavo):
             d["uv"] = _b64(m.uv, "<f4")
             d["texture"] = base64.b64encode(m.texture).decode()
         out.append(d)
+    return out
+
+
+def _rilievo(scavo, estensione):
+    """Dislivello del modello e lato maggiore della pianta (m): la vista sceglie l'esagerazione verticale."""
+    zs = [(float(np.min(m.bot)), float(np.max(m.top))) for m in scavo.modello.unita.values() if len(m.V2)]
+    if not zs:
+        return dict(z=0.0, xy=0.0)
+    z = max(b for _, b in zs) - min(a for a, _ in zs)
+    xy = max(estensione[2] - estensione[0], estensione[3] - estensione[1]) if estensione else 0.0
+    return dict(z=round(z, 2), xy=round(float(xy), 2))
+
+
+def _ortofoto_unita(scavo):
+    """Le fotografie delle singole unità (texture proprie), in coordinate locali."""
+    E0, N0 = scavo.origine["E0"], scavo.origine["N0"]
+    out = {}
+    for u, o in (getattr(scavo, "ortofoto_unita", None) or {}).items():
+        if scavo.modello is not None and int(u) not in scavo.modello.unita:
+            continue
+        x0, y0, x1, y1 = o.estensione
+        out[int(u)] = dict(jpeg=base64.b64encode(o.jpeg).decode(), estensione=[x0 - E0, y0 - N0, x1 - E0, y1 - N0],
+                           nome=o.nome)
     return out
 
 

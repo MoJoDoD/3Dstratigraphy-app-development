@@ -19,6 +19,17 @@ def vocabolario_utente_separato(tmp_path_factory):
     V.ricarica()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def cache_separata(tmp_path_factory):
+    """La cache dei dati ridotti (DEM, ortofoto, modelli 3D) dei test non va nella cartella dell'utente."""
+    from stratigrafia3d import cache
+    d = str(tmp_path_factory.mktemp("cache"))
+    vecchia = cache.cartella
+    cache.cartella = lambda: d
+    yield d
+    cache.cartella = vecchia
+
+
 @pytest.fixture(scope="session")
 def demo(tmp_path_factory):
     """Scavo dimostrativo generato una volta per tutta la sessione di test."""

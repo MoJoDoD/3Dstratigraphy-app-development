@@ -13,6 +13,7 @@ import numpy as np
 from .superficie import georef
 
 LATO_MAX = 4096
+LATO_UNITA = 1024                # texture propria di una singola unità
 PIXEL_MAX = 400_000_000          # oltre, meglio ridurre l'immagine prima (GIS)
 
 
@@ -26,14 +27,39 @@ class Ortofoto:
 
     @classmethod
     def leggi(cls, path, limiti=None, margine=5.0, lato_max=LATO_MAX):
-        """Legge un GeoTIFF a colori. ``limiti`` (x0, y0, x1, y1): ritaglia sull'area, con un margine."""
+        """Legge un GeoTIFF a colori. ``limiti`` (x0, y0, x1, y1): ritaglia sull'area, con un margine. Il
+        risultato resta nella cache (cache.py): le ortofoto da centinaia di MB si decodificano una volta."""
+        from . import cache
+        cp = cache.percorso("ortofoto", path, None if limiti is None else [round(float(v), 2) for v in limiti],
+                            margine, lato_max)
+        b = cache.leggi(cp)
+        if b is not None:
+            try:
+                return cls.da_bytes(b)
+            except Exception:
+                pass
+        o = cls._leggi(path, limiti, margine, lato_max)
+        cache.scrivi(cp, o.a_bytes())
+        return o
+
+    @classmethod
+    def _leggi(cls, path, limiti=None, margine=5.0, lato_max=LATO_MAX):
         g = georef(path)
-        if g["righe"] * g["colonne"] > PIXEL_MAX:
-            raise RuntimeError(f"Ortofoto troppo grande ({g['colonne']} × {g['righe']} pixel): riducila nel GIS "
-                               "a una risoluzione adatta alla vista d'insieme (per esempio 5 cm)")
-        img = _pixel(path)
         x0, y0, x1, y1 = g["estensione"]
         sx, sy = g["passo"]
+        # riduzione già in lettura: l'immagine intera (anche miliardi di pixel) non passa mai dalla memoria
+        larg, alt = g["colonne"], g["righe"]
+        if limiti is not None:
+            a, b, c, d = limiti
+            larg = min(larg, (c - a + 2 * margine) / sx)
+            alt = min(alt, (d - b + 2 * margine) / sy)
+        k = max(1, int(np.floor(max(larg, alt) / lato_max)))
+        if k > 1 or g["righe"] * g["colonne"] > PIXEL_MAX:
+            img = _pixel_ridotti(path, max(k, 1))
+            f = g["righe"] / img.shape[0]
+            sx, sy = (x1 - x0) / img.shape[1], (y1 - y0) / img.shape[0]
+        else:
+            img = _pixel(path)
         # ritaglio sull'area dello scavo
         c0, c1, r0, r1 = 0, img.shape[1], 0, img.shape[0]
         if limiti is not None:
@@ -81,6 +107,27 @@ class Ortofoto:
         meta = json.loads(b[4:4 + n].decode("utf-8"))
         return cls(b[4 + n:], meta["estensione"], meta["larghezza"], meta["altezza"], meta.get("nome", ""),
                    meta.get("passo"))
+
+
+def _pixel_ridotti(path, k):
+    """Pixel RGB ridotti di un fattore ``k`` (vedi superficie.leggi_tiff_ridotto)."""
+    from .superficie import leggi_tiff_ridotto
+    try:
+        a, _, _ = leggi_tiff_ridotto(path, k)
+    except Exception as e:
+        raise RuntimeError(f"Impossibile leggere l'ortofoto: {e}") from e
+    return _rgb(a)
+
+
+def _rgb(a):
+    if a.ndim == 2:
+        a = np.stack([a] * 3, axis=-1)
+    if a.shape[-1] == 4:              # trasparenza: sfondo bianco
+        alfa = a[..., 3:4].astype("float32") / 255
+        a = (a[..., :3] * alfa + 255 * (1 - alfa)).astype("uint8")
+    if a.dtype != np.uint8:
+        a = np.clip(a, 0, 255).astype("uint8")
+    return np.ascontiguousarray(a[..., :3])
 
 
 def _pixel(path):

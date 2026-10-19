@@ -634,6 +634,8 @@ def ruolo_layer(nome, geometria, ha_z=False, campi=()):
             else:
                 return None, 0.5, "punti senza quota"
     elif geometria == "linea":
+        if ruolo in ("usm", "area") and not ha_z:
+            return None, 0.6, "linee di muri o del perimetro (non tracce di sezione)"
         if ruolo not in ("profili", "sezioni", "fondi"):
             ruolo, p = ("profili", 0.5) if ha_z else ("sezioni", 0.35)
             motivo = "linee 3D" if ha_z else "linee 2D: forse tracce di sezione"
@@ -1127,8 +1129,13 @@ def _statistiche_raster(path, g):
     try:
         z = tifffile.memmap(path, mode="r")        # non compresso: si leggono solo le celle campionate
     except Exception:
-        with tifffile.TiffFile(path) as t:
-            z = t.pages[0].asarray()
+        # compresso (LZW di Metashape…): versione ridotta a 2 cm, che resta in cache per l'importazione
+        from .dem_unita import leggi_ridotto
+        try:
+            z = leggi_ridotto(path).z
+        except Exception:
+            with tifffile.TiffFile(path) as t:
+                z = t.pages[0].asarray()
     if z.ndim == 3:
         z = z[..., 0] if z.shape[-1] <= 4 else z[0]
     passo = max(1, int((z.size / 1_000_000) ** 0.5))

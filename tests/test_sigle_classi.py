@@ -280,6 +280,12 @@ def cartella_dem(cartella, tmp_path_factory):
     _dem_unita(str(r / "G2_A3_DEM_0710.tif"), X0 + 5, Y0 + 5, 2.0, 1174.35, dentro=zona)
     _dem_unita(str(r / "G2_A3-4_DEM_0810.tif"), X0 + 5, Y0 + 5, 2.0, 1174.20, dentro=zona)
     _dem_unita(str(r / "AREA_G_DEM_1210.tif"), X0 - 2, Y0 - 2, 12.0, 1174.0, cella=0.05)
+    # ortofoto dell'unità A3, scattata lo stesso giorno del suo primo DEM
+    import tifffile
+    img = np.zeros((200, 200, 3), "uint8")
+    img[..., 0] = 180
+    tifffile.imwrite(str(r / "G2_A3_ortho_0510.tif"), img, photometric="rgb", extratags=[
+        (33550, "d", 3, (0.01, 0.01, 0.0), False), (33922, "d", 6, (0.0, 0.0, 0.0, X0 + 5, Y0 + 7, 0.0), False)])
     return str(d)
 
 
@@ -297,7 +303,7 @@ def test_date_e_nomi_dei_dem():
     assert sg.unita_nel_nome("G2_A16-33-B33_DEM_2909", c, noti) == [1016, 1033, 2033]
 
 
-def test_dem_delle_unita(cartella_dem):
+def test_dem_delle_unita(cartella_dem, tmp_path):
     from stratigrafia3d.ricostruzione import ricostruisci
     abb = importa.proponi([cartella_dem])
     dem = {os.path.basename(d["percorso"]): d for d in abb.dem_unita}
@@ -318,6 +324,17 @@ def test_dem_delle_unita(cartella_dem):
     assert abs(float(np.median([p.z for p in inf.geometry])) - 1174.21) < 0.02    # il più recente
     assert any("Modelli del terreno delle unità" in n for n in s.note_importazione)
     assert not [p for p in s.verifica() if p.livello == "errore"]
+    # la muratura B3 non ha quote: sommità dal modello del terreno generale
+    b3 = q[(q["us"] == 2003) & (q["tipo_quota"] == "rasatura")]
+    assert len(b3) >= 5 and set(b3["origine"]) == {"dem"}
+    # texture propria dell'unità
+    assert 1003 in s.ortofoto_unita and s.ortofoto_unita[1003].larghezza <= 1028
     ricostruisci(s)
     m = s.modello.unita[1003]
     assert abs(float(np.median(m.top)) - 1174.51) < 0.03 and float(np.median(m.top - m.bot)) > 0.2
+    from stratigrafia3d.esporta import dati_visualizzatore
+    d = dati_visualizzatore(s)
+    assert 1003 in d["ortofoto_unita"] and d["rilievo"]["xy"] > 0
+    s.salva(str(tmp_path / "dem.scavo"))
+    r = Scavo.apri(str(tmp_path / "dem.scavo"))
+    assert 1003 in r.ortofoto_unita and 1003 in r.modello.unita

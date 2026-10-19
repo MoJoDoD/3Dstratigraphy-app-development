@@ -30,7 +30,10 @@ It runs offline on your own computer, as a desktop app or from the command line.
   photogrammetry targets are recognised in total-station point files. Copies and the outputs of other
   programs left in a folder are set aside. **Terrain models of single units** ("G2_A16_DEM_2409.tif"),
   as produced by photogrammetry of each exposed context, give a unit its plan, its top (the earliest
-  model) and the surface reached (the latest).
+  model) and the surface reached (the latest). A unit's own orthophoto becomes its texture.
+- **Handles large archives.** OBJ models of hundreds of MB, and DEMs and orthophotos at millimetre
+  resolution, are read already reduced and kept in a cache, so the same archive imports quickly the
+  next time.
 - **Reconstructs with whatever data exist.** Units with surveyed levels are interpolated by kriging.
   Where only depths and thicknesses were recorded, units are built down from a reference surface (a
   terrain model, a constant level or the surveyed levels) and stacked in stratigraphic order. Every

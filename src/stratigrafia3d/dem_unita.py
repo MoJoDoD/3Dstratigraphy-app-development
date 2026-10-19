@@ -13,7 +13,6 @@ La base degli strati si aggancia poi, come sempre, al tetto delle unità sottost
 I DEM con più unità nel nome («G2_A16-33-B33») danno le quote delle unità già note dentro le loro piante.
 I DEM senza unità nel nome («AREA_G_DEM», «G12_apertura_DEM») restano superfici di riferimento.
 """
-import hashlib
 import os
 import re
 
@@ -60,38 +59,22 @@ def data_dal_nome(percorso):
     return anno, mm, gg
 
 
-def _cartella_cache():
-    d = os.path.join(os.path.expanduser("~"), ".stratigrafia3d", "dem_ridotti")
-    os.makedirs(d, exist_ok=True)
-    return d
-
-
 def leggi_ridotto(percorso, cella=CELLA):
-    """Il DEM a ``cella`` metri (un valore ogni k celle): Raster. Il risultato resta in una cache accanto alle
-    impostazioni, così una nuova importazione non decodifica di nuovo i file grandi."""
-    from .superficie import Raster, georef
-    try:
-        st = os.stat(percorso)
-        chiave = hashlib.sha1(f"{os.path.abspath(percorso)}|{st.st_mtime_ns}|{st.st_size}|{cella}".encode()).hexdigest()
-        cache = os.path.join(_cartella_cache(), chiave + ".npz")
-        if os.path.exists(cache):
-            with open(cache, "rb") as f:
-                return Raster.da_bytes(f.read())
-    except OSError:
-        cache = None
-    passo = georef(percorso)["passo"][0]
-    r = Raster.leggi(percorso)
-    k = max(1, int(round(cella / max(passo, 1e-6))))
-    if k > 1:
-        # la prima cella ridotta è centrata dove era il centro della cella (k//2, k//2) dell'originale
-        z = r.z[k // 2::k, k // 2::k]
-        r = Raster(z, r.x0 + (k // 2) * r.sx, r.y0 - (k // 2) * r.sy, r.sx * k, r.sy * k, None, r.nome)
-    if cache:
+    """Il DEM a ``cella`` metri: Raster. Si legge il livello ridotto del GeoTIFF più vicino, se il file ne
+    ha (piramidi interne), altrimenti si decodifica una striscia alla volta tenendo un valore ogni k celle:
+    la memoria resta quella del risultato anche per DEM di centinaia di milioni di celle. Il risultato va
+    nella cache (cache.py): una nuova importazione non decodifica di nuovo i file grandi."""
+    from . import cache
+    from .superficie import Raster, leggi_griglia_ridotta
+    cp = cache.percorso("dem", percorso, cella)
+    b = cache.leggi(cp)
+    if b is not None:
         try:
-            with open(cache, "wb") as f:
-                f.write(r.a_bytes())
-        except OSError:
+            return Raster.da_bytes(b)
+        except Exception:
             pass
+    r = leggi_griglia_ridotta(percorso, cella)
+    cache.scrivi(cp, r.a_bytes())
     return r
 
 
