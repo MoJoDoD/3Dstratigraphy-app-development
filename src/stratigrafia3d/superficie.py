@@ -49,8 +49,9 @@ class Raster:
             try:
                 z = p.asarray()
             except Exception as e:
-                raise RuntimeError(f"Compressione del raster non supportata ({p.compression}); "
-                                   "salvalo senza compressione o con compressione DEFLATE") from e
+                raise RuntimeError(f"Compressione del raster non supportata ({p.compression}); esegui di nuovo "
+                                   "l'installazione (pacchetto «imagecodecs») o salva il raster senza "
+                                   "compressione") from e
         if z.ndim == 3:
             z = z[..., 0] if z.shape[-1] <= 4 else z[0]
         if z.dtype == np.int16:                           # valori "vuoti" tipici dei DEM interi
