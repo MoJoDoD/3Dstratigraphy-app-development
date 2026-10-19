@@ -206,11 +206,8 @@ def in_attesa(scavo):
 
 # ---------------------------------------------------------------------------------------------- fogli
 def _sha256(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    from .progetto import _sha256 as f
+    return f(path)
 
 
 def mappa_fogli(abb):
@@ -689,12 +686,13 @@ def _aggiorna_impronta(scavo, path):
 # ---------------------------------------------------------------------------------------------- dai file
 def sorgenti_cambiate(scavo):
     """File d'origine cambiati (o spariti) dopo l'importazione o l'ultima riscrittura."""
+    from .progetto import impronta_uguale
     out = []
     for s in scavo.sorgenti:
         p = s["percorso"]
         if not os.path.exists(p):
             out.append(dict(percorso=p, stato="mancante"))
-        elif os.path.getsize(p) != s.get("dimensione") or _sha256(p) != s.get("sha256"):
+        elif os.path.getsize(p) != s.get("dimensione") or not impronta_uguale(p, s.get("sha256")):
             out.append(dict(percorso=p, stato="cambiato"))
     return out
 

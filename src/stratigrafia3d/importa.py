@@ -435,22 +435,24 @@ def _coords(g):
 def esamina_raster(files):
     """Descrizione dei raster tra i file: percorso -> dict (con «tipo»: «dem» o «ortofoto») o errore."""
     from .superficie import Raster, EST_RASTER, georef, e_ortofoto, e_differenza
-    out = {}
-    for f in files:
-        if os.path.splitext(f)[1].lower() in EST_RASTER:
-            try:
-                g = georef(f)
-                if e_ortofoto(g):
-                    out[f] = dict(tipo="ortofoto", nome=os.path.basename(f), righe=g["righe"], colonne=g["colonne"],
-                                  passo=round(g["passo"][0], 3), estensione=[round(v, 2) for v in g["estensione"]])
-                else:
-                    from .dem_unita import leggi_ridotto      # DEM al millimetro: basta la versione a 2 cm
-                    d = leggi_ridotto(f).descrizione()
-                    d["nome"] = os.path.basename(f)
-                    out[f] = dict(d, tipo="dem", differenza=e_differenza(d))
-            except Exception as e:
-                out[f] = dict(errore=str(e))
-    return out
+    def uno(f):
+        try:
+            g = georef(f)
+            if e_ortofoto(g):
+                return dict(tipo="ortofoto", nome=os.path.basename(f), righe=g["righe"], colonne=g["colonne"],
+                            passo=round(g["passo"][0], 3), estensione=[round(v, 2) for v in g["estensione"]])
+            from .dem_unita import leggi_ridotto      # DEM al millimetro: basta la versione a 2 cm (in cache)
+            d = leggi_ridotto(f).descrizione()
+            d["nome"] = os.path.basename(f)
+            return dict(d, tipo="dem", differenza=e_differenza(d))
+        except Exception as e:
+            return dict(errore=str(e))
+    raster = [f for f in files if os.path.splitext(f)[1].lower() in EST_RASTER]
+    if len(raster) > 1:
+        from concurrent.futures import ThreadPoolExecutor      # la decompressione rilascia il GIL
+        with ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 2)) as ex:
+            return dict(zip(raster, ex.map(uno, raster)))
+    return {f: uno(f) for f in raster}
 
 
 def esamina(files):
@@ -999,6 +1001,10 @@ class Abbinamento:
     # modelli del terreno di singole unità («G2_A16_DEM_2409.tif»): [{"percorso", "unita": [numeri], "data":
     # [anno, mese, giorno] o None}] (vedi dem_unita.py)
     dem_unita: list = field(default_factory=list)
+    # ortofoto di singole unità («G2_A16_ortho_2409.tif»), stessa forma: texture propria di ogni unità
+    orto_unita: list = field(default_factory=list)
+    # modelli del terreno senza unità nel nome (aperture, vista generale): servono anche per le murature
+    dem_generali: list = field(default_factory=list)
 
     def a_json(self):
         return json.dumps(asdict(self), ensure_ascii=False, indent=1)
@@ -1443,6 +1449,22 @@ def _note_identificativi(df, col):
     return out
 
 
+def _rettilinee(g):
+    """Vero se le linee sono quasi tutte rette (tracce di sezione A–B), non contorni curvi."""
+    try:
+        rette = []
+        for geom in g.geometry:
+            for ln in getattr(geom, "geoms", [geom]):
+                if ln is None or ln.is_empty or ln.length <= 0:
+                    continue
+                c = list(ln.coords)
+                d = ((c[0][0] - c[-1][0]) ** 2 + (c[0][1] - c[-1][1]) ** 2) ** 0.5
+                rette.append(d >= 0.97 * ln.length)
+        return not rette or np.mean(rette) >= 0.6
+    except Exception:
+        return True
+
+
 def _etichetta_unita(u):
     """«B12» se le sigle di classe sono attive, altrimenti «US 12»."""
     cod = sg.attiva()
@@ -1763,9 +1785,15 @@ def _proponi(files, termini=None, scelte=None):
             else:
                 motivo.append(dal_nome)
         elif li.geometria == "linea":
-            if ruolo not in ("profili", "sezioni", "fondi", "ignora"):
+            if ruolo in ("usm", "area") and not li.ha_z:
+                ruolo = "ignora"         # allineamenti dei muri, perimetri disegnati come linee: non sono sezioni
+                motivo.append("linee di muri o del perimetro (non tracce di sezione)")
+            elif ruolo not in ("profili", "sezioni", "fondi", "ignora"):
                 ruolo = "profili" if li.ha_z else "sezioni"
                 motivo.append("linee 3D" if li.ha_z else "linee 2D")
+                if ruolo == "sezioni" and not _rettilinee(g):
+                    ruolo = "ignora"          # contorni (roccia, crolli…): una traccia di sezione è una retta
+                    motivo.append("non rettilinee: non sono tracce di sezione")
             else:
                 motivo.append(dal_nome)
         elif li.geometria == "testo":
@@ -1932,6 +1960,7 @@ def _proponi(files, termini=None, scelte=None):
                 e = er[f].get("estensione") or [0, 0, 0, 0]
                 return -(e[2] - e[0]) * (e[3] - e[1])
             raster.sort(key=_area)
+        abb.dem_generali = list(raster)
     from .modelli3d import EST_MODELLI
     for f in files:
         if os.path.splitext(f)[1].lower() in EST_MODELLI:
@@ -1942,6 +1971,25 @@ def _proponi(files, termini=None, scelte=None):
             abb.note.append(f"Modello 3D «{os.path.basename(f)}»: sarà mostrato accanto alle unità" if not
                             spec.get("escluso") else f"Modello 3D «{os.path.basename(f)}»: escluso "
                             "dall'inventario (si può includere nel riquadro dei modelli 3D)")
+    # ortofoto di singole unità («G2_A16_ortho_2409»): texture di quell'unità; tra le altre, la più estesa
+    if noti and orto:
+        from . import dem_unita as DU
+        for f in list(orto):
+            uu = sg.unita_nel_nome(os.path.splitext(os.path.basename(f))[0], None, noti)
+            if len(uu) == 1:
+                data = DU.data_dal_nome(f)
+                abb.orto_unita.append({"percorso": f, "unita": [int(uu[0])], "data": list(data) if data else None})
+                orto.remove(f)
+            elif uu:
+                orto.remove(f)             # più unità nella stessa foto: né texture propria né vista d'insieme
+        if abb.orto_unita:
+            abb.note.append(f"{len(abb.orto_unita)} ortofoto di singole unità (dal nome, es. "
+                            f"«{os.path.basename(abb.orto_unita[0]['percorso'])}»): texture di ciascuna unità")
+        if len(orto) > 1:
+            def _area_o(f):
+                e = er[f].get("estensione") or [0, 0, 0, 0]
+                return -(e[2] - e[0]) * (e[3] - e[1])
+            orto.sort(key=_area_o)
     if orto:
         abb.ortofoto = orto[0]
         abb.note.append(f"Ortofoto «{os.path.basename(orto[0])}»: sarà drappeggiata sul modello")
@@ -3556,7 +3604,7 @@ def _tabella_dai_punti(s, ruolo, tabs, note):
 def _superfici_dai_dem(s, abb, note):
     """Pianta e quote delle unità dai loro modelli del terreno (vedi dem_unita.py). Le piante si aggiungono
     solo alle US che non ne hanno una; le murature ricevono le quote di rasatura dentro la loro pianta."""
-    if not abb.dem_unita:
+    if not abb.dem_unita and not abb.dem_generali:
         return
     from . import dem_unita as DU
     schede_us = set(s.tabelle[sc.S_US][sc.C_US]) if sc.S_US in s.tabelle else set()
@@ -3646,6 +3694,55 @@ def _superfici_dai_dem(s, abb, note):
                     P2 = DU.campiona(ultimo, geom)
                     uu += [u] * len(P2); tipi += [sc.Q_INF] * len(P2); pts += [Point(*p) for p in P2]
                     con_fondo += 1
+    # murature senza quote di rasatura: la sommità è il punto più alto dei DEM dentro la loro pianta, la base
+    # almeno la superficie più bassa scavata lì accanto
+    con_quote = set(uu)
+    q0 = s.layers.get(sc.L_QUOTE)
+    if q0 is not None and len(q0):
+        con_quote |= set(q0.loc[q0[sc.F_TIPO_QUOTA].isin([sc.Q_RASATURA, sc.Q_SUP]), sc.F_US].dropna().astype(int))
+    tutti = [d["percorso"] for d in abb.dem_unita if os.path.exists(d["percorso"])] + \
+        [p for p in (abb.dem_generali or []) if os.path.exists(p)]
+    muri_fatti = 0
+    for u, geom in poli_m.items():
+        if u in con_quote or not tutti:
+            continue
+        P = None
+        fondi = []
+        anello = geom.buffer(0.4).difference(geom.buffer(0.02))
+        for p in tutti:
+            r = leggi(p)
+            if r is None:
+                continue
+            e = r.descrizione()["estensione"]
+            x0, y0, x1, y1 = geom.bounds
+            if x1 < e[0] or x0 > e[2] or y1 < e[1] or y0 > e[3]:
+                continue
+            Q = DU.campiona(r, geom, 300)
+            if len(Q) >= 5:
+                if P is None:
+                    P = Q
+                else:            # stessa griglia di campionamento: si tiene il più alto punto per punto
+                    from scipy.spatial import cKDTree
+                    d, i = cKDTree(Q[:, :2]).query(P[:, :2])
+                    vicini = d < 1e-6
+                    P[vicini, 2] = np.maximum(P[vicini, 2], Q[i[vicini], 2])
+            A = DU.campiona(r, anello, 200)
+            if len(A) >= 5:
+                fondi.append(float(np.percentile(A[:, 2], 5)))
+        if P is None or len(P) < 5:
+            continue
+        uu += [u] * len(P); tipi += [sc.Q_RASATURA] * len(P); pts += [Point(*p) for p in P]
+        if fondi:
+            base = min(fondi)
+            if base < float(np.median(P[:, 2])) - 0.05:
+                c = geom.representative_point()
+                b0 = geom.bounds
+                for x, y in ((c.x, c.y), (b0[0], b0[1]), (b0[2], b0[3]), (b0[0], b0[3]), (b0[2], b0[1])):
+                    uu.append(u); tipi.append(sc.Q_FONDAZIONE); pts.append(Point(x, y, base))
+        muri_fatti += 1
+    if muri_fatti:
+        note.append(f"{muri_fatti} murature senza quote: sommità dai modelli del terreno, base dalla superficie "
+                    "più bassa scavata accanto")
     if pts:
         q = gpd.GeoDataFrame({sc.F_US: uu, sc.F_TIPO_QUOTA: tipi, "origine": "dem"}, geometry=pts, crs=s.crs)
         base = s.layers.get(sc.L_QUOTE)
@@ -3660,6 +3757,48 @@ def _superfici_dai_dem(s, abb, note):
         note.append(f"{mancanti} modelli del terreno delle unità non trovati")
     if errori:
         note.append(f"Modelli del terreno non letti: {'; '.join(errori[:3])}{'…' if len(errori) > 3 else ''}")
+
+
+def _ortofoto_delle_unita(s, abb, note):
+    """Texture propria delle unità che hanno un'ortofoto con il loro nome: quella della stessa data del DEM da
+    cui viene il tetto (la superficie fotografata quel giorno), altrimenti la più antica. Ritorna i file usati."""
+    if not abb.orto_unita:
+        return set()
+    from .ortofoto import Ortofoto, LATO_UNITA
+    poli = {}
+    for nome_l, campo in ((sc.L_US, sc.F_US), (sc.L_USM, sc.F_USM)):
+        g = s.layers.get(nome_l)
+        if g is not None and len(g):
+            for u, geom in zip(g[campo], g.geometry):
+                if geom is not None and not pd.isna(u):
+                    poli[int(u)] = unary_union([poli[int(u)], geom]) if int(u) in poli else geom
+    date_tetto = {}
+    for d in abb.dem_unita or []:
+        if len(d["unita"]) == 1 and d.get("data"):
+            u = int(d["unita"][0])
+            date_tetto[u] = min(date_tetto.get(u, tuple(d["data"])), tuple(d["data"]))
+    per_u = {}
+    for d in abb.orto_unita:
+        if os.path.exists(d["percorso"]):
+            per_u.setdefault(int(d["unita"][0]), []).append((tuple(d.get("data") or (0, 0, 0)), d["percorso"]))
+    usate, errori = set(), []
+    s.ortofoto_unita = {}
+    for u, lst in per_u.items():
+        if u not in poli:
+            continue
+        lst.sort()
+        stessa = [p for dt, p in lst if dt == date_tetto.get(u)]
+        p = stessa[0] if stessa else lst[0][1]
+        try:
+            s.ortofoto_unita[u] = Ortofoto.leggi(p, limiti=tuple(poli[u].bounds), margine=0.1, lato_max=LATO_UNITA)
+            usate.add(p)
+        except Exception as e:
+            errori.append(f"{os.path.basename(p)}: {e}")
+    if s.ortofoto_unita:
+        note.append(f"Ortofoto delle unità: {len(s.ortofoto_unita)} unità con la propria fotografia come texture")
+    if errori:
+        note.append(f"Ortofoto delle unità non lette: {'; '.join(errori[:3])}{'…' if len(errori) > 3 else ''}")
+    return usate
 
 
 def _colonne_uniche(df):
@@ -4130,8 +4269,23 @@ def _applica(abb, log=None):
                 note.append(f"Ortofoto «{d['nome']}»: {d['larghezza']} × {d['altezza']} pixel, {d['passo_cm']} cm")
             except Exception as e:
                 note.append(f"Ortofoto non letta: {e}")
+    orto_u_fonti = _ortofoto_delle_unita(s, abb, note)
 
     # ------------------------------------------------ modelli 3D rilevati
+    # budget complessivo: molti modelli fotogrammetrici insieme non devono bloccare il visualizzatore
+    from .modelli3d import Modello3D, TRIANGOLI_TOTALI, TRIANGOLI_MAX
+    attivi = [x for x in (abb.modelli3d or []) if not x.get("escluso") and x.get("percorso")]
+    n_mod = max(len(attivi), 1)
+    tri_max = int(np.clip(TRIANGOLI_TOTALI / n_mod, 40_000, TRIANGOLI_MAX))
+    lato_tex = 4096 if n_mod <= 2 else (2048 if n_mod <= 6 else 1024)
+    riquadro = None
+    for nome_l in (sc.L_AREA, sc.L_US, sc.L_USM):
+        g = s.layers.get(nome_l)
+        if g is not None and len(g):
+            b = g.total_bounds
+            riquadro = b if riquadro is None else [min(riquadro[0], b[0]), min(riquadro[1], b[1]),
+                                                     max(riquadro[2], b[2]), max(riquadro[3], b[3])]
+    lontani = []
     modelli_fonti = set()
     for spec in abb.modelli3d or []:
         p = spec.get("percorso")
@@ -4141,30 +4295,37 @@ def _applica(abb, log=None):
             note.append(f"Modello 3D non trovato: {p}")
             continue
         try:
-            from .modelli3d import Modello3D
-            m = Modello3D.leggi(p, spostamento=tuple(spec.get("spostamento") or (0, 0, 0)))
+            m = Modello3D.leggi(p, spostamento=tuple(spec.get("spostamento") or (0, 0, 0)), triangoli_max=tri_max,
+                                lato_texture=lato_tex)
         except Exception as e:
             note.append(f"Modello 3D «{os.path.basename(p)}» non letto: {e}")
             continue
         d = m.descrizione()
-        g = s.layers.get(sc.L_US)
-        if g is not None and len(g):
-            x0, y0, x1, y1 = g.total_bounds
+        if riquadro is not None:
+            x0, y0, x1, y1 = riquadro
             cx, cy = m.V[:, 0].mean(), m.V[:, 1].mean()
             if max(x0 - cx, cx - x1, y0 - cy, cy - y1) > 1000:
                 note.append(f"Il modello 3D «{d['nome']}» è a più di un chilometro dallo scavo: forse è stato "
                             "esportato con uno spostamento delle coordinate, da indicare nel riquadro dei modelli 3D")
+            else:
+                mx0, my0, mx1, my1 = d["estensione"][0], d["estensione"][1], d["estensione"][3], d["estensione"][4]
+                if mx1 < x0 - 5 or mx0 > x1 + 5 or my1 < y0 - 5 or my0 > y1 + 5:
+                    lontani.append(d["nome"])         # un'altra area del sito: appesantirebbe la vista per nulla
+                    continue
         s.modelli3d.append(m)
         modelli_fonti.add(p)
         note.append(f"Modello 3D «{d['nome']}»: {d['triangoli']:,} triangoli".replace(",", ".")
                     + (", con texture" if d["texture"] else (", con colori" if d["colori"] else "")))
+    if lontani:
+        note.append(f"{len(lontani)} modelli 3D fuori dall'area delle unità non mostrati ({', '.join(lontani[:4])}"
+                    f"{'…' if len(lontani) > 4 else ''}): si possono includere nel riquadro dei modelli 3D")
 
     now = _dt.datetime.now().isoformat(timespec="seconds")
     fonti = sorted({x.sorgente for x in abb.layers if x.ruolo != "ignora"} | ({abb.tabella} if abb.tabella else set())
                    | ({raster_fonte} if raster_fonte else set()) | ({orto_fonte} if orto_fonte else set())
                    | ({corr_fonte} if corr_fonte else set()) | modelli_fonti)
     fonti = sorted(set(fonti) | {f for f in (abb.tabelle_extra or []) if f and os.path.exists(f)})
-    dem_fonti = {d["percorso"] for d in (abb.dem_unita or []) if os.path.exists(d["percorso"])}
+    dem_fonti = {d["percorso"] for d in (abb.dem_unita or []) if os.path.exists(d["percorso"])} | orto_u_fonti
     fonti = sorted(set(fonti) | dem_fonti)
     for p in fonti:
         s.sorgenti.append(dict(percorso=os.path.abspath(p),

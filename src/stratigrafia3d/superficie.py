@@ -126,6 +126,59 @@ class Raster:
         return cls(d["z"], x0, y0, sx, sy, None, str(d["nome"]))
 
 
+ELEMENTI_IN_MEMORIA = 60_000_000      # oltre, il raster si decodifica su disco (memmap) prima di ridurlo
+
+
+def leggi_tiff_ridotto(path, k):
+    """Pixel di un GeoTIFF ridotti di un fattore ``k`` (un valore ogni k), senza tenere in memoria l'immagine
+    intera: si usa il livello delle piramidi interne più vicino (se c'è) e, per immagini grandi, la
+    decodifica va in un file temporaneo. Ritorna (array, fattore effettivo, scarto in pixel originali del
+    centro della prima cella dall'angolo)."""
+    import tifffile
+    k = max(1, int(k))
+    with tifffile.TiffFile(path) as t:
+        serie = t.series[0]
+        livelli = list(getattr(serie, "levels", None) or [serie])
+
+        def righe(x):
+            sh = x.shape
+            return sh[1] if len(sh) == 3 and sh[0] <= 4 and sh[-1] > 4 else sh[0]
+        r0 = righe(livelli[0])
+        scelto, f = livelli[0], 1.0
+        for lv in livelli[1:]:
+            fl = r0 / max(righe(lv), 1)
+            if fl <= k * 1.01 and fl > f:
+                scelto, f = lv, fl
+        resto = max(1, int(round(k / f)))
+        try:
+            grande = int(np.prod(scelto.shape)) > ELEMENTI_IN_MEMORIA and resto > 1
+            a = scelto.asarray(out="memmap") if grande else scelto.asarray()
+        except Exception as e:
+            raise RuntimeError(f"Compressione del raster non supportata ({scelto.pages[0].compression if hasattr(scelto, 'pages') else '?'}); "
+                               "esegui di nuovo l'installazione (pacchetto «imagecodecs») o salva il raster senza "
+                               "compressione") from e
+        if a.ndim == 3 and a.shape[0] <= 4 and a.shape[-1] > 4:
+            a = np.moveaxis(a, 0, -1)
+        a = np.array(a[resto // 2::resto, resto // 2::resto])
+    return a, f * resto, (resto // 2 + 0.5) * f
+
+
+def leggi_griglia_ridotta(path, cella):
+    """Raster (una banda) a circa ``cella`` metri, letto con ``leggi_tiff_ridotto``."""
+    g = georef(path)
+    sx, sy = g["passo"]
+    k = max(1, int(round(cella / max(sx, 1e-9))))
+    if k == 1:
+        return Raster.leggi(path)
+    z, f, scarto = leggi_tiff_ridotto(path, k)
+    if z.ndim == 3:
+        z = z[..., 0]
+    if z.dtype == np.int16:
+        z = np.where((z == -32768) | (z == 32767), np.nan, z.astype("float32"))
+    xs, ys = g["angolo"]
+    return Raster(z, xs + scarto * sx, ys - scarto * sy, sx * f, sy * f, g["nodata"], os.path.basename(path))
+
+
 def e_differenza(descr):
     """Un raster di differenze (troncamento, spessore asportato) e non di quote: valori tutti tra -20 e 0."""
     return descr.get("quota_max") is not None and descr["quota_max"] <= 0 and descr["quota_min"] >= -20

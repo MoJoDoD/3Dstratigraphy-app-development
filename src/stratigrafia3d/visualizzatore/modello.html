@@ -302,6 +302,9 @@ const S=D.schede;                  // schede per numero
 $("titolo").textContent=D.sito||"Scavo"; document.title=(D.sito||"Scavo")+" – Stratigrafia 3D"; $("tagDemo").hidden=!D.demo;
 const FASI={}; D.fasi.forEach(f=>FASI[f.Fase]=f);
 const PH_COL=["#8e8a7c","#5c7196","#6f8f45","#b88a2c","#a8573a","#7b4b86","#cf6e4f","#2f8580","#6d6659"];
+// fasi presenti e livello massimo della sequenza (colori di ripiego e impostazioni iniziali della vista)
+const N_FASI=new Set(Object.values(D.schede).map(r=>{const f=+r.Fase; return isNaN(f)?0:f})).size, LEVMAX0=D.livello_max||0;
+function hsl(h,sa,l){const f=n=>{const k=(n+h/30)%12,a=sa*Math.min(l,1-l);return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,"0")};return "#"+f(0)+f(8)+f(4)}
 const CAT_COL={"strato":"#a88b62","crollo":"#c0694d","riempimento":"#4f4237","taglio":"#222222","piano pavimentale":"#c58f7e","preparazione":"#bdb2a0","focolare":"#d0622f","struttura":"#a2553a","muro":"#c9c2b4","canaletta":"#8f9aa3","soglia":"#9aa29b"};
 // fasi e categorie oltre quelle previste: colori generati (angolo aureo), stabili tra un'apertura e l'altra
 {const hsl=(h,sa,l)=>{const f=n=>{const k=(n+h/30)%12,a=sa*Math.min(l,1-l);return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,"0")};return "#"+f(0)+f(8)+f(4)};
@@ -387,7 +390,11 @@ function colorFor(u){
   if(mode.startsWith("f:")){const k=mode.slice(2), v=campoOf(u,k); return v==null?"#b9b5ad":(CAMPI_COL[k]?.pal[v]||"#999")}
   const s=S[u]; if(s&&/^#[0-9a-f]{6}$/i.test(String(s["Colore HEX"]||""))) return s["Colore HEX"];
   if(s&&s._tipo==="USM") return "#c9c2b4";
-  return CAT_COL[catOf(u)]||PH_COL[faseOf(u)]||"#9a8f80";   // nessun colore in scheda: per categoria o fase
+  if(CAT_COL[catOf(u)]) return CAT_COL[catOf(u)];
+  if(N_FASI>1) return PH_COL[faseOf(u)]||"#9a8f80";
+  // nessun colore, categoria o fase: tono del sedimento per posizione nella sequenza (chiaro = recente)
+  const t=LEVMAX0?(s?._livello??0)/LEVMAX0:0.5;
+  return hsl(28+12*t,.32,.70-.36*t);
 }
 
 // modelli 3D rilevati: mesh in coordinate locali, con colori dei vertici o texture
@@ -411,8 +418,14 @@ if(M3D.children.length) $("oM3D").hidden=false;
 const ORTO=D.ortofoto||null;
 let ORTO_TEX=null;
 if(ORTO){ ORTO_TEX=new THREE.TextureLoader().load("data:image/jpeg;base64,"+ORTO.jpeg,()=>{ if($("colMode").value==="orto") applyColors() });
-  ORTO_TEX.anisotropy=renderer.capabilities.getMaxAnisotropy();
-  const o=document.createElement("option"); o.value="orto"; o.textContent="ortofoto"; $("colMode").insertBefore(o,$("colMode").options[1]) }
+  ORTO_TEX.anisotropy=renderer.capabilities.getMaxAnisotropy() }
+// fotografie delle singole unità (ortofoto fatte quando l'unità era esposta): texture propria di quell'unità
+const ORTO_U={};
+Object.entries(D.ortofoto_unita||{}).forEach(([u,o])=>{
+  const t=new THREE.TextureLoader().load("data:image/jpeg;base64,"+o.jpeg,()=>{ if($("colMode").value==="orto") applyColors() });
+  t.anisotropy=renderer.capabilities.getMaxAnisotropy(); ORTO_U[u]={tex:t,E:o.estensione,nome:o.nome} });
+const N_ORTO_U=Object.keys(ORTO_U).length, HA_ORTO=!!ORTO||N_ORTO_U>0;
+if(HA_ORTO){ const o=document.createElement("option"); o.value="orto"; o.textContent="ortofoto"; $("colMode").insertBefore(o,$("colMode").options[1]) }
 // ------------------------------------------------------------ unità: geometrie costruite a blocchi
 // Dati compatti (esporta.py): ogni unità è un prisma sulla propria triangolazione in pianta. Le piante
 // (XY e triangoli) e le quote (tetto, base) sono in elenchi senza doppioni: i riempimenti che ereditano
@@ -486,10 +499,11 @@ function spigoli(U){
 
 // materiali condivisi: uno per colore e stato (normale, trasparente, selezionata), non uno per unità
 const MATF=new Map(), MATB=new Map(), MATE=new Map(), MAT0=new THREE.MeshBasicMaterial(), MAT0L=new THREE.LineBasicMaterial();
-function matFronte(col,cut,st,orto,acc){
-  const k=col+"|"+(cut?1:0)+st+(orto?1:0)+(st===2?acc:""); let M=MATF.get(k); if(M) return M;
+function matFronte(col,cut,st,orto,acc,tex){
+  tex=tex||ORTO_TEX;
+  const k=col+"|"+(cut?1:0)+st+(orto?1:0)+(st===2?acc:"")+(orto&&tex?tex.uuid:""); let M=MATF.get(k); if(M) return M;
   const on=st===2, ghost=st===1;
-  M=new THREE.MeshStandardMaterial({color:orto?0xffffff:col,map:orto?ORTO_TEX:null,roughness:.92,metalness:0,side:cut?THREE.DoubleSide:THREE.FrontSide,
+  M=new THREE.MeshStandardMaterial({color:orto?0xffffff:col,map:orto?tex:null,roughness:.92,metalness:0,side:cut?THREE.DoubleSide:THREE.FrontSide,
     transparent:cut||ghost,opacity:cut?(on?.6:(ghost?.12:.28)):(ghost?.16:1),depthWrite:!(cut||ghost),clippingPlanes:clipArr(),
     polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,emissive:new THREE.Color(on?acc:"#000"),emissiveIntensity:on?.55:0});
   MATF.set(k,M); return M;
@@ -504,10 +518,10 @@ function matSpigoli(st,cut,acc){
 }
 let EDGES_ON=true;
 // stato grafico di un'unità (colore, selezione, trasparenza, spigoli): unico punto in cui si assegnano i materiali
-function contesto(){ return {orto:$("colMode").value==="orto"&&!!ORTO_TEX, acc:css("--accent")||"#c4321c"} }
+function contesto(){ return {orto:$("colMode").value==="orto"&&HA_ORTO, acc:css("--accent")||"#c4321c"} }
 function applicaStato(U,u,c){
   const on=u===selected, ghost=GHOST && selected!=null && !on && !clipOn, st=on?2:ghost?1:0;
-  if(U.front) U.front.material=matFronte(U.col,U.cut,st,c.orto&&!U.cut&&U.inOrto,c.acc);
+  if(U.front) U.front.material=matFronte(U.col,U.cut,st,c.orto&&!U.cut&&U.inOrto,c.acc,U.tex);
   if(U.back){ U.back.material=matRetro(U.col); U.back.visible=!ghost }
   if(U.edges){ U.edges.material=matSpigoli(st,U.cut,c.acc); U.edges.visible=EDGES_ON }
 }
@@ -516,10 +530,12 @@ function costruisci(U){
   const m=U.def, P=pianta(m.g), pos=posizioni(P,zeta(m.zt),U.cut?null:zeta(m.zb));
   const g=new THREE.BufferGeometry();
   g.setAttribute("position",new THREE.BufferAttribute(pos,3));
-  if(ORTO){ const E=ORTO.estensione, nv=pos.length/3, uv=new Float32Array(nv*2); let dentro=0;
+  const OU=ORTO_U[m.id], E=OU?OU.E:(ORTO?ORTO.estensione:null);
+  if(E){ const nv=pos.length/3, uv=new Float32Array(nv*2); let dentro=0;
     for(let i=0;i<nv;i++){const x=pos[3*i]+CX, y=CY-pos[3*i+2]; uv[2*i]=(x-E[0])/(E[2]-E[0]); uv[2*i+1]=(y-E[1])/(E[3]-E[1]);
       if(uv[2*i]>=0&&uv[2*i]<=1&&uv[2*i+1]>=0&&uv[2*i+1]<=1) dentro++}
-    U.inOrto=dentro>nv*0.5;            // l'immagine copre almeno metà dell'unità
+    U.inOrto=!!OU||dentro>nv*0.5;      // la propria fotografia, o l'ortofoto generale se copre metà dell'unità
+    U.tex=OU?OU.tex:ORTO_TEX;
     g.setAttribute("uv",new THREE.BufferAttribute(uv,2)) }
   g.setIndex(indice(P,!U.cut));
   g.computeVertexNormals(); g.computeBoundingSphere();
@@ -628,6 +644,11 @@ const removedAt=u=>S[u]._tipo!=="USM" && TOPD[u]<EXC;
 // esploso per fase: la posizione della fase tra quelle presenti (le fasi possono avere numeri radi)
 const FRANK={}; [...new Set(Object.values(S).map(r=>+r.Fase||0))].sort((a,b)=>a-b).forEach((f,i)=>FRANK[f]=i);
 {const nf=Object.keys(FRANK).length; if(nf>9){GAP=Math.round(0.3*9/nf*100)/100; $("expl").value=GAP; $("explO").textContent=Math.round(GAP*100)+" cm"}}
+// vista iniziale adatta ai dati: senza fasi l'esploso non separa nulla; con un rilievo vero (dislivelli di metri,
+// DEM fotogrammetrici) le quote si mostrano come sono; con le fotografie delle unità si parte dall'ortofoto
+if(N_FASI<=1){GAP=0; $("expl").value=0; $("explO").textContent="0 cm"}
+{const R=D.rilievo; if(R&&R.xy>0&&R.z/R.xy>0.06){VE=1; $("ve").value=1; $("veO").textContent="×1"}}
+if(N_ORTO_U>0) $("colMode").value="orto";
 function explIndex(u){ if(EXPL_MODE==="fase") return (FRANK[faseOf(u)]??0)*2 + (S[u]?._tipo==="USM"? .5:0); return S[u]?._livello??0 }
 function applyLayout(){
   Object.entries(units).forEach(([u,U])=>{
@@ -675,19 +696,36 @@ function highlight(){
 }
 
 // ------------------------------------------------------------ interfaccia: elenco
+// senza fasi, l'elenco si raggruppa per stanza, ambiente o locus, se le schede lo indicano
+const CAMPO_GRUPPO=(()=>{ if(N_FASI>1) return null;
+  const re=/^(room|space|room\/space|ambiente|vano|stanza|locus|loci|settore|sector|area|saggio|trench|quadrato|square)\b/i;
+  const ks=[...new Set(Object.values(S).flatMap(r=>Object.keys(r)))].filter(k=>!k.startsWith("_")&&re.test(k));
+  let best=null, bs=0;
+  ks.forEach(k=>{ const v=Object.values(S).map(r=>r[k]).filter(x=>x!=null&&String(x).trim()!=="");
+    const n=new Set(v.map(x=>String(x).split(/[,;]/)[0].trim())).size;
+    if(n>=2&&n<=80&&v.length>=Object.keys(S).length*.5&&v.length>bs){best=k;bs=v.length} });
+  return best })();
+const gruppoDi=u=>{ if(!CAMPO_GRUPPO) return String(faseOf(u)); const v=S[u]?.[CAMPO_GRUPPO];
+  return v==null||String(v).trim()===""?"—":String(v).split(/[,;]/)[0].trim() };
+const naturale=(a,b)=>String(a).localeCompare(String(b),"it",{numeric:true});
 function buildTree(){
   const byF={};
-  Object.keys(S).map(Number).forEach(u=>{if(units[u]) (byF[faseOf(u)]??=[]).push(u)});
+  Object.keys(S).map(Number).forEach(u=>{if(units[u]) (byF[gruppoDi(u)]??=[]).push(u)});
   const t=$("tree"); t.innerHTML="";
-  Object.keys(byF).map(Number).sort((a,b)=>b-a).forEach(f=>{
-    const F=FASI[f]||{Titolo:"Fase "+f}; const list=byF[f].sort((a,b)=>a-b);
+  const chiavi=CAMPO_GRUPPO?Object.keys(byF).sort(naturale):Object.keys(byF).map(Number).sort((a,b)=>b-a);
+  chiavi.forEach(f=>{
+    const list=byF[f].sort((a,b)=>naturale(ETI(a),ETI(b)));
     const d=document.createElement("div"); d.className="phase";
-    d.innerHTML=`<div class="phase-h"><input type="checkbox" checked aria-label="Mostra fase ${f}" data-f="${f}"><i class="sw" style="background:${PH_COL[f]}"></i><b>${f} · ${esc(F.Titolo)}</b><small>${F["Da (anno)"]!=null?esc(fmtY(F["Da (anno)"]))+"–"+esc(fmtY(F["A (anno)"])):""}</small></div>`+
+    let testa;
+    if(CAMPO_GRUPPO) testa=`<i class="sw" style="background:#b9b2a6"></i><b>${esc(f)}</b><small>${esc(CAMPO_GRUPPO)} · ${list.length}</small>`;
+    else { const F=FASI[f]||{Titolo:"Fase "+f};
+      testa=`<i class="sw" style="background:${PH_COL[f]}"></i><b>${f} · ${esc(F.Titolo)}</b><small>${F["Da (anno)"]!=null?esc(fmtY(F["Da (anno)"]))+"–"+esc(fmtY(F["A (anno)"])):""}</small>` }
+    d.innerHTML=`<div class="phase-h"><input type="checkbox" checked aria-label="Mostra ${esc(f)}" data-f="${esc(f)}">${testa}</div>`+
       list.map(u=>`<div class="unit" data-u="${u}"><input type="checkbox" checked aria-label="Mostra ${u}" data-u="${u}"><i class="c${S[u].Tipo==="negativa"?" neg":""}" data-c="${u}"></i><span class="n">${esc(ETI(u))}</span><span class="d">${esc(defOf(u))}</span></div>`).join("");
     t.appendChild(d);
   });
   t.addEventListener("change",e=>{
-    const el=e.target; if(el.dataset.f!=null){const f=+el.dataset.f; byF[f].forEach(u=>el.checked?hidden.delete(u):hidden.add(u))}
+    const el=e.target; if(el.dataset.f!=null){const f=el.dataset.f; byF[f].forEach(u=>el.checked?hidden.delete(u):hidden.add(u))}
     else if(el.dataset.u){const u=+el.dataset.u; el.checked?hidden.delete(u):hidden.add(u)}
     isolated=false; updateVisibility(); renderScheda();
   });
@@ -709,7 +747,7 @@ $("btnAll").onclick=()=>{hidden.clear();isolated=false;EXC=0;$("exc").value=0;up
 function buildLegend(){
   const mode=$("colMode").value, L=$("legend");
   if(mode==="fase") L.innerHTML="<h4>Fasi</h4>"+D.fasi.slice().reverse().map(f=>`<div><i style="background:${PH_COL[f.Fase]}"></i>${f.Fase} · ${esc(f.Titolo)}</div>`).join("");
-  else if(mode==="orto"&&ORTO) L.innerHTML=`<h4>Ortofoto</h4><div class="muted" style="max-width:190px;display:block">${esc(ORTO.nome)}, ${String(ORTO.passo_cm).replace(".",",")} cm per pixel, proiettata dall'alto su ogni unità. Sulle pareti ripide l'immagine appare stirata.</div>`;
+  else if(mode==="orto"&&HA_ORTO) L.innerHTML=`<h4>Ortofoto</h4><div class="muted" style="max-width:190px;display:block">${N_ORTO_U?`<span>${N_ORTO_U} unità con la propria fotografia, scattata quando erano esposte.</span> `:""}${ORTO?`<span>${esc(ORTO.nome)}, ${String(ORTO.passo_cm).replace(".",",")} cm per pixel, sulle altre unità.</span> `:""}<span>Proiettata dall'alto: sulle pareti ripide l'immagine appare stirata.</span></div>`;
   else if(mode==="aff"){const cs=Object.keys(AFF_COL).filter(k=>Object.keys(units).some(u=>affOf(+u)===k));
     L.innerHTML="<h4>Affidabilità della forma</h4>"+cs.map(c=>`<div><i style="background:${AFF_COL[c]}"></i>${esc(AFF_TXT[c])}</div>`).join("")}
   else if(mode.startsWith("f:")){const k=mode.slice(2), C=CAMPI_COL[k]; if(!C){L.innerHTML="";return}
@@ -849,7 +887,7 @@ $("lb").onclick=e=>{ if(e.target.id==="lb") chiudiLB() };
 function renderScheda(){
   const P=$("pScheda");
   if(selected==null){
-    const nU=Object.keys(S).length, nm=D.materiali.reduce((s,m)=>s+(m.NR||0),0);
+    const nU=(D.meshes||[]).length||Object.keys(S).length, nm=D.materiali.reduce((s,m)=>s+(m.NR||0),0);
     P.innerHTML=`<div class="empty"><p style="font-family:var(--f-ui);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px">${D.demo?"Scavo immaginario · ":""}${esc(ORIG.crs||"coordinate locali")}</p>
       <p><b>${nU}</b> unità stratigrafiche ricostruite in 3D a partire da poligoni, quote e profili del GIS, con <b>${nm.toLocaleString(LOC)}</b> frammenti inventariati, ${D.rs.length} reperti speciali e ${D.campioni.length} campioni.</p>
       <p>Seleziona un'unità nella scena, nell'elenco o nel diagramma di Harris per aprirne la scheda.</p>

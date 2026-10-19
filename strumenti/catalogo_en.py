@@ -1077,6 +1077,23 @@ T.update({
         "{0} plans from terrain models clipped to the excavation limit",
     "{0} modelli del terreno delle unità non trovati": "{0} unit terrain models not found",
     "Modelli del terreno non letti: {0}": "Terrain models not read: {0}",
+    "{0} ortofoto di singole unità (dal nome, es. «{1}»): texture di ciascuna unità":
+        "{0} orthophotos of single units (from the name, e.g. «{1}»): texture of each unit",
+    "Ortofoto delle unità: {0} unità con la propria fotografia come texture":
+        "Unit orthophotos: {0} units with their own photograph as texture",
+    "Ortofoto delle unità non lette: {0}": "Unit orthophotos not read: {0}",
+    "{0} murature senza quote: sommità dai modelli del terreno, base dalla superficie più bassa scavata accanto":
+        "{0} masonry units without levels: top from the terrain models, base from the lowest excavated surface "
+        "beside them",
+    "{0} modelli 3D fuori dall'area delle unità non mostrati ({1}): si possono includere nel riquadro dei modelli 3D":
+        "{0} 3D models outside the area of the units not shown ({1}): they can be included in the 3D models panel",
+    "linee di muri o del perimetro (non tracce di sezione)": "lines of walls or of the perimeter (not section traces)",
+    "non rettilinee: non sono tracce di sezione": "not straight: not section traces",
+    "{0} unità con la propria fotografia, scattata quando erano esposte.":
+        "{0} units with their own photograph, taken when they were exposed.",
+    "{0}, {1} cm per pixel, sulle altre unità.": "{0}, {1} cm per pixel, on the other units.",
+    "Proiettata dall'alto: sulle pareti ripide l'immagine appare stirata.":
+        "Projected from above: on steep sides the image looks stretched.",
     "Classi murarie (USM) indicate: {0}": "Masonry classes (MSU) set: {0}",
     "{0} copie fatte a mano («- Copia», «(2)»…) accanto all'originale: non usate":
         "{0} hand-made copies («- Copy», «(2)»…) next to the original: not used",

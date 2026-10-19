@@ -79,12 +79,37 @@ class Modello:
     dedotti: list = field(default_factory=list)    # rapporti «copre» dedotti tra riempimenti (a sopra b)
 
 
+GRANDE_IMPRONTA = 32 * 2 ** 20      # oltre: impronta rapida (DEM, ortofoto, modelli 3D di centinaia di MB)
+
+
 def _sha256(path):
+    """Impronta di un file d'origine. Per i file grandi basta dimensione + inizio + fine («rapida:…»): rileggere
+    ogni volta decine di GB di raster e modelli 3D bloccava l'app. Un'impronta salvata per intero (progetti
+    precedenti) si confronta ancora per intero."""
+    size = os.path.getsize(path)
+    if size > GRANDE_IMPRONTA:
+        h = hashlib.sha256(str(size).encode())
+        with open(path, "rb") as f:
+            h.update(f.read(4 << 20))
+            f.seek(max(0, size - (4 << 20)))
+            h.update(f.read(4 << 20))
+        return "rapida:" + h.hexdigest()
+    return _sha256_intero(path)
+
+
+def _sha256_intero(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def impronta_uguale(path, salvata):
+    """Vero se il file ha ancora l'impronta ``salvata`` (calcolata nello stesso modo)."""
+    if not salvata:
+        return False
+    return (_sha256(path) if str(salvata).startswith("rapida:") else _sha256_intero(path)) == salvata
 
 
 def _pulisci(df):
@@ -136,6 +161,7 @@ class Scavo:
         self.raster_superficie = None     # superficie.Raster (modello del terreno), se usato
         self.modifiche = []               # registro delle modifiche fatte nell'app (vedi modifiche.py)
         self.ortofoto = None              # ortofoto.Ortofoto drappeggiata sul modello, se c'è
+        self.ortofoto_unita = {}          # {unità: Ortofoto} fotografia della singola unità esposta
         self.modelli3d = []               # modelli3d.Modello3D rilevati (fotogrammetria, laser scanner)
 
     # ------------------------------------------------------------------ lettura
@@ -500,6 +526,8 @@ class Scavo:
             cur.execute("INSERT INTO s3d_raster VALUES (?, ?)", ("superficie", self.raster_superficie.a_bytes()))
         if self.ortofoto is not None:
             cur.execute("INSERT INTO s3d_raster VALUES (?, ?)", ("ortofoto", self.ortofoto.a_bytes()))
+        for u, o in sorted((getattr(self, "ortofoto_unita", None) or {}).items()):
+            cur.execute("INSERT INTO s3d_raster VALUES (?, ?)", (f"ortofoto:{int(u)}", o.a_bytes()))
         for m in self.modelli3d:
             cur.execute("INSERT INTO s3d_modelli3d (nome, dati) VALUES (?, ?)", (m.nome, m.a_bytes()))
         self.registra("salvataggio", dict(file=os.path.basename(path)))
@@ -546,6 +574,9 @@ class Scavo:
             if o:
                 from .ortofoto import Ortofoto
                 s.ortofoto = Ortofoto.da_bytes(o[0])
+            from .ortofoto import Ortofoto
+            s.ortofoto_unita = {int(n.split(":", 1)[1]): Ortofoto.da_bytes(b) for n, b in
+                                cur.execute("SELECT nome, dati FROM s3d_raster WHERE nome LIKE 'ortofoto:%'")}
         except sqlite3.OperationalError:       # progetti salvati prima della versione 0.3
             r = None
         if r:
