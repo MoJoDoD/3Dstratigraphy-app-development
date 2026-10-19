@@ -4,6 +4,8 @@ pietra con un file per unità, layer in sistemi di riferimento diversi, reperti 
 CSV della stazione totale, copie e risultati di programmi nella cartella. Dati sintetici: nessun dato reale."""
 import os
 
+import numpy as np
+
 import geopandas as gpd
 import openpyxl
 import pandas as pd
@@ -185,7 +187,7 @@ def test_reperti_con_us_dall_inventario(scavo):
     assert {"LTA1", "LTA2", "LTA3", "BON7"} <= set(rs["RS"])
     per = dict(zip(rs["RS"], rs["US"]))
     assert per["LTA1"] == 1002 and per["BON7"] == 1003
-    assert set(rs.loc[rs.RS == "LTA1", "Materiale"]) == {"LTA"}
+    assert set(rs.loc[rs.RS == "LTA1", "Materiale"]) == {"LTA"} and set(rs.loc[rs.RS == "LTA1", "Oggetto"]) == {"LTA"}
 
 
 def test_ricostruzione_e_visualizzatore(scavo, tmp_path):
@@ -242,3 +244,80 @@ def test_profilo_conserva_le_sigle(abb, tmp_path):
     b = importa.Abbinamento.carica_profilo(str(p))
     assert b.sigle == abb.sigle and b.classi_murarie == ["B"]
     assert {x.layer: x.unita_nome for x in b.layers}["B1"] == 2001
+
+
+# ------------------------------------------------------------------ modelli del terreno delle singole unità
+def _dem_unita(path, x0, y0, lato, quota, cella=0.01, dentro=None, lzw=False):
+    """DEM quadrato di ``lato`` m con quota costante (più una leggera pendenza), vuoto fuori da ``dentro``
+    (x0, y0, x1, y1)."""
+    import numpy as np
+    import tifffile
+    n = int(round(lato / cella))
+    xs = x0 + cella * (np.arange(n) + 0.5)
+    ys = y0 + lato - cella * (np.arange(n) + 0.5)
+    X, Y = np.meshgrid(xs, ys)
+    z = (quota + 0.01 * (X - x0)).astype("float32")
+    if dentro is not None:
+        a, b, c, d = dentro
+        z[~((X >= a) & (X <= c) & (Y >= b) & (Y <= d))] = -32767
+    tifffile.imwrite(path, z, compression="lzw" if lzw else None, extratags=[
+        (33550, "d", 3, (cella, cella, 0.0), False),
+        (33922, "d", 6, (0.0, 0.0, 0.0, x0, y0 + lato, 0.0), False),
+        (42113, "s", 0, "-32767", False)])
+    return path
+
+
+@pytest.fixture(scope="module")
+def cartella_dem(cartella, tmp_path_factory):
+    import shutil
+    pytest.importorskip("imagecodecs")              # i DEM di Metashape sono compressi LZW
+    d = tmp_path_factory.mktemp("dem") / "Scavo per classi 25"
+    shutil.copytree(cartella, d)
+    r = d / "RASTER"
+    r.mkdir()
+    zona = (X0 + 5.2, Y0 + 5.2, X0 + 6.8, Y0 + 6.6)
+    _dem_unita(str(r / "G2_A3_DEM_0510.tif"), X0 + 5, Y0 + 5, 2.0, 1174.50, dentro=zona, lzw=True)
+    _dem_unita(str(r / "G2_A3_DEM_0710.tif"), X0 + 5, Y0 + 5, 2.0, 1174.35, dentro=zona)
+    _dem_unita(str(r / "G2_A3-4_DEM_0810.tif"), X0 + 5, Y0 + 5, 2.0, 1174.20, dentro=zona)
+    _dem_unita(str(r / "AREA_G_DEM_1210.tif"), X0 - 2, Y0 - 2, 12.0, 1174.0, cella=0.05)
+    return str(d)
+
+
+def test_date_e_nomi_dei_dem():
+    from stratigrafia3d.dem_unita import data_dal_nome
+    assert data_dal_nome(os.path.join("x", "BAJA25", "RASTER", "G2_A16_DEM_2409.tif")) == (2025, 9, 24)
+    assert data_dal_nome(os.path.join("x", "BAJA26", "RASTER", "G16", "GR5.A64_animal bones_0610_DEM.tif")) == \
+        (2026, 10, 6)
+    assert data_dal_nome(os.path.join("2024", "2210_AREA_G_US_A5_DEM.tif")) == (2024, 10, 22)
+    assert data_dal_nome("G2.US.A11_DEM.tif") is None
+    c = sg.Codifica({"A": 1000, "B": 2000}, 1000)
+    noti = {1030, 1039, 1036, 1026, 1016, 1033, 2033}
+    assert sg.unita_nel_nome("G10_A30-39_DEM_2909", c, noti) == [1030, 1039]
+    assert sg.unita_nel_nome("G5A36+G6A26_DEM_2809", c, noti) == [1036, 1026]
+    assert sg.unita_nel_nome("G2_A16-33-B33_DEM_2909", c, noti) == [1016, 1033, 2033]
+
+
+def test_dem_delle_unita(cartella_dem):
+    from stratigrafia3d.ricostruzione import ricostruisci
+    abb = importa.proponi([cartella_dem])
+    dem = {os.path.basename(d["percorso"]): d for d in abb.dem_unita}
+    assert set(dem) == {"G2_A3_DEM_0510.tif", "G2_A3_DEM_0710.tif", "G2_A3-4_DEM_0810.tif"}
+    assert dem["G2_A3_DEM_0510.tif"]["unita"] == [1003] and dem["G2_A3_DEM_0510.tif"]["data"] == [2025, 10, 5]
+    assert dem["G2_A3-4_DEM_0810.tif"]["unita"] == [1003, 1004]
+    # il DEM senza unità nel nome resta la superficie di riferimento
+    assert abb.superficie["tipo"] == "raster" and abb.superficie["sorgente"].endswith("AREA_G_DEM_1210.tif")
+    s = importa.applica(abb)
+    g = s.layers["us_poligoni"]
+    a3 = g[g["us"] == 1003]
+    assert len(a3) == 1 and 2.0 < a3.geometry.iloc[0].area < 2.4           # 1,6 × 1,4 m
+    q = s.layers["quote"]
+    sup = q[(q["us"] == 1003) & (q["tipo_quota"] == "sup")]
+    inf = q[(q["us"] == 1003) & (q["tipo_quota"] == "inf")]
+    assert 50 < len(sup) <= 800 and len(inf) > 50
+    assert abs(float(np.median([p.z for p in sup.geometry])) - 1174.51) < 0.02    # il DEM più antico
+    assert abs(float(np.median([p.z for p in inf.geometry])) - 1174.21) < 0.02    # il più recente
+    assert any("Modelli del terreno delle unità" in n for n in s.note_importazione)
+    assert not [p for p in s.verifica() if p.livello == "errore"]
+    ricostruisci(s)
+    m = s.modello.unita[1003]
+    assert abs(float(np.median(m.top)) - 1174.51) < 0.03 and float(np.median(m.top - m.bot)) > 0.2

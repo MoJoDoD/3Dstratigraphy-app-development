@@ -50,7 +50,13 @@ CSV di punti, Excel o CSV delle schede. Riconoscono da soli:
   "…_BON.csv"), collegate alla loro US tramite l'inventario. I **target della fotogrammetria**
   ("…_MIRE.csv") non vengono presi per quote;
 - nelle cartelle, si mettono da parte le copie ("- Copia", "(2)"), i risultati di altri programmi
-  (cartelle "run_…") e le versioni più vecchie della stessa tabella delle schede.
+  (cartelle "run_…") e le versioni più vecchie della stessa tabella delle schede;
+- i **modelli del terreno di singole unità** ("G2_A16_DEM_2409.tif", "GR6.A66_DEM.tif"), come quelli che
+  la fotogrammetria produce per ogni US esposta. La zona rilevata del DEM, senza le murature e dentro il
+  limite di scavo, diventa la pianta dell'unità se non ne ha una. Il DEM più antico (dalla data nel nome)
+  dà il tetto, il più recente la superficie raggiunta, e la base si aggancia alle unità sottostanti. I DEM
+  con più unità nel nome ("G2_A16-33-B33") danno le quote delle unità indicate. Quelli senza unità
+  ("AREA_G_DEM") restano superfici di riferimento. Si leggono anche i GeoTIFF compressi LZW di Metashape.
 
 ## Ricette di importazione
 

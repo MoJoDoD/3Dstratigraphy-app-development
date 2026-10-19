@@ -444,7 +444,9 @@ def esamina_raster(files):
                     out[f] = dict(tipo="ortofoto", nome=os.path.basename(f), righe=g["righe"], colonne=g["colonne"],
                                   passo=round(g["passo"][0], 3), estensione=[round(v, 2) for v in g["estensione"]])
                 else:
-                    d = Raster.leggi(f).descrizione()
+                    from .dem_unita import leggi_ridotto      # DEM al millimetro: basta la versione a 2 cm
+                    d = leggi_ridotto(f).descrizione()
+                    d["nome"] = os.path.basename(f)
                     out[f] = dict(d, tipo="dem", differenza=e_differenza(d))
             except Exception as e:
                 out[f] = dict(errore=str(e))
@@ -994,6 +996,9 @@ class Abbinamento:
     sigle: dict = None
     # classi di sigla che sono unità murarie (USM): es. ["B"] a Ba'ja (A = strati, B = murature)
     classi_murarie: list = field(default_factory=list)
+    # modelli del terreno di singole unità («G2_A16_DEM_2409.tif»): [{"percorso", "unita": [numeri], "data":
+    # [anno, mese, giorno] o None}] (vedi dem_unita.py)
+    dem_unita: list = field(default_factory=list)
 
     def a_json(self):
         return json.dumps(asdict(self), ensure_ascii=False, indent=1)
@@ -1125,22 +1130,14 @@ def _ruolo_da_nome(nome, geometria=None):
 
 
 # sigle delle classi di reperti nei nomi dei file di punti (registrazione per classi, comune negli scavi del
-# Vicino Oriente e non solo): «BJ081026_LTA.csv», «2210_CHA.csv», «ALL_UBRs.shp». Valore: (ruolo, descrizione)
-CLASSI_REPERTI = {
-    "bon": ("reperti", "ossa animali"), "bone": ("reperti", "ossa animali"), "bones": ("reperti", "ossa animali"),
-    "lta": ("reperti", "industria litica"), "lit": ("reperti", "industria litica"),
-    "lithic": ("reperti", "industria litica"), "lithics": ("reperti", "industria litica"),
-    "flint": ("reperti", "selce"), "cha": ("reperti", "carboni"), "charcoal": ("reperti", "carboni"),
-    "gro": ("reperti", "macine e pestelli"), "gs": ("reperti", "macine e pestelli"),
-    "orn": ("reperti", "ornamenti"), "ornament": ("reperti", "ornamenti"), "bra": ("reperti", "BRA"),
-    "ubr": ("reperti", "UBR"), "u.br": ("reperti", "UBR"), "pou": ("reperti", "POU"), "bto": ("reperti", "BTO"),
-    "sto": ("reperti", "pietre"), "var": ("reperti", "varia"), "pla": ("reperti", "PLA"),
-    "mco": ("reperti", "MCO"), "mct": ("reperti", "MCT"), "ocr": ("reperti", "ocra"), "cla": ("reperti", "argilla"),
-    "she": ("reperti", "conchiglie"), "shell": ("reperti", "conchiglie"), "pot": ("reperti", "ceramica"),
-    "cer": ("reperti", "ceramica"), "pottery": ("reperti", "ceramica"), "fau": ("reperti", "fauna"),
-    "sed": ("campioni", "campioni di sedimento"), "c14": ("campioni", "campioni per C14"),
-    "sample": ("campioni", "campioni"), "samples": ("campioni", "campioni"),
-}
+# Vicino Oriente e non solo): «BJ081026_LTA.csv», «2210_CHA.csv», «ALL_UBRs.shp». Le sigle restano sigle: la
+# classe mostrata è la sigla stessa («LTA»), senza interpretarla. Valore: ruolo
+CLASSI_REPERTI = {k: "reperti" for k in (
+    "bon", "bone", "bones", "lta", "lit", "lithic", "lithics", "flint", "cha", "charcoal", "gro", "gs", "orn",
+    "ornament", "bra", "ubr", "u.br", "pou", "bto", "sto", "var", "pla", "mco", "mct", "ocr", "cla", "car", "she",
+    "shell", "pot", "cer", "pottery", "fau", "sed")}
+# parole generiche per i campioni (le sigle dello scavo restano classi di reperti, senza interpretarle)
+CLASSI_REPERTI.update({"sample": "campioni", "samples": "campioni", "c14": "campioni"})
 # punti d'appoggio della fotogrammetria (target, mire, marker): non sono quote delle unità
 _TARGET_RE = re.compile(r"^(mire|mira\w*|target|targets|gcp|gcps|marker|markers|fotogramm\w*|photogramm\w*|geo\d+|"
                         r"tblu|trosso|punto rosso|chk|checkpoint\w*)$")
@@ -1162,9 +1159,9 @@ def classe_punti(nome):
         if k is None and "." in t:
             k = t if t in CLASSI_REPERTI else None
         if k:
-            ruolo, descr = CLASSI_REPERTI[k]
-            return ruolo, k, f"«{t.upper()}»: {'reperti' if ruolo == 'reperti' else 'campioni'} ({descr}) " \
-                             "dal nome del file"
+            ruolo = CLASSI_REPERTI[k]
+            return ruolo, k, f"«{t.upper()}»: {'reperti' if ruolo == 'reperti' else 'campioni'} della classe " \
+                             f"«{k.upper()}» dal nome del file"
     return None
 
 
@@ -1914,6 +1911,27 @@ def _proponi(files, termini=None, scelte=None):
         raster.sort(key=_preferito)
         orto.sort(key=_preferito)
         raster = [x for x in raster if ruoli_inv.get(_chiave_percorso(x), {}).get("usa") is not False] or raster
+    # DEM di singole unità («G2_A16_DEM_2409»): pianta e superfici delle unità, non superficie di riferimento
+    if noti:
+        from . import dem_unita as DU
+        for f in list(raster):
+            stem = os.path.splitext(os.path.basename(f))[0]
+            uu = sg.unita_nel_nome(stem, None, noti)
+            if uu:
+                data = DU.data_dal_nome(f)
+                abb.dem_unita.append({"percorso": f, "unita": [int(u) for u in uu],
+                                      "data": list(data) if data else None})
+                raster.remove(f)
+        if abb.dem_unita:
+            n1 = sum(len(d["unita"]) == 1 for d in abb.dem_unita)
+            abb.note.append(f"{len(abb.dem_unita)} modelli del terreno di singole unità (dal nome, es. "
+                            f"«{os.path.basename(abb.dem_unita[0]['percorso'])}»): {n1} danno pianta e superfici "
+                            "di un'unità, gli altri le quote delle unità indicate")
+            # tra i DEM generali, per primo quello più esteso (tutta l'area, non un dettaglio)
+            def _area(f):
+                e = er[f].get("estensione") or [0, 0, 0, 0]
+                return -(e[2] - e[0]) * (e[3] - e[1])
+            raster.sort(key=_area)
     from .modelli3d import EST_MODELLI
     for f in files:
         if os.path.splitext(f)[1].lower() in EST_MODELLI:
@@ -3508,7 +3526,6 @@ def _tabella_dai_punti(s, ruolo, tabs, note):
                 trovate += 1
         if trovate:
             note.append(f"{ruolo.capitalize()}: US di {trovate} punti dagli inventari (stesso nome del reperto)")
-    descr = {k: d for k, (_, d) in CLASSI_REPERTI.items()}
     righe = []
     for geom, nome, u, k in zip(g.geometry, nomi, us, g.get("_classe", [None] * len(g))):
         if geom is None or geom.is_empty:
@@ -3520,10 +3537,10 @@ def _tabella_dai_punti(s, ruolo, tabs, note):
         base = {"US": uu, "E (m)": round(float(geom.x), 3), "N (m)": round(float(geom.y), 3),
                 "Quota (m)": round(float(z), 3)}
         if ruolo == "reperti":
-            righe.append({"RS": nome, **base, "Oggetto": descr.get(str(k or "").lower(), k or ""),
+            righe.append({"RS": nome, **base, "Oggetto": k or "",
                           "Materiale": k or "", "Descrizione": ""})
         else:
-            righe.append({"Campione": nome, **base, "Tipo": descr.get(str(k or "").lower(), k or ""),
+            righe.append({"Campione": nome, **base, "Tipo": k or "",
                           "Analisi": ""})
     if not righe:
         return
@@ -3534,6 +3551,115 @@ def _tabella_dai_punti(s, ruolo, tabs, note):
     con_us = sum(r["US"] is not None for r in righe)
     note.append(f"{len(righe)} {'reperti' if ruolo == 'reperti' else 'campioni'} rilevati come punti "
                 f"({con_us} con la loro US)")
+
+
+def _superfici_dai_dem(s, abb, note):
+    """Pianta e quote delle unità dai loro modelli del terreno (vedi dem_unita.py). Le piante si aggiungono
+    solo alle US che non ne hanno una; le murature ricevono le quote di rasatura dentro la loro pianta."""
+    if not abb.dem_unita:
+        return
+    from . import dem_unita as DU
+    schede_us = set(s.tabelle[sc.S_US][sc.C_US]) if sc.S_US in s.tabelle else set()
+    g_us, g_usm = s.layers.get(sc.L_US), s.layers.get(sc.L_USM)
+
+    def piante(g, campo):
+        out = {}
+        if g is not None and len(g):
+            for u, geom in zip(g[campo], g.geometry):
+                if geom is not None and not pd.isna(u):
+                    out[int(u)] = unary_union([out[int(u)], geom]) if int(u) in out else geom
+        return out
+    poli, poli_m = piante(g_us, sc.F_US), piante(g_usm, sc.F_USM)
+    muri = unary_union(list(poli_m.values())).buffer(0.02) if poli_m else None
+    # i DEM non ritagliati coprono anche il terreno attorno: le piante restano dentro il limite di scavo
+    area = s.layers.get(sc.L_AREA)
+    limite = unary_union([g for g in area.geometry if g is not None and g.geom_type in ("Polygon", "MultiPolygon")]) \
+        if area is not None and len(area) else None
+    limite = limite.buffer(0.05) if limite is not None and not limite.is_empty else None
+    ritagliate = 0
+    letti, errori, mancanti = {}, [], 0
+
+    def leggi(p):
+        if p not in letti:
+            try:
+                letti[p] = DU.leggi_ridotto(p)
+            except Exception as e:
+                letti[p] = None
+                errori.append(f"{os.path.basename(p)}: {e}")
+        return letti[p]
+    per_unita = {}
+    for d in abb.dem_unita:
+        if not os.path.exists(d["percorso"]):
+            mancanti += 1
+            continue
+        for u in d["unita"]:
+            per_unita.setdefault(int(u), []).append((tuple(d.get("data") or (0, 0, 0)), d["percorso"],
+                                                     len(d["unita"]) == 1))
+    # piante delle US che non ne hanno: la parte rilevata dei loro DEM, senza le murature
+    nuove = {}
+    for u, lst in per_unita.items():
+        if u in poli or u in poli_m or u not in schede_us:
+            continue
+        impronte = [DU.impronta(r) for _, p, solo in lst if solo and (r := leggi(p)) is not None]
+        impronte = [g for g in impronte if g is not None]
+        if not impronte:
+            continue
+        g = unary_union(impronte)
+        if limite is not None:
+            dentro = g.intersection(limite)
+            if not dentro.is_empty and dentro.area >= 0.3 * g.area:
+                ritagliate += dentro.area < 0.98 * g.area
+                g = dentro
+        if muri is not None:
+            g = g.difference(muri)
+        g = DU.pulisci(g)
+        if g is not None:
+            nuove[u] = g
+    if nuove:
+        agg = gpd.GeoDataFrame({sc.F_US: list(nuove), "poligono_di": "modello del terreno dell'unità"},
+                               geometry=list(nuove.values()), crs=s.crs)
+        base = s.layers.get(sc.L_US)
+        s.layers[sc.L_US] = gpd.GeoDataFrame(pd.concat([base, agg], ignore_index=True) if base is not None and len(base)
+                                             else agg, geometry="geometry", crs=s.crs)
+        poli.update(nuove)
+    # quote: tetto dal DEM più antico, superficie raggiunta dal più recente (se più bassa)
+    uu, tipi, pts = [], [], []
+    con_fondo = 0
+    for u, lst in per_unita.items():
+        lst.sort()
+        if u in poli and u in schede_us:
+            geom, alto = poli[u], sc.Q_SUP
+        elif u in poli_m:
+            geom, alto = poli_m[u], sc.Q_RASATURA
+        else:
+            continue
+        primo = leggi(lst[0][1])
+        if primo is None:
+            continue
+        P = DU.campiona(primo, geom)
+        uu += [u] * len(P); tipi += [alto] * len(P); pts += [Point(*p) for p in P]
+        if alto == sc.Q_SUP and len(lst) > 1 and lst[-1][0] != lst[0][0]:
+            ultimo = leggi(lst[-1][1])
+            if ultimo is not None:
+                giu = DU.abbassamento(primo, ultimo, geom)
+                if giu is not None and giu > 0.02:
+                    P2 = DU.campiona(ultimo, geom)
+                    uu += [u] * len(P2); tipi += [sc.Q_INF] * len(P2); pts += [Point(*p) for p in P2]
+                    con_fondo += 1
+    if pts:
+        q = gpd.GeoDataFrame({sc.F_US: uu, sc.F_TIPO_QUOTA: tipi, "origine": "dem"}, geometry=pts, crs=s.crs)
+        base = s.layers.get(sc.L_QUOTE)
+        s.layers[sc.L_QUOTE] = gpd.GeoDataFrame(pd.concat([base, q], ignore_index=True) if base is not None and len(base)
+                                                else q, geometry="geometry", crs=s.crs)
+    usate = len({u for u in uu})
+    note.append(f"Modelli del terreno delle unità: {len(nuove)} piante ricavate, quote per {usate} unità "
+                f"({len(pts)} punti)" + (f", superficie raggiunta per {con_fondo}" if con_fondo else ""))
+    if ritagliate:
+        note.append(f"{ritagliate} piante dai modelli del terreno ritagliate sul limite di scavo")
+    if mancanti:
+        note.append(f"{mancanti} modelli del terreno delle unità non trovati")
+    if errori:
+        note.append(f"Modelli del terreno non letti: {'; '.join(errori[:3])}{'…' if len(errori) > 3 else ''}")
 
 
 def _colonne_uniche(df):
@@ -3836,6 +3962,9 @@ def _applica(abb, log=None):
             _tabella_dai_punti(s, ruolo, tabs, note)
     _etichette_sigle(s, abb, note)
     df = s.tabelle[sc.S_US]
+    if s.crs is None:
+        s.crs = crs
+    _superfici_dai_dem(s, abb, note)
     if sc.L_US not in s.layers and sc.L_USM in s.layers and len(s.layers[sc.L_USM]):
         # solo murature disegnate (gli strati hanno solo schede o modelli del terreno): layer US vuoto
         s.layers[sc.L_US] = gpd.GeoDataFrame({sc.F_US: pd.Series([], dtype=int)}, geometry=[],
@@ -3914,6 +4043,10 @@ def _applica(abb, log=None):
                 if sc.L_US in s.layers else {}
             if sc.L_USM in s.layers:
                 poligoni.update({u: g for u, g in zip(s.layers[sc.L_USM][sc.F_USM], s.layers[sc.L_USM].geometry)})
+            if "origine" in q.columns:
+                # le unità con il proprio modello del terreno non ricevono punti sparsi senza US
+                for u in set(q.loc[q["origine"] == "dem", sc.F_US].dropna().astype(int)):
+                    poligoni.pop(u, None)
             assegnate = 0
             nuovi = []
             for i, p in zip(q.index[manca], q.geometry[manca]):
@@ -4031,9 +4164,11 @@ def _applica(abb, log=None):
                    | ({raster_fonte} if raster_fonte else set()) | ({orto_fonte} if orto_fonte else set())
                    | ({corr_fonte} if corr_fonte else set()) | modelli_fonti)
     fonti = sorted(set(fonti) | {f for f in (abb.tabelle_extra or []) if f and os.path.exists(f)})
+    dem_fonti = {d["percorso"] for d in (abb.dem_unita or []) if os.path.exists(d["percorso"])}
+    fonti = sorted(set(fonti) | dem_fonti)
     for p in fonti:
         s.sorgenti.append(dict(percorso=os.path.abspath(p),
-                               tipo="excel" if p == abb.tabella else ("raster" if p in (raster_fonte, orto_fonte, corr_fonte) else "modello 3d" if p in modelli_fonti else
+                               tipo="excel" if p == abb.tabella else ("raster" if p in (raster_fonte, orto_fonte, corr_fonte) or p in dem_fonti else "modello 3d" if p in modelli_fonti else
                                                                      ("tabella" if p in (abb.tabelle_extra or []) else "gis")),
                                sha256=_sha256(p), dimensione=os.path.getsize(p), importato=now))
     base = next((x.sorgente for x in abb.layers if x.ruolo == "us"), fonti[0] if fonti else "scavo")

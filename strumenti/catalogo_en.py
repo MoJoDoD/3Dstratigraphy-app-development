@@ -434,7 +434,10 @@ T.update({
     "Il raster non è georiferito (mancano tag GeoTIFF e file .tfw)": "The raster is not georeferenced (GeoTIFF tags and .tfw file are missing)",
     "Per leggere i raster serve il pacchetto 'tifffile': esegui di nuovo l'installazione (Installa (Windows).bat)": "Reading rasters needs the 'tifffile' package: run the installation again (Installa (Windows).bat)",
     "Raster ruotato nel file .tfw: non supportato": "Rotated raster in the .tfw file: not supported", "Raster ruotato: non supportato": "Rotated raster: not supported",
-    "Compressione del raster non supportata ({0}); salvalo senza compressione o con compressione DEFLATE": "Raster compression not supported ({0}); save it uncompressed or with DEFLATE compression",
+    "Compressione del raster non supportata ({0}); esegui di nuovo l'installazione (pacchetto «imagecodecs») o "
+    "salva il raster senza compressione":
+        "Raster compression not supported ({0}); run the installation again («imagecodecs» package) or save the "
+        "raster uncompressed",
     "Il file OBJ non contiene triangoli": "The OBJ file contains no triangles",
     "Il file PLY non contiene una superficie a triangoli (forse è solo una nuvola di punti)": "The PLY file contains no triangle surface (perhaps it is only a point cloud)",
     "Non è un file PLY": "Not a PLY file", "Formato di modello 3D non supportato: {0}": "3D model format not supported: {0}", "Intestazione PLY incompleta": "Incomplete PLY header",
@@ -1061,6 +1064,19 @@ T.update({
         "{0} units without levels: they start from a flat surface at {1} m (median level of the surveyed points); "
         "a terrain model gives a more faithful result",
     "Superficie di ripiego non impostata: {0}": "Fallback surface not set: {0}",
+    "{0} modelli del terreno di singole unità (dal nome, es. «{1}»): {2} danno pianta e superfici di un'unità, gli "
+    "altri le quote delle unità indicate":
+        "{0} terrain models of single units (from the name, e.g. «{1}»): {2} give the plan and surfaces of one "
+        "unit, the others the levels of the units named",
+    "Modelli del terreno delle unità: {0} piante ricavate, quote per {1} unità ({2} punti)":
+        "Unit terrain models: {0} plans derived, levels for {1} units ({2} points)",
+    "Modelli del terreno delle unità: {0} piante ricavate, quote per {1} unità ({2} punti), superficie raggiunta "
+    "per {3}":
+        "Unit terrain models: {0} plans derived, levels for {1} units ({2} points), surface reached for {3}",
+    "{0} piante dai modelli del terreno ritagliate sul limite di scavo":
+        "{0} plans from terrain models clipped to the excavation limit",
+    "{0} modelli del terreno delle unità non trovati": "{0} unit terrain models not found",
+    "Modelli del terreno non letti: {0}": "Terrain models not read: {0}",
     "Classi murarie (USM) indicate: {0}": "Masonry classes (MSU) set: {0}",
     "{0} copie fatte a mano («- Copia», «(2)»…) accanto all'originale: non usate":
         "{0} hand-made copies («- Copy», «(2)»…) next to the original: not used",
@@ -1075,16 +1091,12 @@ T.update({
         "earlier version of the records in «{0}» (that one is used, the most recent); {1}",
     "«{0}»: punti d'appoggio della fotogrammetria (target), non quote delle unità":
         "«{0}»: photogrammetry control points (targets), not unit levels",
-    "«{0}»: reperti ({1}) dal nome del file": "«{0}»: finds ({1}) from the file name",
-    "«{0}»: campioni ({1}) dal nome del file": "«{0}»: samples ({1}) from the file name",
+    "«{0}»: reperti della classe «{1}» dal nome del file": "«{0}»: finds of class «{1}» from the file name",
+    "«{0}»: campioni della classe «{1}» dal nome del file": "«{0}»: samples of class «{1}» from the file name",
     "inventario dei reperti con coordinate e US (colonne «{0}», «{1}», «{2}», «{3}»): collega i punti dei reperti "
     "alla loro unità":
         "finds inventory with coordinates and SU (columns «{0}», «{1}», «{2}», «{3}»): links the find points to "
         "their unit",
-    "ossa animali": "animal bones", "industria litica": "lithics", "selce": "flint", "carboni": "charcoal",
-    "macine e pestelli": "grinding stones", "ornamenti": "ornaments", "pietre": "stones", "varia": "miscellaneous",
-    "ocra": "ochre", "argilla": "clay", "conchiglie": "shells", "ceramica": "pottery", "fauna": "fauna",
-    "campioni di sedimento": "sediment samples", "campioni per C14": "C14 samples", "campioni": "samples",
 })
 
 if __name__ == "__main__":

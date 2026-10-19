@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 _GENERICHE = {"us", "su", "ue", "se", "sk", "ctx", "cxt", "context", "n", "nr", "no", "num", "unit", "unita",
               "unità", "befund", "bef", "layer", "strato"}
 # sigla + numero dentro un testo: «A12», «B 3», «US.A5», «US-B10»; il numero non continua in lettere lunghe
-_TOKEN_RE = re.compile(r"(?<![A-Za-zÀ-ÿ0-9])((?:[A-Za-z]{1,8}\s*[.\-_:#°/]?\s*)?)(\d+)(?:\s*([A-Za-z]{1,2})(?![A-Za-z]))?")
+# (una sigla può seguire subito un numero: «G5A36» = locus G5, unità A36)
+_TOKEN_RE = re.compile(r"(?<![A-Za-zÀ-ÿ])((?:[A-Za-z]{1,8}\s*[.\-_:#°/]?\s*)?)(\d+)(?:\s*([A-Za-z]{1,2})(?![A-Za-z0-9]))?")
 # identificativo da solo: prefisso di lettere e segni, un numero, un breve suffisso (espressioni lineari: nessun
 # ritorno all'indietro esponenziale sui testi lunghi)
 _SOLO_RE = re.compile(r"([^\d]*)(\d+)\s*([A-Za-z]{0,10})")
@@ -179,9 +180,15 @@ def unita_nel_nome(nome, codifica=None, noti=None):
     unità note (se ``noti`` è dato), in ordine e senza ripetizioni."""
     codifica = codifica if codifica is not None else attiva()
     out = []
-    for m in _TOKEN_RE.finditer(str(nome)):
+    testo = str(nome)
+    prima, fine = None, -1
+    for m in _TOKEN_RE.finditer(testo):
         c = _classe_da_prefisso(m.group(1))
         n = int(m.group(2))
+        # «A30-39», «A16-33-B33»: il numero dopo il trattino ha la classe di quello prima
+        if c is None and not m.group(1) and prima and testo[fine:m.start()] in ("-", "–"):
+            c = prima
+        prima, fine = c, m.end()
         if codifica is not None:
             k = codifica.codice(f"{c}{n}" if c else n)
         else:

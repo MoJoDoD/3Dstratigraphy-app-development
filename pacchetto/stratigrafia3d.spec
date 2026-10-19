@@ -4,7 +4,7 @@
 from PyInstaller.utils.hooks import collect_all
 
 datas, binaries, hidden = [], [], []
-for pkg in ("pyogrio", "pyproj", "shapely", "webview", "tifffile", "stratigrafia3d"):
+for pkg in ("pyogrio", "pyproj", "shapely", "webview", "tifffile", "imagecodecs", "stratigrafia3d"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hidden += h
 hidden += ["openpyxl", "PIL.Image", "skimage.measure", "matplotlib.backends.backend_agg"]
