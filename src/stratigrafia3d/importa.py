@@ -432,6 +432,47 @@ def _coords(g):
     return out
 
 
+def _copertura(e, z):
+    """Quota della zona ``z`` coperta dall'estensione ``e`` (riquadri [x0, y0, x1, y1])."""
+    if not e or z is None:
+        return 0.0
+    w = min(e[2], z[2]) - max(e[0], z[0])
+    h = min(e[3], z[3]) - max(e[1], z[1])
+    area = max((z[2] - z[0]) * (z[3] - z[1]), 1e-9)
+    return max(0.0, w) * max(0.0, h) / area
+
+
+def _zona_scavo(er, abb):
+    """Riquadro che contiene i DEM e le ortofoto delle singole unità: la zona dello scavo (None se non ce ne sono)."""
+    est = [er[d["percorso"]].get("estensione") for d in list(abb.dem_unita or []) + list(abb.orto_unita or [])
+           if d["percorso"] in er and er[d["percorso"]].get("estensione")]
+    if not est:
+        return None
+    # le unità di un'altra area (dati di più scavi nella stessa cartella) non allargano la zona: si tiene il
+    # riquadro attorno alla mediana dei centri, fino a 3 volte la dispersione
+    c = np.array([[(e[0] + e[2]) / 2, (e[1] + e[3]) / 2] for e in est])
+    med = np.median(c, axis=0)
+    d = np.abs(c - med).max(1)
+    lim = max(3 * float(np.median(d)), 30.0)
+    est = [e for e, x in zip(est, d) if x <= lim] or est
+    return [min(e[0] for e in est), min(e[1] for e in est), max(e[2] for e in est), max(e[3] for e in est)]
+
+
+def _ordine_generali(er, f, zona):
+    """Chiave d'ordine dei DEM e delle ortofoto generali: prima quelli che coprono almeno metà della zona dello
+    scavo, tra questi i file dichiarati ortofoto o DEM nel nome, poi la copertura (a decimi) e il passo più
+    fine; senza zona, il più esteso."""
+    e = er[f].get("estensione") or [0, 0, 0, 0]
+    if zona is None:
+        return (0.0, 0, -(e[2] - e[0]) * (e[3] - e[1]))
+    # a parità di copertura, prima i file che si dichiarano ortofoto o modelli del terreno (non una pianta o
+    # una figura georiferita in una cartella di rapporti), poi il passo più fine
+    nome = os.path.basename(f).lower()
+    dichiarato = 0 if re.search(r"orth|orto|geotiff|dem|dtm|dsm|mdt", nome) else 1
+    cop = _copertura(e, zona)
+    return (0 if cop >= 0.5 else 1, dichiarato, -round(cop, 1), float(er[f].get("passo") or 1.0))
+
+
 def esamina_raster(files):
     """Descrizione dei raster tra i file: percorso -> dict (con «tipo»: «dem» o «ortofoto») o errore."""
     from .superficie import Raster, EST_RASTER, georef, e_ortofoto, e_differenza
@@ -1955,11 +1996,9 @@ def _proponi(files, termini=None, scelte=None):
             abb.note.append(f"{len(abb.dem_unita)} modelli del terreno di singole unità (dal nome, es. "
                             f"«{os.path.basename(abb.dem_unita[0]['percorso'])}»): {n1} danno pianta e superfici "
                             "di un'unità, gli altri le quote delle unità indicate")
-            # tra i DEM generali, per primo quello più esteso (tutta l'area, non un dettaglio)
-            def _area(f):
-                e = er[f].get("estensione") or [0, 0, 0, 0]
-                return -(e[2] - e[0]) * (e[3] - e[1])
-            raster.sort(key=_area)
+            # tra i DEM generali, per primo quello che copre la zona dei DEM delle unità (lo scavo, non un'altra
+            # area del sito), poi il più dettagliato; senza zona, il più esteso
+            raster.sort(key=lambda f: _ordine_generali(er, f, _zona_scavo(er, abb)))
         abb.dem_generali = list(raster)
     from .modelli3d import EST_MODELLI
     for f in files:
@@ -1986,10 +2025,14 @@ def _proponi(files, termini=None, scelte=None):
             abb.note.append(f"{len(abb.orto_unita)} ortofoto di singole unità (dal nome, es. "
                             f"«{os.path.basename(abb.orto_unita[0]['percorso'])}»): texture di ciascuna unità")
         if len(orto) > 1:
-            def _area_o(f):
-                e = er[f].get("estensione") or [0, 0, 0, 0]
-                return -(e[2] - e[0]) * (e[3] - e[1])
-            orto.sort(key=_area_o)
+            zona = _zona_scavo(er, abb)
+            orto.sort(key=lambda f: _ordine_generali(er, f, zona))
+            if zona is not None and any(_copertura(er[f].get("estensione"), zona) > 0 for f in orto):
+                fuori = [f for f in orto if _copertura(er[f].get("estensione"), zona) == 0]
+                if fuori:
+                    orto = [f for f in orto if f not in fuori]
+                    abb.note.append(f"{len(fuori)} ortofoto fuori dalla zona dello scavo (altre aree del sito): "
+                                    "non drappeggiate")
     if orto:
         abb.ortofoto = orto[0]
         abb.note.append(f"Ortofoto «{os.path.basename(orto[0])}»: sarà drappeggiata sul modello")
@@ -3760,50 +3803,58 @@ def _superfici_dai_dem(s, abb, note):
 
 
 def _date_dei_rilievi(s, abb, note):
-    """Colonna «Date rilievi» delle schede US e USM: i giorni dei modelli del terreno e delle ortofoto di ogni
-    unità (dalla data nel nome). Il visualizzatore ne ricava lo scavo giorno per giorno (architettura.py).
-    Le date già scritte nelle schede restano; si aggiungono quelle nuove."""
-    from .architettura import C_DATE_RILIEVI, data_iso, date_dal_testo
+    """Colonne «Date rilievi» e «Date rilievi con altre US» delle schede US e USM: i giorni dei modelli del
+    terreno e delle ortofoto della sola unità e quelli dei DEM che avvolgono più unità (dalla data nel nome).
+    L'ultimo DEM proprio di un'unità è la superficie lasciata dopo averla scavata: il visualizzatore ne ricava
+    lo scavo giorno per giorno (architettura.py). Le date già scritte nelle schede restano."""
+    from .architettura import C_DATE_RILIEVI, C_DATE_INSIEME, data_iso, date_dal_testo
     from .dem_unita import anno_dalla_cartella
     certe, incerte = {}, {}
-    for d in list(abb.dem_unita or []) + list(abb.orto_unita or []):
-        if d.get("data") and len(d["unita"]) == 1:
-            dove = certe if anno_dalla_cartella(d["percorso"]) is not None else incerte
-            dove.setdefault(int(d["unita"][0]), set()).add(tuple(d["data"]))
+    fonti = [(d, False) for d in list(abb.dem_unita or []) + list(abb.orto_unita or [])]
+    for d, _ in fonti:
+        if not d.get("data"):
+            continue
+        insieme = len(d["unita"]) > 1
+        dove = certe if anno_dalla_cartella(d["percorso"]) is not None else incerte
+        for u in d["unita"]:
+            dove.setdefault((int(u), insieme), set()).add(tuple(d["data"]))
     # anno preso dalla data del file (nessuna cartella dell'anno): quello dei rilievi della stessa unità nello
     # stesso giorno e mese, altrimenti l'anno più frequente dei rilievi datati dalle cartelle
     anni = [a for v in certe.values() for a, _, _ in v]
     anno_tipico = max(set(anni), key=anni.count) if anni else None
-    per_u = {u: {data_iso(t) for t in v} for u, v in certe.items()}
-    for u, v in incerte.items():
+    per_u = {k: {data_iso(t) for t in v} for k, v in certe.items()}
+    for (u, ins), v in incerte.items():
+        stessa_u = set(certe.get((u, False), ())) | set(certe.get((u, True), ()))
         for a, m, g in v:
-            uguali = [t[0] for t in certe.get(u, ()) if (t[1], t[2]) == (m, g)]
+            uguali = [t[0] for t in stessa_u if (t[1], t[2]) == (m, g)]
             a = uguali[0] if uguali else (anno_tipico or a)
-            per_u.setdefault(u, set()).add(data_iso((a, m, g)))
+            per_u.setdefault((u, ins), set()).add(data_iso((a, m, g)))
     if not per_u:
         return
-    scritte = 0
+    scritte = set()
     for nome, campo in ((sc.S_US, sc.C_US), (sc.S_USM, sc.C_USM)):
         df = s.tabelle.get(nome)
         if df is None or campo not in df.columns:
             continue
         df = df.copy()
-        if C_DATE_RILIEVI not in df.columns:
-            df[C_DATE_RILIEVI] = None
-        df[C_DATE_RILIEVI] = df[C_DATE_RILIEVI].astype(object)
-        for i, u in zip(df.index, df[campo]):
-            try:
-                u = int(u)
-            except (TypeError, ValueError):
+        for col, ins in ((C_DATE_RILIEVI, False), (C_DATE_INSIEME, True)):
+            if not any(k[1] == ins for k in per_u):
                 continue
-            if u in per_u:
-                tutte = sorted(set(date_dal_testo(df.at[i, C_DATE_RILIEVI])) | per_u[u])
-                df.at[i, C_DATE_RILIEVI] = ", ".join(tutte)
-                scritte += 1
+            if col not in df.columns:
+                df[col] = None
+            df[col] = df[col].astype(object)
+            for i, u in zip(df.index, df[campo]):
+                try:
+                    u = int(u)
+                except (TypeError, ValueError):
+                    continue
+                if (u, ins) in per_u:
+                    df.at[i, col] = ", ".join(sorted(set(date_dal_testo(df.at[i, col])) | per_u[(u, ins)]))
+                    scritte.add(u)
         s.tabelle[nome] = df
     if scritte:
         giorni = sorted(set().union(*per_u.values()))
-        note.append(f"Date dei rilievi per {scritte} unità ({len(giorni)} giorni, dal {giorni[0]} al {giorni[-1]}): "
+        note.append(f"Date dei rilievi per {len(scritte)} unità ({len(giorni)} giorni, dal {giorni[0]} al {giorni[-1]}): "
                     "lo scavo virtuale può procedere giorno per giorno")
 
 
@@ -4344,6 +4395,15 @@ def _applica(abb, log=None):
         if not p or not os.path.exists(p):
             note.append(f"Modello 3D non trovato: {p}")
             continue
+        if riquadro is not None:
+            # prima di leggere (e semplificare) centinaia di MB: un modello chiaramente di un'altra area si salta
+            from .modelli3d import riquadro_rapido
+            rr = riquadro_rapido(p, tuple(spec.get("spostamento") or (0, 0, 0)))
+            x0, y0, x1, y1 = riquadro
+            if rr is not None and (rr[2] < x0 - 30 or rr[0] > x1 + 30 or rr[3] < y0 - 30 or rr[1] > y1 + 30) and \
+                    max(abs(rr[0] - x0), abs(rr[1] - y0)) < 1000:
+                lontani.append(os.path.basename(p))
+                continue
         try:
             m = Modello3D.leggi(p, spostamento=tuple(spec.get("spostamento") or (0, 0, 0)), triangoli_max=tri_max,
                                 lato_texture=lato_tex)
@@ -4356,7 +4416,9 @@ def _applica(abb, log=None):
             cx, cy = m.V[:, 0].mean(), m.V[:, 1].mean()
             if max(x0 - cx, cx - x1, y0 - cy, cy - y1) > 1000:
                 note.append(f"Il modello 3D «{d['nome']}» è a più di un chilometro dallo scavo: forse è stato "
-                            "esportato con uno spostamento delle coordinate, da indicare nel riquadro dei modelli 3D")
+                            "esportato con uno spostamento delle coordinate, da indicare nel riquadro dei modelli 3D; "
+                            "finché non si indica non viene mostrato")
+                continue
             else:
                 mx0, my0, mx1, my1 = d["estensione"][0], d["estensione"][1], d["estensione"][3], d["estensione"][4]
                 if mx1 < x0 - 5 or mx0 > x1 + 5 or my1 < y0 - 5 or my0 > y1 + 5:

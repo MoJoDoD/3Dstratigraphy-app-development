@@ -1159,7 +1159,15 @@ T.update({
     "Sezione tracciata (A–B)": "Drawn section (A–B)",
     "Date dei rilievi per {0} unità ({1} giorni, dal {2} al {3}): lo scavo virtuale può procedere giorno per giorno":
         "Survey dates for {0} units ({1} days, from {2} to {3}): the virtual excavation can proceed day by day",
-    "Date rilievi": "Survey dates",
+    "Date rilievi": "Survey dates", "Date rilievi con altre US": "Survey dates with other SUs",
+    "rilevata con altre US: {0}": "surveyed with other SUs: {0}",
+    "Modelli del terreno che avvolgono più unità": "Terrain models covering several units",
+    "Il modello 3D «{0}» è a più di un chilometro dallo scavo: forse è stato esportato con uno spostamento delle "
+    "coordinate, da indicare nel riquadro dei modelli 3D; finché non si indica non viene mostrato":
+        "The 3D model «{0}» is more than a kilometre from the excavation: it may have been exported with a "
+        "coordinate shift, to be entered in the 3D models box; until then it is not shown",
+    "{0} ortofoto fuori dalla zona dello scavo (altre aree del sito): non drappeggiate":
+        "{0} orthophotos outside the excavation zone (other areas of the site): not draped",
 })
 
 if __name__ == "__main__":

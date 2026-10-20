@@ -466,12 +466,68 @@ def _risultato(categoria, ruolo=None, punteggio=0.0, motivo="", usa=None, destin
     return r
 
 
+# il risultato dell'analisi di ogni file resta anche su disco (cache dell'app, inventario.json): una nuova
+# importazione dello stesso archivio non riapre migliaia di tabelle e raster che non sono cambiati
+_DISCO = {"voci": None, "cambiato": False, "salvato": 0.0}
+_DISCO_LOCK = __import__("threading").Lock()
+_DISCO_MAX = 60000
+
+
+def _file_disco():
+    from . import cache
+    return os.path.join(cache.cartella(), "inventario.json")
+
+
+def _disco():
+    if _DISCO["voci"] is None:
+        voci = {}
+        try:
+            import json
+            with open(_file_disco(), encoding="utf-8") as f:
+                d = json.load(f)
+            from . import __version__
+            if d.get("versione") == __version__:
+                voci = d.get("voci") or {}
+        except Exception:
+            pass
+        _DISCO["voci"], _DISCO["cambiato"] = voci, False
+    return _DISCO["voci"]
+
+
+def _salva_disco():
+    if not _DISCO["cambiato"] or _DISCO["voci"] is None:
+        return
+    try:
+        import json
+        from . import __version__
+        voci = _DISCO["voci"]
+        if len(voci) > _DISCO_MAX:                    # si tengono le più recenti
+            voci = dict(list(voci.items())[-_DISCO_MAX // 2:])
+            _DISCO["voci"] = voci
+        p = _file_disco()
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p + ".tmp", "w", encoding="utf-8") as f:
+            json.dump({"versione": __version__, "voci": dict(voci)}, f, ensure_ascii=False)
+        os.replace(p + ".tmp", p)
+        _DISCO["cambiato"] = False
+    except Exception:
+        pass
+
+
 def _analizza(el, accessori):
-    """Classifica un file principale (con i suoi accessori). Il risultato si ricorda finché il file non cambia."""
+    """Classifica un file principale (con i suoi accessori). Il risultato si ricorda finché il file non cambia,
+    anche tra un avvio e l'altro dell'app."""
     mt, dim = _firma(el.percorso) if el.estratto else (None, el.dimensione)
-    chiave = (el.percorso, mt, dim, tuple(sorted(a.nome.lower() for a in accessori)))
+    acc = tuple(sorted(f"{a.nome.lower()}:{a.dimensione or 0}" for a in accessori))
+    chiave = (el.percorso, mt, dim, acc)
     if el.estratto and chiave in _CACHE:
         return _CACHE[chiave]
+    k_disco = f"{os.path.abspath(el.percorso)}|{mt}|{dim}|{'/'.join(acc)}" if el.estratto and mt else None
+    if k_disco:
+        r = _disco().get(k_disco)
+        if r is not None:
+            _CACHE[chiave] = r
+            return r
     try:
         r = _analizza_file(el, accessori)
     except Exception as e:           # un file strano non deve fermare l'inventario
@@ -480,6 +536,20 @@ def _analizza(el, accessori):
         if len(_CACHE) > 50000:
             _CACHE.clear()
         _CACHE[chiave] = r
+        if k_disco:
+            try:
+                import json
+                rj = json.loads(json.dumps(r, ensure_ascii=False))     # solo risultati scrivibili e uguali
+                if rj == r:
+                    _disco()[k_disco] = rj
+                    _DISCO["cambiato"] = True
+                    # ogni tanto anche durante l'inventario: un'importazione interrotta non riparte da zero
+                    if time.time() - _DISCO.get("salvato", 0) > 20:
+                        _DISCO["salvato"] = time.time()
+                        with _DISCO_LOCK:
+                            _salva_disco()
+            except (TypeError, ValueError):
+                pass
     return r
 
 
@@ -1473,6 +1543,7 @@ def esamina_cartella(percorsi, profondita_max=8, limite_file=20000):
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=min(8, (os.cpu_count() or 2) + 2)) as ex:
         risultati = list(ex.map(lambda g: _analizza(*g), gruppi))
+    _salva_disco()
     for (el, acc), r in zip(gruppi, risultati):
         v = dict(percorso=el.percorso, origine=el.origine, relativo=el.relativo, nome=el.nome,
                  estensione=os.path.splitext(el.nome)[1].lower(), dimensione=el.dimensione)

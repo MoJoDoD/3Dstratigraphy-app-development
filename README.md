@@ -44,6 +44,8 @@ It runs offline on your own computer, as a desktop app or from the command line.
   - free or surveyed sections, including a section drawn in plan with two clicks, with its profile;
   - navigation by room ("Room/Space"): one room with its deposits and all its walls, shared ones included;
   - construction phases of the walls, from bonded and abutting relationships;
+  - several seasons in one project: the general terrain model and orthophoto are chosen among those covering
+    the units' surveys, and 3D models of other areas of the site are skipped without being read;
   - an interactive Harris matrix;
   - the full context record for each unit, with finds, samples, photographs and drawings;
   - colours by any field of the record, and a draped orthophoto;

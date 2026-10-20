@@ -49,7 +49,7 @@ def test_cronologia_scavo():
     assert c["date"] == ["2025-09-24", "2025-09-25", "2025-09-27", "2025-09-28"]
     u = c["unita"]
     # rilevata due volte: asportata entro l'ultimo rilievo
-    assert u[1002] == {"rilievi": [1, 2], "rimossa": 2, "stimata": False}
+    assert u[1002] == {"rilievi": [1, 2], "insieme": [], "rimossa": 2, "stimata": False}
     # un solo rilievo: asportata quando compare la prima unità sottostante
     assert u[1001]["rimossa"] == 1 and u[1001]["stimata"]
     assert u[1004]["rilievi"] == [] and u[1004]["rimossa"] == 3 and u[1004]["stimata"]
@@ -58,6 +58,20 @@ def test_cronologia_scavo():
     assert u[1005]["rimossa"] == 1 and u[1005]["stimata"]     # la sommità del muro compare il 25
     assert 1006 not in u and 1007 not in u
     assert ar.cronologia_scavo(rap, {}) is None
+
+
+def test_cronologia_con_dem_di_piu_unita():
+    # 1001 copre 1002; 1002 compare solo in un DEM che avvolge anche 1003 (il 27): 1001 tolta entro il 27;
+    # 1002 era ancora esposta il 28 (altro DEM d'insieme): la sua asportazione stimata non viene prima
+    rap = _rap([(1001, "copre", 1002), (1002, "copre", 1004)])
+    c = ar.cronologia_scavo(rap, {1001: ["2025-09-24"], 1004: ["2025-09-25"]},
+                            insieme={1002: ["2025-09-27", "2025-09-28"], 1003: ["2025-09-27"]})
+    assert c["date"] == ["2025-09-24", "2025-09-25", "2025-09-27", "2025-09-28"]
+    u = c["unita"]
+    assert u[1002]["insieme"] == [2, 3] and u[1002]["rilievi"] == []
+    assert u[1002]["rimossa"] == 3 and u[1002]["stimata"]
+    assert u[1001]["rimossa"] == 1                      # 1004, sotto 1002, compare il 25
+    assert ar.cronologia_scavo(rap, {}, insieme={1003: ["2025-09-27"]})["unita"][1003]["rimossa"] is None
 
 
 def test_date_delle_schede():

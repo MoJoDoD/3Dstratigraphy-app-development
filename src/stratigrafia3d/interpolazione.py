@@ -54,7 +54,12 @@ class Krig:
         return self.coef[0] + self.coef[1] * xy[:, 0] + self.coef[2] * xy[:, 1]
 
     def _cov(self, A, B):
-        d2 = ((A[:, None, :] - B[None, :, :]) ** 2).sum(-1)
+        # distanze al quadrato come |a|² + |b|² - 2a·b (prodotto di matrici, senza l'array n×m×2), dopo aver
+        # spostato l'origine nel centro dei punti: con coordinate assolute (UTM) si perderebbero le cifre
+        c = B.mean(0) if len(B) else 0.0
+        A, B = A - c, B - c
+        d2 = (A * A).sum(1)[:, None] + (B * B).sum(1)[None, :] - 2.0 * (A @ B.T)
+        np.maximum(d2, 0.0, out=d2)
         return self.s2 * np.exp(-d2 / self.a ** 2)
 
     def __call__(self, xy):

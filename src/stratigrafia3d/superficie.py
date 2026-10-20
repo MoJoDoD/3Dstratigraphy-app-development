@@ -62,7 +62,9 @@ class Raster:
     # ------------------------------------------------------------------ uso
     def __call__(self, x, y):
         """Quota bilineare (coordinate assolute). Fuori dal raster: il bordo più vicino."""
-        x, y = np.asarray(x, float), np.asarray(y, float)
+        forma = np.broadcast(np.asarray(x), np.asarray(y)).shape
+        x, y = np.broadcast_arrays(np.atleast_1d(np.asarray(x, float)), np.atleast_1d(np.asarray(y, float)))
+        x, y = x.ravel(), y.ravel()
         z = self.z
         c = np.clip((x - self.x0) / self.sx, 0, z.shape[1] - 1)
         r = np.clip((self.y0 - y) / self.sy, 0, z.shape[0] - 1)
@@ -71,19 +73,57 @@ class Raster:
         c1, r1 = np.minimum(c0 + 1, z.shape[1] - 1), np.minimum(r0 + 1, z.shape[0] - 1)
         fc, fr = c - c0, r - r0
         v = ((z[r0, c0] * (1 - fc) + z[r0, c1] * fc) * (1 - fr) + (z[r1, c0] * (1 - fc) + z[r1, c1] * fc) * fr)
-        if np.isnan(v).any():                            # celle vuote: il valore valido più vicino
-            vicino = self._piu_vicino(c, r)
-            v = np.where(np.isnan(v), vicino, v)
-        return v
+        buchi = np.isnan(v)
+        if buchi.any():
+            # al bordo delle zone vuote: media pesata delle sole celle vicine con un valore
+            idx = np.nonzero(buchi)
+            fcb, frb = fc[idx], fr[idx]
+            num = np.zeros(len(fcb)); den = np.zeros(len(fcb))
+            for rr, cc, w in ((r0, c0, (1 - fcb) * (1 - frb)), (r0, c1, fcb * (1 - frb)),
+                              (r1, c0, (1 - fcb) * frb), (r1, c1, fcb * frb)):
+                q = z[rr[idx], cc[idx]]
+                ok = ~np.isnan(q)
+                num[ok] += w[ok] * q[ok]
+                den[ok] += w[ok]
+            vb = np.where(den > 1e-12, num / np.where(den > 1e-12, den, 1), np.nan)
+            v[idx] = vb
+            if np.isnan(vb).any():                       # celle tutte vuote: il valore valido più vicino
+                resto = tuple(i[np.isnan(vb)] for i in idx)
+                v[resto] = self._piu_vicino(c[resto], r[resto])
+        return v.reshape(forma) if forma else v[0]
 
     def _piu_vicino(self, c, r):
+        """Valore della cella valida più vicina: cercata in una finestra attorno ai punti, allargata se serve
+        (costruire l'albero su tutto il raster, milioni di celle, a ogni chiamata era lento)."""
         from scipy.spatial import cKDTree
-        ok = np.argwhere(~np.isnan(self.z))
-        if len(ok) == 0:
-            return np.full(np.shape(c), np.nan)
-        _, i = cKDTree(ok).query(np.c_[np.ravel(r), np.ravel(c)])
-        rr, cc = ok[i].T
-        return self.z[rr, cc].reshape(np.shape(c))
+        c, r = np.ravel(c), np.ravel(r)
+        out = np.full(len(c), np.nan)
+        if not len(c):
+            return out
+        h, w = self.z.shape
+        m = 32
+        while True:
+            r0, r1 = max(0, int(r.min()) - m), min(h, int(r.max()) + m + 2)
+            c0, c1 = max(0, int(c.min()) - m), min(w, int(c.max()) + m + 2)
+            ok = np.argwhere(~np.isnan(self.z[r0:r1, c0:c1]))
+            tutto = r0 == 0 and c0 == 0 and r1 == h and c1 == w
+            if len(ok) or tutto:
+                break
+            m *= 4
+        if not len(ok):
+            return out
+        ok = ok + [r0, c0]
+        d, i = cKDTree(ok).query(np.c_[r, c])
+        # un punto più vicino al bordo della finestra che alla cella trovata: si cerca su tutto il raster
+        lontano = d > m - 1
+        if lontano.any() and not tutto:
+            tutte = np.argwhere(~np.isnan(self.z))
+            _, j = cKDTree(tutte).query(np.c_[r[lontano], c[lontano]])
+            sel = ok[i]
+            sel[lontano] = tutte[j]
+        else:
+            sel = ok[i]
+        return self.z[sel[:, 0], sel[:, 1]]
 
     def copre(self, x, y):
         """Vero dove il raster ha un valore (dentro l'estensione e cella non vuota)."""

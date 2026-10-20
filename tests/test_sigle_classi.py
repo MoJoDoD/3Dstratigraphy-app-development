@@ -339,8 +339,11 @@ def test_dem_delle_unita(cartella_dem, tmp_path):
     us = s.tabelle["US"].set_index("US")
     assert us.loc[1003, "Date rilievi"] == "2025-10-05, 2025-10-07"
     cr = d["architettura"]["cronologia"]
-    assert cr["date"] == ["2025-10-05", "2025-10-07"]
-    assert cr["unita"][1003] == {"rilievi": [0, 1], "rimossa": 1, "stimata": False}
+    assert cr["date"] == ["2025-10-05", "2025-10-07", "2025-10-08"]
+    assert cr["unita"][1003]["rilievi"] == [0, 1] and cr["unita"][1003]["rimossa"] == 1
+    # «G2_A3-4_DEM_0810» avvolge A3 e A4: data d'insieme, non un rilievo proprio
+    assert us.loc[1004, "Date rilievi con altre US"] == "2025-10-08"
+    assert cr["unita"][1003]["insieme"] == [2] and cr["unita"][1004]["insieme"] == [2]
     assert cr["unita"][1002]["stimata"]                    # A2 copre A3: asportata prima che A3 fosse rilevata
     fm = d["architettura"]["fasi_murarie"]
     assert fm[2001]["cantiere"] == fm[2002]["cantiere"]    # B1 e B2 legati
