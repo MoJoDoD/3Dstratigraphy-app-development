@@ -685,6 +685,9 @@ const FRANK={}; [...new Set(Object.values(S).map(r=>+r.Fase||0))].sort((a,b)=>a-
 if(N_FASI<=1){GAP=0; $("expl").value=0; $("explO").textContent="0 cm"}
 {const R=D.rilievo; if(R&&R.xy>0&&R.z/R.xy>0.06){VE=1; $("ve").value=1; $("veO").textContent="×1"}}
 if(N_ORTO_U>0) $("colMode").value="orto";
+// con le fotografie delle unità, i modelli 3D rilevati (di solito superfici d'area di prima dello scavo) le
+// coprirebbero: si accendono a richiesta con «Rilievo 3D»
+if(N_ORTO_U>0 && M3D.children.length) $("oM3D").setAttribute("aria-pressed","false");
 if(HA_FM){ const o=document.createElement("option"); o.value="mur"; o.textContent="fasi murarie"; $("colMode").insertBefore(o,$("colMode").querySelector('option[value="cat"]')) }
 if(CR_D.length){ $("excMode").hidden=false; $("excMode").value=EXC_MODE; $("excPlay").hidden=EXC_MODE!=="data" }
 function explIndex(u){ if(EXPL_MODE==="fase") return (FRANK[faseOf(u)]??0)*2 + (S[u]?._tipo==="USM"? .5:0); return S[u]?._livello??0 }
@@ -1307,7 +1310,9 @@ function bindHarris(){
 function renderHarrisSel(){
   if(hVista==="seq" && (selected!=null?HG[selected]??null:null)!==hGruppo){ renderHarris(); return }
   document.querySelectorAll(".hnode").forEach(g=>{const on=+g.dataset.h===selected; g.classList.toggle("sel",on);
-    if(on && hVista==="tutto" && !$("pHarris").hidden) g.scrollIntoView({block:"nearest",inline:"nearest"})});
+    // si sposta solo il riquadro del diagramma (scrollIntoView muoverebbe anche la pagina)
+    if(on && !$("pHarris").hidden){ const w=g.closest(".hwrap"); if(w){ const a=g.getBoundingClientRect(), c=w.getBoundingClientRect();
+      w.scrollLeft+=a.left-c.left-(c.width-a.width)/2; w.scrollTop+=a.top-c.top-(c.height-a.height)/2 } }});
 }
 
 // ------------------------------------------------------------ Sezioni 2D (disegni del GIS)
@@ -1359,7 +1364,8 @@ function renderSez(){
 function renderSezSel(){ document.querySelectorAll(".spoly").forEach(p=>p.classList.toggle("sel",+p.dataset.s===selected)) }
 
 // ------------------------------------------------------------ pannelli e controlli
-function switchTab(id){ ["tScheda","tHarris","tSez"].forEach(t=>{$(t).setAttribute("aria-selected",t===id);$("p"+t.slice(1)).hidden=t!==id}); if(id==="tSez") renderSez() }
+function switchTab(id){ ["tScheda","tHarris","tSez"].forEach(t=>{$(t).setAttribute("aria-selected",t===id);$("p"+t.slice(1)).hidden=t!==id}); if(id==="tSez") renderSez();
+  if(id==="tHarris") renderHarrisSel() }      // il diagramma si apre centrato sull'unità selezionata
 ["tScheda","tHarris","tSez"].forEach(t=>$(t).onclick=()=>switchTab(t));
 function showPanel(on){ $("main").classList.toggle("nopanel",!on); $("btnPanel").setAttribute("aria-pressed",on); setTimeout(resize,0) }
 $("btnPanel").onclick=()=>showPanel($("main").classList.contains("nopanel"));

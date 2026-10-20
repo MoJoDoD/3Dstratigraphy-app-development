@@ -399,6 +399,25 @@ def unita_dal_percorso(relativo, unita_note=None, livelli=3, testo_libero=False)
     return scelta, motivo, scartati
 
 
+def unita_dalle_sigle(relativo, codifica, unita_note=None, livelli=3):
+    """Come ``unita_dal_percorso`` per gli scavi con unità numerate per classe (A1, B1…): contano solo le
+    sigle con la lettera della classe, nel nome del file e poi nelle cartelle più vicine. I numeri nudi
+    no: «2001_1.pdf» o «Gebel_Hermansen_2001.pdf» non sono l'unità B1, anche se il suo numero interno
+    è 2001."""
+    from . import sigle as sg
+    parti = [p for p in re.split(r"[\\/]+", str(relativo)) if p]
+    if not parti:
+        return [], "", []
+    parti[-1] = os.path.splitext(parti[-1])[0]
+    for i, parte in enumerate(reversed(parti[-(livelli + 1):])):
+        uu = sg.unita_nel_nome(parte, codifica, unita_note, solo_classe=True)
+        if uu:
+            dove = "nel nome del file" if i == 0 else "nel nome della cartella"
+            etichette = ", ".join(codifica.sigla(u) or str(u) for u in uu)
+            return uu, f"«{etichette}» {dove}", []
+    return [], "", []
+
+
 # ---------------------------------------------------------------- collegamenti
 def _ext(v):
     return os.path.splitext(str(v.get("relativo") or v.get("percorso") or ""))[1].lower()
@@ -432,6 +451,9 @@ def documenti_per_unita(voci, unita_note=None):
     sigla («1005-sez.tif») e si scartano quelli che non sono unità; senza, valgono solo i numeri con
     una sigla (US, SU, UE, USM, Context, Ctx, Befund, Layer, Cut, Fill...)."""
     note_set = None if unita_note is None else {int(u) for u in unita_note}
+    from . import sigle as sg
+    cod = sg.attiva()
+    per_classe = cod is not None and bool(getattr(cod, "classi", None))
     coll, non_coll, cache = {}, [], {}
     n_imm = n_cartella = n_incerti = n_pdf = 0
     ignoti, scartati_noti = set(), 0
@@ -442,7 +464,10 @@ def documenti_per_unita(voci, unita_note=None):
             continue
         if imm:
             n_imm += 1
-        numeri, motivo, scartati = unita_dal_percorso(v.get("relativo") or v.get("percorso"), note_set)
+        if per_classe:            # numeri interni (B1 = 2001): solo le sigle con la lettera della classe
+            numeri, motivo, scartati = unita_dalle_sigle(v.get("relativo") or v.get("percorso"), cod, note_set)
+        else:
+            numeri, motivo, scartati = unita_dal_percorso(v.get("relativo") or v.get("percorso"), note_set)
         ignoti |= {n for n, perche in scartati if perche == "unità non presente nel progetto"}
         if not numeri:
             if imm:
