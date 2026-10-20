@@ -459,8 +459,9 @@ def _zona_scavo(er, abb):
 
 
 def _ordine_generali(er, f, zona):
-    """Chiave d'ordine dei DEM e delle ortofoto generali: copertura della zona dello scavo (a decimi), poi
-    il passo più fine; senza zona, il più esteso."""
+    """Chiave d'ordine dei DEM e delle ortofoto generali: prima quelli che coprono almeno metà della zona dello
+    scavo, tra questi i file dichiarati ortofoto o DEM nel nome, poi la copertura (a decimi) e il passo più
+    fine; senza zona, il più esteso."""
     e = er[f].get("estensione") or [0, 0, 0, 0]
     if zona is None:
         return (0.0, 0, -(e[2] - e[0]) * (e[3] - e[1]))
@@ -468,7 +469,8 @@ def _ordine_generali(er, f, zona):
     # una figura georiferita in una cartella di rapporti), poi il passo più fine
     nome = os.path.basename(f).lower()
     dichiarato = 0 if re.search(r"orth|orto|geotiff|dem|dtm|dsm|mdt", nome) else 1
-    return (-round(_copertura(e, zona), 1), dichiarato, float(er[f].get("passo") or 1.0))
+    cop = _copertura(e, zona)
+    return (0 if cop >= 0.5 else 1, dichiarato, -round(cop, 1), float(er[f].get("passo") or 1.0))
 
 
 def esamina_raster(files):
