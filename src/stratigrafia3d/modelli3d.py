@@ -116,6 +116,33 @@ class Modello3D:
                    z["uv"] if "uv" in z else None, z["texture"].tobytes() if "texture" in z else None, str(z["nome"]))
 
 
+def riquadro_rapido(path, spostamento=(0.0, 0.0, 0.0), campioni=64, blocco=64 * 1024):
+    """Riquadro approssimato [x0, y0, x1, y1] di un OBJ da qualche blocco sparso nel file (righe «v»), senza
+    leggerlo tutto: basta a riconoscere i modelli di un'altra area del sito. None se non si ricava."""
+    if os.path.splitext(str(path))[1].lower() != ".obj":
+        return None
+    try:
+        dim = os.path.getsize(path)
+        xs, ys = [], []
+        with open(path, "rb") as f:
+            for i in range(campioni):
+                f.seek(int(dim * i / campioni))
+                righe = f.read(blocco).split(b"\n")[1:-1]          # righe intere
+                for r in righe:
+                    if r.startswith(b"v "):
+                        p = r.split()
+                        if len(p) >= 4:
+                            try:
+                                xs.append(float(p[1])); ys.append(float(p[2]))
+                            except ValueError:
+                                pass
+        if len(xs) < 10:
+            return None
+        return [min(xs) + spostamento[0], min(ys) + spostamento[1], max(xs) + spostamento[0], max(ys) + spostamento[1]]
+    except OSError:
+        return None
+
+
 def esamina(path):
     """Descrizione rapida (senza semplificare) per il wizard: vertici, triangoli, estensione."""
     try:

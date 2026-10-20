@@ -4389,6 +4389,15 @@ def _applica(abb, log=None):
         if not p or not os.path.exists(p):
             note.append(f"Modello 3D non trovato: {p}")
             continue
+        if riquadro is not None:
+            # prima di leggere (e semplificare) centinaia di MB: un modello chiaramente di un'altra area si salta
+            from .modelli3d import riquadro_rapido
+            rr = riquadro_rapido(p, tuple(spec.get("spostamento") or (0, 0, 0)))
+            x0, y0, x1, y1 = riquadro
+            if rr is not None and (rr[2] < x0 - 30 or rr[0] > x1 + 30 or rr[3] < y0 - 30 or rr[1] > y1 + 30) and \
+                    max(abs(rr[0] - x0), abs(rr[1] - y0)) < 1000:
+                lontani.append(os.path.basename(p))
+                continue
         try:
             m = Modello3D.leggi(p, spostamento=tuple(spec.get("spostamento") or (0, 0, 0)), triangoli_max=tri_max,
                                 lato_texture=lato_tex)
