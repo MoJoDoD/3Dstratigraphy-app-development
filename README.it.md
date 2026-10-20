@@ -174,6 +174,13 @@ e per confrontare il modello con le sezioni rilevate.
   (▶ lo riproduce): un'unità rilevata in più giorni è asportata entro l'ultimo; con un solo rilievo, o
   nessuno, entro il primo rilievo di un'unità sottostante (data stimata, indicata come tale). Le unità
   rilevate quel giorno hanno l'etichetta gialla.
+- **DEM di più unità**: un DEM con più unità nel nome («G2_A16-A50_DEM_0410») le avvolge tutte: la sua
+  data va nella colonna «Date rilievi con altre US» e dice quando le unità erano esposte; l'asportazione
+  viene dall'ultimo DEM proprio di ogni unità (la superficie lasciata dopo averla scavata).
+- **Più stagioni insieme**: DEM e ortofoto generali si scelgono tra quelli che coprono la zona dei rilievi
+  delle unità (non un'altra area del sito), preferendo i file dichiarati ortofoto o DEM; i modelli 3D
+  chiaramente di altre aree si saltano senza leggerli, quelli a più di un chilometro (esportati con uno
+  spostamento delle coordinate) non si mostrano finché non si indica lo spostamento.
 - **Fasi murarie**: colore «fasi murarie» con l'ordine di costruzione dei muri, dai rapporti tra murature
   («si appoggia a», «copre», anche attraverso gli strati); i muri legati sono un unico cantiere. Gli
   strati diventano trasparenti.
@@ -188,7 +195,8 @@ e per confrontare il modello con le sezioni rilevate.
 triangoli comune, quelli fuori dall'area delle unità esclusi), DEM e ortofoto al millimetro (letti già
 ridotti, senza mai tenere in memoria l'immagine intera). I risultati restano in una cache
 (`~/.stratigrafia3d/cache`), quindi una nuova importazione dello stesso archivio non decodifica di nuovo
-i file pesanti. Per riconoscere i file d'origine cambiati, quelli grandi si confrontano per dimensione,
+i file pesanti; anche l'esame di ogni file della cartella resta in cache (`inventario.json`), quindi una
+nuova importazione di migliaia di file non cambiati è quasi immediata. Per riconoscere i file d'origine cambiati, quelli grandi si confrontano per dimensione,
 inizio e fine. Le cartelle di OneDrive "solo online" vanno rese disponibili sul computer, altrimenti
 ogni lettura le scarica.
 

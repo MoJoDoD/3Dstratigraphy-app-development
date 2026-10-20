@@ -62,7 +62,9 @@ class Raster:
     # ------------------------------------------------------------------ uso
     def __call__(self, x, y):
         """Quota bilineare (coordinate assolute). Fuori dal raster: il bordo più vicino."""
-        x, y = np.asarray(x, float), np.asarray(y, float)
+        forma = np.broadcast(np.asarray(x), np.asarray(y)).shape
+        x, y = np.broadcast_arrays(np.atleast_1d(np.asarray(x, float)), np.atleast_1d(np.asarray(y, float)))
+        x, y = x.ravel(), y.ravel()
         z = self.z
         c = np.clip((x - self.x0) / self.sx, 0, z.shape[1] - 1)
         r = np.clip((self.y0 - y) / self.sy, 0, z.shape[0] - 1)
@@ -88,7 +90,7 @@ class Raster:
             if np.isnan(vb).any():                       # celle tutte vuote: il valore valido più vicino
                 resto = tuple(i[np.isnan(vb)] for i in idx)
                 v[resto] = self._piu_vicino(c[resto], r[resto])
-        return v
+        return v.reshape(forma) if forma else v[0]
 
     def _piu_vicino(self, c, r):
         """Valore della cella valida più vicina: cercata in una finestra attorno ai punti, allargata se serve

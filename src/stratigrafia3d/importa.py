@@ -4416,7 +4416,9 @@ def _applica(abb, log=None):
             cx, cy = m.V[:, 0].mean(), m.V[:, 1].mean()
             if max(x0 - cx, cx - x1, y0 - cy, cy - y1) > 1000:
                 note.append(f"Il modello 3D «{d['nome']}» è a più di un chilometro dallo scavo: forse è stato "
-                            "esportato con uno spostamento delle coordinate, da indicare nel riquadro dei modelli 3D")
+                            "esportato con uno spostamento delle coordinate, da indicare nel riquadro dei modelli 3D; "
+                            "finché non si indica non viene mostrato")
+                continue
             else:
                 mx0, my0, mx1, my1 = d["estensione"][0], d["estensione"][1], d["estensione"][3], d["estensione"][4]
                 if mx1 < x0 - 5 or mx0 > x1 + 5 or my1 < y0 - 5 or my0 > y1 + 5:

@@ -711,7 +711,8 @@ function updateVisibility(){
   OGGI=new Set();
   if(EXC_MODE==="data"){
     lab.textContent=EXC===0?"prima":fmtData(CR_D[EXC-1]);
-    if(EXC>0) Object.entries(CR_U).forEach(([u,c])=>{ if((c.rilievi.includes(EXC-1)||(c.insieme||[]).includes(EXC-1))&&units[u]) OGGI.add(+u) });
+    // rilevate quel giorno e ancora in posto (un DEM d'insieme può comprendere un'unità già scavata)
+    if(EXC>0) Object.entries(CR_U).forEach(([u,c])=>{ if((c.rilievi.includes(EXC-1)||(c.insieme||[]).includes(EXC-1))&&units[u]&&!removedAt(+u)) OGGI.add(+u) });
   } else lab.textContent=EXC===0?"nessuno":EXC+"/"+EXCMAX;
   const stanza=ROOM!=null?`<b>${esc(T("Stanza {0}",ROOM))}</b>`:"";
   if(EXC>0 && EXC_MODE==="data"){
