@@ -3760,50 +3760,58 @@ def _superfici_dai_dem(s, abb, note):
 
 
 def _date_dei_rilievi(s, abb, note):
-    """Colonna «Date rilievi» delle schede US e USM: i giorni dei modelli del terreno e delle ortofoto di ogni
-    unità (dalla data nel nome). Il visualizzatore ne ricava lo scavo giorno per giorno (architettura.py).
-    Le date già scritte nelle schede restano; si aggiungono quelle nuove."""
-    from .architettura import C_DATE_RILIEVI, data_iso, date_dal_testo
+    """Colonne «Date rilievi» e «Date rilievi con altre US» delle schede US e USM: i giorni dei modelli del
+    terreno e delle ortofoto della sola unità e quelli dei DEM che avvolgono più unità (dalla data nel nome).
+    L'ultimo DEM proprio di un'unità è la superficie lasciata dopo averla scavata: il visualizzatore ne ricava
+    lo scavo giorno per giorno (architettura.py). Le date già scritte nelle schede restano."""
+    from .architettura import C_DATE_RILIEVI, C_DATE_INSIEME, data_iso, date_dal_testo
     from .dem_unita import anno_dalla_cartella
     certe, incerte = {}, {}
-    for d in list(abb.dem_unita or []) + list(abb.orto_unita or []):
-        if d.get("data") and len(d["unita"]) == 1:
-            dove = certe if anno_dalla_cartella(d["percorso"]) is not None else incerte
-            dove.setdefault(int(d["unita"][0]), set()).add(tuple(d["data"]))
+    fonti = [(d, False) for d in list(abb.dem_unita or []) + list(abb.orto_unita or [])]
+    for d, _ in fonti:
+        if not d.get("data"):
+            continue
+        insieme = len(d["unita"]) > 1
+        dove = certe if anno_dalla_cartella(d["percorso"]) is not None else incerte
+        for u in d["unita"]:
+            dove.setdefault((int(u), insieme), set()).add(tuple(d["data"]))
     # anno preso dalla data del file (nessuna cartella dell'anno): quello dei rilievi della stessa unità nello
     # stesso giorno e mese, altrimenti l'anno più frequente dei rilievi datati dalle cartelle
     anni = [a for v in certe.values() for a, _, _ in v]
     anno_tipico = max(set(anni), key=anni.count) if anni else None
-    per_u = {u: {data_iso(t) for t in v} for u, v in certe.items()}
-    for u, v in incerte.items():
+    per_u = {k: {data_iso(t) for t in v} for k, v in certe.items()}
+    for (u, ins), v in incerte.items():
+        stessa_u = set(certe.get((u, False), ())) | set(certe.get((u, True), ()))
         for a, m, g in v:
-            uguali = [t[0] for t in certe.get(u, ()) if (t[1], t[2]) == (m, g)]
+            uguali = [t[0] for t in stessa_u if (t[1], t[2]) == (m, g)]
             a = uguali[0] if uguali else (anno_tipico or a)
-            per_u.setdefault(u, set()).add(data_iso((a, m, g)))
+            per_u.setdefault((u, ins), set()).add(data_iso((a, m, g)))
     if not per_u:
         return
-    scritte = 0
+    scritte = set()
     for nome, campo in ((sc.S_US, sc.C_US), (sc.S_USM, sc.C_USM)):
         df = s.tabelle.get(nome)
         if df is None or campo not in df.columns:
             continue
         df = df.copy()
-        if C_DATE_RILIEVI not in df.columns:
-            df[C_DATE_RILIEVI] = None
-        df[C_DATE_RILIEVI] = df[C_DATE_RILIEVI].astype(object)
-        for i, u in zip(df.index, df[campo]):
-            try:
-                u = int(u)
-            except (TypeError, ValueError):
+        for col, ins in ((C_DATE_RILIEVI, False), (C_DATE_INSIEME, True)):
+            if not any(k[1] == ins for k in per_u):
                 continue
-            if u in per_u:
-                tutte = sorted(set(date_dal_testo(df.at[i, C_DATE_RILIEVI])) | per_u[u])
-                df.at[i, C_DATE_RILIEVI] = ", ".join(tutte)
-                scritte += 1
+            if col not in df.columns:
+                df[col] = None
+            df[col] = df[col].astype(object)
+            for i, u in zip(df.index, df[campo]):
+                try:
+                    u = int(u)
+                except (TypeError, ValueError):
+                    continue
+                if (u, ins) in per_u:
+                    df.at[i, col] = ", ".join(sorted(set(date_dal_testo(df.at[i, col])) | per_u[(u, ins)]))
+                    scritte.add(u)
         s.tabelle[nome] = df
     if scritte:
         giorni = sorted(set().union(*per_u.values()))
-        note.append(f"Date dei rilievi per {scritte} unità ({len(giorni)} giorni, dal {giorni[0]} al {giorni[-1]}): "
+        note.append(f"Date dei rilievi per {len(scritte)} unità ({len(giorni)} giorni, dal {giorni[0]} al {giorni[-1]}): "
                     "lo scavo virtuale può procedere giorno per giorno")
 
 

@@ -22,17 +22,23 @@ def metodo_triangolazione():
 
 
 def densify_ring(ring, step):
-    c = np.asarray(ring.coords)[:, :2]
-    out = []
-    for a, b in zip(c[:-1], c[1:]):
-        n = max(1, int(np.ceil(np.linalg.norm(b - a) / step)))
-        for t in np.arange(n) / n:
-            out.append(a + (b - a) * t)
-    out = np.array(out)
-    keep = [0]
-    for i in range(1, len(out)):
-        if np.linalg.norm(out[i] - out[keep[-1]]) > 0.01:
-            keep.append(i)
+    c = np.asarray(ring.coords, float)[:, :2]
+    seg = c[1:] - c[:-1]
+    if not len(seg):
+        return c[:0]
+    # punti intermedi di tutti i lati in un colpo (prima: un ciclo Python per punto)
+    n = np.maximum(1, np.ceil(np.linalg.norm(seg, axis=1) / step).astype(int))
+    quale = np.repeat(np.arange(len(seg)), n)
+    t = (np.arange(n.sum()) - np.repeat(np.cumsum(n) - n, n)) / np.repeat(n, n)
+    out = c[:-1][quale] + seg[quale] * t[:, None]
+    passi = np.linalg.norm(np.diff(out, axis=0), axis=1)
+    if (passi > 0.01).all():                        # nessun punto doppio: si tengono tutti
+        keep = list(range(len(out)))
+    else:
+        keep = [0]
+        for i in range(1, len(out)):
+            if np.linalg.norm(out[i] - out[keep[-1]]) > 0.01:
+                keep.append(i)
     while len(keep) > 3 and np.linalg.norm(out[keep[-1]] - out[keep[0]]) <= 0.01:   # chiusura dell'anello
         keep.pop()
     return out[keep]

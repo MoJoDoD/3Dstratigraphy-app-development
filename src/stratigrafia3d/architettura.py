@@ -7,9 +7,12 @@ Letture architettoniche e cronologiche della sequenza, per il visualizzatore:
   (un muro fondato su uno strato che copre un altro muro è più recente di quello). La fase è la posizione nella
   sequenza delle sole murature: 0 = le più antiche.
 * cronologia dello scavo: le date dei rilievi di ogni unità (modelli del terreno e ortofoto con la data nel
-  nome, colonna «Date rilievi» delle schede) danno un giorno per giorno dell'asportazione. Un'unità rilevata in
-  più giorni è stata scavata entro l'ultimo; con un solo rilievo, o nessuno, è stata tolta al più tardi quando
-  è comparsa la prima unità sottostante rilevata (data stimata); senza unità sottostanti datate resta in posto.
+  nome, colonna «Date rilievi» delle schede) danno un giorno per giorno dell'asportazione. L'ultimo DEM proprio
+  di un'unità è la superficie lasciata dopo averla scavata: rilevata in più giorni, è stata scavata entro
+  l'ultimo. Con un solo rilievo, o nessuno, è stata tolta al più tardi quando è comparsa la prima unità
+  sottostante (data stimata); senza unità sottostanti datate resta in posto. I DEM che avvolgono più unità
+  («Date rilievi con altre US») dicono quando un'unità era esposta, non quando è stata scavata: contano per la
+  comparsa delle unità sottostanti.
 """
 import re
 
@@ -17,7 +20,8 @@ import networkx as nx
 
 from . import stratigrafia as st
 
-C_DATE_RILIEVI = "Date rilievi"
+C_DATE_RILIEVI = "Date rilievi"                    # DEM e ortofoto della sola unità
+C_DATE_INSIEME = "Date rilievi con altre US"        # DEM che avvolgono più unità
 _DATA_RE = re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})")
 
 
@@ -102,26 +106,29 @@ def fasi_murarie(rap, murarie):
     return out
 
 
-def cronologia_scavo(rap, date, murarie=()):
+def cronologia_scavo(rap, date, murarie=(), insieme=None):
     """Cronologia dello scavo dalle date dei rilievi.
 
-    ``date``: {unità: ["AAAA-MM-GG", ...]}. Ritorna {"date": [giorni ordinati], "unita": {u: {"rilievi": [indici
-    dei giorni], "rimossa": indice del giorno entro cui è stata asportata o None, "stimata": bool}}}, oppure
-    None se nessuna unità ha date. Le murature restano in posto."""
+    ``date``: {unità: ["AAAA-MM-GG", ...]} dei rilievi della sola unità; ``insieme``: quelle dei DEM che
+    avvolgono più unità. Ritorna {"date": [giorni ordinati], "unita": {u: {"rilievi": [indici dei giorni],
+    "insieme": [indici], "rimossa": indice del giorno entro cui è stata asportata o None, "stimata": bool}}},
+    oppure None se nessuna unità ha date. Le murature restano in posto."""
     date = {int(u): sorted(set(d)) for u, d in date.items() if d}
-    if not date:
+    insieme = {int(u): sorted(set(d)) for u, d in (insieme or {}).items() if d}
+    if not date and not insieme:
         return None
-    giorni = sorted({g for d in date.values() for g in d})
+    giorni = sorted({g for d in list(date.values()) + list(insieme.values()) for g in d})
     ix = {g: i for i, g in enumerate(giorni)}
     murarie = {int(u) for u in murarie}
     C, nodo = _grafo_condensato(rap)
-    # il primo giorno in cui compare (è rilevata) ciascun nodo del grafo e, per ogni nodo, il primo giorno in
-    # cui compare qualcosa sotto di esso
+    # il primo giorno in cui compare (è rilevata, da sola o con altre) ciascun nodo del grafo e, per ogni nodo,
+    # il primo giorno in cui compare qualcosa sotto di esso
     primo_n = {}
-    for u, d in date.items():
-        if u in nodo:
-            n = nodo[u]
-            primo_n[n] = min(primo_n.get(n, ix[d[0]]), ix[d[0]])
+    for dd in (date, insieme):
+        for u, d in dd.items():
+            if u in nodo:
+                n = nodo[u]
+                primo_n[n] = min(primo_n.get(n, ix[d[0]]), ix[d[0]])
     sotto = {}
     for n in reversed(list(nx.topological_sort(C))):
         best = None
@@ -131,20 +138,21 @@ def cronologia_scavo(rap, date, murarie=()):
                     best = v
         sotto[n] = best
     unita = {}
-    tutte = set(date) | {u for u in nodo if u not in murarie}
+    tutte = set(date) | set(insieme) | {u for u in nodo if u not in murarie}
     for u in sorted(tutte):
-        d = date.get(u, [])
-        ril = [ix[g] for g in d]
-        rec = {"rilievi": ril, "rimossa": None, "stimata": False}
+        ril = [ix[g] for g in date.get(u, [])]
+        ins = [ix[g] for g in insieme.get(u, [])]
+        rec = {"rilievi": ril, "insieme": ins, "rimossa": None, "stimata": False}
         if u not in murarie:
             if len(ril) >= 2:
-                rec["rimossa"] = ril[-1]
+                rec["rimossa"] = ril[-1]          # l'ultimo DEM proprio: la superficie dopo lo scavo
             else:
                 s = sotto.get(nodo[u]) if u in nodo else None
                 if s is not None:
-                    rec["rimossa"] = max(s, ril[-1]) if ril else s
+                    # al più tardi quando compare ciò che copre, ma non prima dell'ultimo giorno in cui era rilevata
+                    rec["rimossa"] = max([s] + ril + ins)
                     rec["stimata"] = True
-        if ril or rec["rimossa"] is not None:
+        if ril or ins or rec["rimossa"] is not None:
             unita[u] = rec
     return {"date": giorni, "unita": unita}
 

@@ -262,9 +262,11 @@ def _architettura(scavo, rap, recs):
         fasi = ar.fasi_murarie(rap, murarie)
     except Exception:            # rapporti incoerenti: la vista resta senza fasi murarie
         fasi = {}
-    date = ar.date_delle_schede((scavo.tabelle.get(sc.S_US), sc.C_US), (scavo.tabelle.get(sc.S_USM), sc.C_USM))
+    tab = ((scavo.tabelle.get(sc.S_US), sc.C_US), (scavo.tabelle.get(sc.S_USM), sc.C_USM))
+    date = ar.date_delle_schede(*tab)
+    insieme = ar.date_delle_schede(*tab, colonne=(ar.C_DATE_INSIEME,))
     try:
-        crono = ar.cronologia_scavo(rap, date, murarie)
+        crono = ar.cronologia_scavo(rap, date, murarie, insieme)
     except Exception:
         crono = None
     return dict(fasi_murarie={int(u): v for u, v in fasi.items()}, cronologia=crono)
