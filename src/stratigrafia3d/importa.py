@@ -432,6 +432,41 @@ def _coords(g):
     return out
 
 
+def _copertura(e, z):
+    """Quota della zona ``z`` coperta dall'estensione ``e`` (riquadri [x0, y0, x1, y1])."""
+    if not e or z is None:
+        return 0.0
+    w = min(e[2], z[2]) - max(e[0], z[0])
+    h = min(e[3], z[3]) - max(e[1], z[1])
+    area = max((z[2] - z[0]) * (z[3] - z[1]), 1e-9)
+    return max(0.0, w) * max(0.0, h) / area
+
+
+def _zona_scavo(er, abb):
+    """Riquadro che contiene i DEM e le ortofoto delle singole unità: la zona dello scavo (None se non ce ne sono)."""
+    est = [er[d["percorso"]].get("estensione") for d in list(abb.dem_unita or []) + list(abb.orto_unita or [])
+           if d["percorso"] in er and er[d["percorso"]].get("estensione")]
+    if not est:
+        return None
+    # le unità di un'altra area (dati di più scavi nella stessa cartella) non allargano la zona: si tiene il
+    # riquadro attorno alla mediana dei centri, fino a 3 volte la dispersione
+    c = np.array([[(e[0] + e[2]) / 2, (e[1] + e[3]) / 2] for e in est])
+    med = np.median(c, axis=0)
+    d = np.abs(c - med).max(1)
+    lim = max(3 * float(np.median(d)), 30.0)
+    est = [e for e, x in zip(est, d) if x <= lim] or est
+    return [min(e[0] for e in est), min(e[1] for e in est), max(e[2] for e in est), max(e[3] for e in est)]
+
+
+def _ordine_generali(er, f, zona):
+    """Chiave d'ordine dei DEM e delle ortofoto generali: copertura della zona dello scavo (a decimi), poi
+    il passo più fine; senza zona, il più esteso."""
+    e = er[f].get("estensione") or [0, 0, 0, 0]
+    if zona is None:
+        return (0.0, -(e[2] - e[0]) * (e[3] - e[1]))
+    return (-round(_copertura(e, zona), 1), float(er[f].get("passo") or 1.0))
+
+
 def esamina_raster(files):
     """Descrizione dei raster tra i file: percorso -> dict (con «tipo»: «dem» o «ortofoto») o errore."""
     from .superficie import Raster, EST_RASTER, georef, e_ortofoto, e_differenza
@@ -1955,11 +1990,9 @@ def _proponi(files, termini=None, scelte=None):
             abb.note.append(f"{len(abb.dem_unita)} modelli del terreno di singole unità (dal nome, es. "
                             f"«{os.path.basename(abb.dem_unita[0]['percorso'])}»): {n1} danno pianta e superfici "
                             "di un'unità, gli altri le quote delle unità indicate")
-            # tra i DEM generali, per primo quello più esteso (tutta l'area, non un dettaglio)
-            def _area(f):
-                e = er[f].get("estensione") or [0, 0, 0, 0]
-                return -(e[2] - e[0]) * (e[3] - e[1])
-            raster.sort(key=_area)
+            # tra i DEM generali, per primo quello che copre la zona dei DEM delle unità (lo scavo, non un'altra
+            # area del sito), poi il più dettagliato; senza zona, il più esteso
+            raster.sort(key=lambda f: _ordine_generali(er, f, _zona_scavo(er, abb)))
         abb.dem_generali = list(raster)
     from .modelli3d import EST_MODELLI
     for f in files:
@@ -1986,10 +2019,14 @@ def _proponi(files, termini=None, scelte=None):
             abb.note.append(f"{len(abb.orto_unita)} ortofoto di singole unità (dal nome, es. "
                             f"«{os.path.basename(abb.orto_unita[0]['percorso'])}»): texture di ciascuna unità")
         if len(orto) > 1:
-            def _area_o(f):
-                e = er[f].get("estensione") or [0, 0, 0, 0]
-                return -(e[2] - e[0]) * (e[3] - e[1])
-            orto.sort(key=_area_o)
+            zona = _zona_scavo(er, abb)
+            orto.sort(key=lambda f: _ordine_generali(er, f, zona))
+            if zona is not None and any(_copertura(er[f].get("estensione"), zona) > 0 for f in orto):
+                fuori = [f for f in orto if _copertura(er[f].get("estensione"), zona) == 0]
+                if fuori:
+                    orto = [f for f in orto if f not in fuori]
+                    abb.note.append(f"{len(fuori)} ortofoto fuori dalla zona dello scavo (altre aree del sito): "
+                                    "non drappeggiate")
     if orto:
         abb.ortofoto = orto[0]
         abb.note.append(f"Ortofoto «{os.path.basename(orto[0])}»: sarà drappeggiata sul modello")
