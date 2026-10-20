@@ -175,9 +175,10 @@ def ripristina(tok):
     _ATTIVA.reset(tok)
 
 
-def unita_nel_nome(nome, codifica=None, noti=None):
+def unita_nel_nome(nome, codifica=None, noti=None, solo_classe=False):
     """Unità indicate nel nome di un file o layer («B12», «GR6.A66», «US_1005»): codici interni delle sole
-    unità note (se ``noti`` è dato), in ordine e senza ripetizioni."""
+    unità note (se ``noti`` è dato), in ordine e senza ripetizioni. Con ``solo_classe`` contano solo le
+    sigle con la lettera della classe («B1»), non i numeri nudi («2001_1.pdf» non è B1)."""
     codifica = codifica if codifica is not None else attiva()
     out = []
     testo = str(nome)
@@ -189,6 +190,8 @@ def unita_nel_nome(nome, codifica=None, noti=None):
         if c is None and not m.group(1) and prima and testo[fine:m.start()] in ("-", "–"):
             c = prima
         prima, fine = c, m.end()
+        if solo_classe and c is None:
+            continue
         if codifica is not None:
             k = codifica.codice(f"{c}{n}" if c else n)
         else:

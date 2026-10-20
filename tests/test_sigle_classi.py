@@ -351,3 +351,19 @@ def test_dem_delle_unita(cartella_dem, tmp_path):
     r = Scavo.apri(str(tmp_path / "dem.scavo"))
     assert 1003 in r.ortofoto_unita and 1003 in r.modello.unita
     assert r.tabelle["US"].set_index("US").loc[1003, "Date rilievi"] == "2025-10-05, 2025-10-07"
+
+
+def test_documenti_collegati_per_sigla():
+    """Con le unità numerate per classe, un file si collega solo alla sigla con la lettera: «2001_1.pdf» non è B1
+    (numero interno 2001), «G2_A16_foto.jpg» è A16."""
+    from stratigrafia3d import documenti_auto as da
+    c = sg.Codifica({"A": 1000, "B": 2000}, 1000)
+    voci = [{"relativo": r, "percorso": "/x/" + r, "categoria": "documento"} for r in
+            ("BIB/2001_1.pdf", "BIB/Gebel_Hermansen_2001.pdf", "REPORT/G2_A16_sezione.pdf", "B1/rilievo.pdf")]
+    with sg.usa(c):
+        r = da.documenti_per_unita(voci, unita_note=[1016, 2001])
+    coll = {u: sorted(e["percorso"] for e in v) for u, v in r["collegamenti"].items()}
+    assert coll == {1016: ["/x/REPORT/G2_A16_sezione.pdf"], 2001: ["/x/B1/rilievo.pdf"]}
+    # senza classi i numeri nudi delle unità note valgono ancora
+    r = da.documenti_per_unita([{"relativo": "foto/1005_nord.pdf", "percorso": "/y/1005_nord.pdf"}], unita_note=[1005])
+    assert 1005 in r["collegamenti"]
