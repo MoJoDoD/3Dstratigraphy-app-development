@@ -468,7 +468,8 @@ def _risultato(categoria, ruolo=None, punteggio=0.0, motivo="", usa=None, destin
 
 # il risultato dell'analisi di ogni file resta anche su disco (cache dell'app, inventario.json): una nuova
 # importazione dello stesso archivio non riapre migliaia di tabelle e raster che non sono cambiati
-_DISCO = {"voci": None, "cambiato": False}
+_DISCO = {"voci": None, "cambiato": False, "salvato": 0.0}
+_DISCO_LOCK = __import__("threading").Lock()
 _DISCO_MAX = 60000
 
 
@@ -506,7 +507,7 @@ def _salva_disco():
         p = _file_disco()
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p + ".tmp", "w", encoding="utf-8") as f:
-            json.dump({"versione": __version__, "voci": voci}, f, ensure_ascii=False)
+            json.dump({"versione": __version__, "voci": dict(voci)}, f, ensure_ascii=False)
         os.replace(p + ".tmp", p)
         _DISCO["cambiato"] = False
     except Exception:
@@ -542,6 +543,11 @@ def _analizza(el, accessori):
                 if rj == r:
                     _disco()[k_disco] = rj
                     _DISCO["cambiato"] = True
+                    # ogni tanto anche durante l'inventario: un'importazione interrotta non riparte da zero
+                    if time.time() - _DISCO.get("salvato", 0) > 20:
+                        _DISCO["salvato"] = time.time()
+                        with _DISCO_LOCK:
+                            _salva_disco()
             except (TypeError, ValueError):
                 pass
     return r
