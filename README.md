@@ -39,8 +39,11 @@ It runs offline on your own computer, as a desktop app or from the command line.
   terrain model, a constant level or the surveyed levels) and stacked in stratigraphic order. Every
   unit records how it was built, so the viewer can colour units by reliability.
 - **Lets you explore the sequence.** The viewer offers:
-  - exploded views by phase or sequence, and a virtual excavation that removes units in order;
-  - free or surveyed sections;
+  - exploded views by phase or sequence, and a virtual excavation that removes units in order, or day by
+    day from the dates of the unit surveys (DEMs and orthophotos named with their date);
+  - free or surveyed sections, including a section drawn in plan with two clicks, with its profile;
+  - navigation by room ("Room/Space"): one room with its deposits and all its walls, shared ones included;
+  - construction phases of the walls, from bonded and abutting relationships;
   - an interactive Harris matrix;
   - the full context record for each unit, with finds, samples, photographs and drawings;
   - colours by any field of the record, and a draped orthophoto;

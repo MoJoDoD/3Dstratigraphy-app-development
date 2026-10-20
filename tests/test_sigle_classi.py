@@ -335,6 +335,16 @@ def test_dem_delle_unita(cartella_dem, tmp_path):
     from stratigrafia3d.esporta import dati_visualizzatore
     d = dati_visualizzatore(s)
     assert 1003 in d["ortofoto_unita"] and d["rilievo"]["xy"] > 0
+    # date dei rilievi nella scheda (DEM e ortofoto con un'unità sola) e cronologia dello scavo
+    us = s.tabelle["US"].set_index("US")
+    assert us.loc[1003, "Date rilievi"] == "2025-10-05, 2025-10-07"
+    cr = d["architettura"]["cronologia"]
+    assert cr["date"] == ["2025-10-05", "2025-10-07"]
+    assert cr["unita"][1003] == {"rilievi": [0, 1], "rimossa": 1, "stimata": False}
+    assert cr["unita"][1002]["stimata"]                    # A2 copre A3: asportata prima che A3 fosse rilevata
+    fm = d["architettura"]["fasi_murarie"]
+    assert fm[2001]["cantiere"] == fm[2002]["cantiere"]    # B1 e B2 legati
     s.salva(str(tmp_path / "dem.scavo"))
     r = Scavo.apri(str(tmp_path / "dem.scavo"))
     assert 1003 in r.ortofoto_unita and 1003 in r.modello.unita
+    assert r.tabelle["US"].set_index("US").loc[1003, "Date rilievi"] == "2025-10-05, 2025-10-07"

@@ -166,6 +166,20 @@ e per confrontare il modello con le sezioni rilevate.
 - **Ortofoto delle unità**: un'unità che ha una propria ortofoto (stesso nome del suo DEM, es.
   "G2_A16_ortho_2409.tif") la usa come texture. L'ortofoto generale più estesa copre le altre unità.
   Con le fotografie delle unità, la vista parte già in modalità ortofoto.
+- **Stanze**: con un campo stanza/ambiente/locus nelle schede, ogni stanza si isola (pulsante «Isola»
+  nell'elenco o menu «Stanza») con i suoi depositi e tutti i suoi muri, anche quelli in comune con le
+  stanze vicine ("GR2, GR3" nella scheda: il muro compare in entrambe).
+- **Scavo giorno per giorno**: le date nei nomi dei DEM e delle ortofoto delle unità diventano la colonna
+  «Date rilievi» delle schede. Lo scavo virtuale «per data dei rilievi» mostra lo stato a fine giornata
+  (▶ lo riproduce): un'unità rilevata in più giorni è asportata entro l'ultimo; con un solo rilievo, o
+  nessuno, entro il primo rilievo di un'unità sottostante (data stimata, indicata come tale). Le unità
+  rilevate quel giorno hanno l'etichetta gialla.
+- **Fasi murarie**: colore «fasi murarie» con l'ordine di costruzione dei muri, dai rapporti tra murature
+  («si appoggia a», «copre», anche attraverso gli strati); i muri legati sono un unico cantiere. Gli
+  strati diventano trasparenti.
+- **Sezione tracciata**: «✎ Traccia» nello strumento Sezione, poi due clic in pianta. Il modello si taglia
+  lungo la linea (il cursore la sposta parallelamente) e nella scheda Sezioni compare il profilo delle
+  unità visibili, che segue lo scavo virtuale e la stanza scelta.
 - **Vista adatta ai dati**: senza fasi, l'elenco si raggruppa per stanza o locus ("Room/Space") e
   l'esploso parte da 0. Con dislivelli di metri non c'è esagerazione verticale. Senza colori in scheda,
   gli strati hanno un tono per posizione nella sequenza (chiaro = recente).

@@ -42,14 +42,7 @@ def data_dal_nome(percorso):
                 break
     if gg is None:
         return None
-    anno = None
-    for parte in list(reversed(os.path.normpath(str(percorso)).split(os.sep)[:-1]))[:4]:   # le cartelle vicine
-        # «2025», «BAJA25», «Scavo 25» (non «G16», che è un locus)
-        a = re.search(r"(?<!\d)(20\d{2})(?!\d)", parte) or re.search(r"[A-Za-z]{3,}[\s_\-]?(\d{2})$", parte)
-        if a:
-            v = int(a.group(1))
-            anno = v if v > 1900 else 2000 + v
-            break
+    anno = anno_dalla_cartella(percorso)
     if anno is None:
         try:
             import datetime as dt
@@ -57,6 +50,16 @@ def data_dal_nome(percorso):
         except OSError:
             anno = 0
     return anno, mm, gg
+
+
+def anno_dalla_cartella(percorso):
+    """L'anno dalle cartelle vicine al file («2025», «BAJA25», «Scavo 25»; non «G16», che è un locus), o None."""
+    for parte in list(reversed(os.path.normpath(str(percorso)).split(os.sep)[:-1]))[:4]:
+        a = re.search(r"(?<!\d)(20\d{2})(?!\d)", parte) or re.search(r"[A-Za-z]{3,}[\s_\-]?(\d{2})$", parte)
+        if a:
+            v = int(a.group(1))
+            return v if v > 1900 else 2000 + v
+    return None
 
 
 def leggi_ridotto(percorso, cella=CELLA):

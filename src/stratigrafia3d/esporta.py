@@ -250,7 +250,24 @@ def dati_visualizzatore(scavo):
         ortofoto_unita=_ortofoto_unita(scavo),
         rilievo=_rilievo(scavo, estensione),
         modelli3d=_modelli3d(scavo),
+        architettura=_architettura(scavo, rap, recs),
     )
+
+
+def _architettura(scavo, rap, recs):
+    """Fasi costruttive delle murature e cronologia dello scavo dalle date dei rilievi (architettura.py)."""
+    from . import architettura as ar
+    murarie = [u for u, r in recs.items() if r.get("_tipo") == "USM"]
+    try:
+        fasi = ar.fasi_murarie(rap, murarie)
+    except Exception:            # rapporti incoerenti: la vista resta senza fasi murarie
+        fasi = {}
+    date = ar.date_delle_schede((scavo.tabelle.get(sc.S_US), sc.C_US), (scavo.tabelle.get(sc.S_USM), sc.C_USM))
+    try:
+        crono = ar.cronologia_scavo(rap, date, murarie)
+    except Exception:
+        crono = None
+    return dict(fasi_murarie={int(u): v for u, v in fasi.items()}, cronologia=crono)
 
 
 def _modelli3d(scavo):
