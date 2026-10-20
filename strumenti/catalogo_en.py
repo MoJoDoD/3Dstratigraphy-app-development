@@ -1116,6 +1116,52 @@ T.update({
         "their unit",
 })
 
+# 0.14: stanze, fasi murarie, cronologia dello scavo, sezione tracciata
+T.update({
+    "per data dei rilievi": "by survey date", "Ordine dello scavo virtuale": "Order of the virtual excavation",
+    "Riproduci lo scavo giorno per giorno": "Replay the excavation day by day", "prima": "before",
+    "tracciata": "drawn", "✎ Traccia": "✎ Draw",
+    "Traccia in pianta una sezione libera: clic sul primo e sul secondo punto":
+        "Draw a free section in plan: click the first and the second point",
+    "Stanza": "Room", "tutte": "all", "Stanza {0}": "Room {0}", "Scavo al {0}": "Excavation on {0}",
+    ", giorno {0} di {1}: ": ", day {0} of {1}: ",
+    "asportate {0} unità ({1}), {2} con data stimata dai rapporti.":
+        "{0} units removed ({1}), {2} with a date estimated from the relationships.",
+    "nessuna unità asportata.": "no unit removed.",
+    "Rilevate quel giorno (in giallo): {0}.": "Surveyed that day (in yellow): {0}.",
+    "Le murature restano in posto.": "Walls stay in place.",
+    ": {0} unità, di cui {1} muri": ": {0} units, {1} of them walls",
+    "; in comune con altre stanze: {0}": "; shared with other rooms: {0}",
+    "«Tutte» o Esc per tornare all'intero scavo.": "«All» or Esc to return to the whole excavation.",
+    "anche in: {0}": "also in: {0}", "Mostra solo questa stanza, con i suoi muri": "Show only this room, with its walls",
+    "Mostra solo la stanza {0}": "Show only room {0}",
+    "fasi murarie": "wall phases", "Fasi costruttive dei muri": "Construction phases of the walls", "fase {0}": "phase {0}",
+    "senza rapporti con altri muri": "no relationship with other walls",
+    "Ordine di costruzione dai rapporti tra i muri (si appoggia, copre, anche attraverso gli strati): 0 = più antichi. "
+    "I muri legati tra loro sono un unico cantiere.":
+        "Building order from the relationships between walls (abuts, covers, also through the layers): 0 = oldest. "
+        "Walls bonded together are a single building event.",
+    "Ordine di costruzione dei muri (0 = più antichi)": "Building order of the walls (0 = oldest)",
+    "fase muraria {0}": "wall phase {0}", ", legato a {0}": ", bonded with {0}",
+    "Giorni dei rilievi dell'unità (modelli del terreno, ortofoto)": "Survey days of the unit (terrain models, orthophotos)",
+    "rilevata: {0}": "surveyed: {0}", "asportata entro il {0}": "removed by {0}",
+    "asportata entro il {0} (stima)": "removed by {0} (estimate)",
+    "Sezione libera": "Free section", "clic sul primo punto in pianta (Esc per annullare).":
+        "click the first point in plan (Esc to cancel).", "clic sul secondo punto.": "click the second point.",
+    "Nessun disegno di sezione. Con «✎ Traccia» (strumento Sezione) si disegna in pianta una sezione libera: il "
+    "profilo delle unità compare qui.":
+        "No section drawing. With «✎ Draw» (Section tool) you draw a free section in plan: the profile of the units "
+        "appears here.",
+    "Profilo ricavato dal modello 3D lungo la traccia (da A a B, {0} m), con le sole unità visibili: segue lo scavo "
+    "virtuale e la stanza scelta. Esagerazione verticale ×2.":
+        "Profile taken from the 3D model along the line (from A to B, {0} m), with the visible units only: it follows "
+        "the virtual excavation and the chosen room. Vertical exaggeration ×2.",
+    "Sezione tracciata (A–B)": "Drawn section (A–B)",
+    "Date dei rilievi per {0} unità ({1} giorni, dal {2} al {3}): lo scavo virtuale può procedere giorno per giorno":
+        "Survey dates for {0} units ({1} days, from {2} to {3}): the virtual excavation can proceed day by day",
+    "Date rilievi": "Survey dates",
+})
+
 if __name__ == "__main__":
     qui = os.path.dirname(os.path.abspath(__file__))
     dest = os.path.join(qui, "..", "src", "stratigrafia3d", "lingue", "en.json")

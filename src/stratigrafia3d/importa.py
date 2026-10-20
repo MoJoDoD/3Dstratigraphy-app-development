@@ -3759,6 +3759,54 @@ def _superfici_dai_dem(s, abb, note):
         note.append(f"Modelli del terreno non letti: {'; '.join(errori[:3])}{'…' if len(errori) > 3 else ''}")
 
 
+def _date_dei_rilievi(s, abb, note):
+    """Colonna «Date rilievi» delle schede US e USM: i giorni dei modelli del terreno e delle ortofoto di ogni
+    unità (dalla data nel nome). Il visualizzatore ne ricava lo scavo giorno per giorno (architettura.py).
+    Le date già scritte nelle schede restano; si aggiungono quelle nuove."""
+    from .architettura import C_DATE_RILIEVI, data_iso, date_dal_testo
+    from .dem_unita import anno_dalla_cartella
+    certe, incerte = {}, {}
+    for d in list(abb.dem_unita or []) + list(abb.orto_unita or []):
+        if d.get("data") and len(d["unita"]) == 1:
+            dove = certe if anno_dalla_cartella(d["percorso"]) is not None else incerte
+            dove.setdefault(int(d["unita"][0]), set()).add(tuple(d["data"]))
+    # anno preso dalla data del file (nessuna cartella dell'anno): quello dei rilievi della stessa unità nello
+    # stesso giorno e mese, altrimenti l'anno più frequente dei rilievi datati dalle cartelle
+    anni = [a for v in certe.values() for a, _, _ in v]
+    anno_tipico = max(set(anni), key=anni.count) if anni else None
+    per_u = {u: {data_iso(t) for t in v} for u, v in certe.items()}
+    for u, v in incerte.items():
+        for a, m, g in v:
+            uguali = [t[0] for t in certe.get(u, ()) if (t[1], t[2]) == (m, g)]
+            a = uguali[0] if uguali else (anno_tipico or a)
+            per_u.setdefault(u, set()).add(data_iso((a, m, g)))
+    if not per_u:
+        return
+    scritte = 0
+    for nome, campo in ((sc.S_US, sc.C_US), (sc.S_USM, sc.C_USM)):
+        df = s.tabelle.get(nome)
+        if df is None or campo not in df.columns:
+            continue
+        df = df.copy()
+        if C_DATE_RILIEVI not in df.columns:
+            df[C_DATE_RILIEVI] = None
+        df[C_DATE_RILIEVI] = df[C_DATE_RILIEVI].astype(object)
+        for i, u in zip(df.index, df[campo]):
+            try:
+                u = int(u)
+            except (TypeError, ValueError):
+                continue
+            if u in per_u:
+                tutte = sorted(set(date_dal_testo(df.at[i, C_DATE_RILIEVI])) | per_u[u])
+                df.at[i, C_DATE_RILIEVI] = ", ".join(tutte)
+                scritte += 1
+        s.tabelle[nome] = df
+    if scritte:
+        giorni = sorted(set().union(*per_u.values()))
+        note.append(f"Date dei rilievi per {scritte} unità ({len(giorni)} giorni, dal {giorni[0]} al {giorni[-1]}): "
+                    "lo scavo virtuale può procedere giorno per giorno")
+
+
 def _ortofoto_delle_unita(s, abb, note):
     """Texture propria delle unità che hanno un'ortofoto con il loro nome: quella della stessa data del DEM da
     cui viene il tetto (la superficie fotografata quel giorno), altrimenti la più antica. Ritorna i file usati."""
@@ -3787,7 +3835,8 @@ def _ortofoto_delle_unita(s, abb, note):
         if u not in poli:
             continue
         lst.sort()
-        stessa = [p for dt, p in lst if dt == date_tetto.get(u)]
+        # stesso giorno e mese (l'anno di un file fuori dalle cartelle dell'anno viene dalla data del file)
+        stessa = [p for dt, p in lst if u in date_tetto and tuple(dt[1:]) == tuple(date_tetto[u][1:])]
         p = stessa[0] if stessa else lst[0][1]
         try:
             s.ortofoto_unita[u] = Ortofoto.leggi(p, limiti=tuple(poli[u].bounds), margine=0.1, lato_max=LATO_UNITA)
@@ -4104,6 +4153,7 @@ def _applica(abb, log=None):
     if s.crs is None:
         s.crs = crs
     _superfici_dai_dem(s, abb, note)
+    _date_dei_rilievi(s, abb, note)
     if sc.L_US not in s.layers and sc.L_USM in s.layers and len(s.layers[sc.L_USM]):
         # solo murature disegnate (gli strati hanno solo schede o modelli del terreno): layer US vuoto
         s.layers[sc.L_US] = gpd.GeoDataFrame({sc.F_US: pd.Series([], dtype=int)}, geometry=[],

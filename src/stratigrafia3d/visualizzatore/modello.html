@@ -92,6 +92,15 @@ aside.list{border-right:1px solid var(--line);background:var(--panel);display:fl
 .tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--panel);font-size:12px;padding:4px 7px;border-radius:4px;transform:translate(10px,10px);white-space:nowrap;z-index:5}
 .lbl{position:absolute;transform:translate(-50%,-100%);font-family:var(--f-num);font-size:10px;padding:1px 4px;border-radius:3px;background:color-mix(in srgb,var(--panel) 85%,transparent);border:1px solid var(--line);pointer-events:none;white-space:nowrap}
 .lbl.sel{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.tools [hidden]{display:none!important}
+.lbl.oggi{background:#e0a800;color:#1b1b1b;border-color:#a87d00;font-weight:600}
+.riso{border:1px solid var(--line);background:transparent;border-radius:4px;font-size:11px;padding:1px 6px;cursor:pointer;color:var(--ink);flex:none}
+.riso[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button.chip{cursor:pointer;font:inherit}
+#clipDraw[aria-pressed="true"],#excPlay[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.stage.traccia #c3d{cursor:crosshair}
+.sezA{font-family:var(--f-num);font-size:11px;font-weight:700;fill:#c4321c}
+.sline{fill:none;stroke-width:1.6;stroke-dasharray:4 2}
 #labels{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px}
 /* avanzamento della costruzione delle unità: non blocca la scena, che è già utilizzabile */
@@ -250,16 +259,18 @@ details.sub>summary small{font-family:var(--f-num);font-size:11.5px;color:var(--
       <div class="tools">
         <div class="tool"><label for="expl">Esploso</label><input type="range" id="expl" min="0" max="0.6" step="0.01" value="0.3"><output id="explO">30 cm</output>
           <select id="explMode" aria-label="Ordine dell'esploso"><option value="fase">per fase</option><option value="lev">per sequenza</option></select></div>
-        <div class="tool"><label for="exc">Scavo virtuale</label><input type="range" id="exc" min="0" max="10" step="1" value="0"><output id="excO"></output></div>
+        <div class="tool"><label for="exc">Scavo virtuale</label><input type="range" id="exc" min="0" max="10" step="1" value="0"><output id="excO"></output>
+          <select id="excMode" aria-label="Ordine dello scavo virtuale" hidden><option value="seq">per sequenza</option><option value="data">per data dei rilievi</option></select><button class="hbtn" id="excPlay" title="Riproduci lo scavo giorno per giorno" aria-pressed="false" hidden>▶</button></div>
         <div class="tool"><label for="ve">Esag. vert.</label><input type="range" id="ve" min="1" max="6" step="0.5" value="2.5"><output id="veO">×2.5</output></div>
         <div class="tool"><label for="clipAx">Sezione</label>
-          <select id="clipAx" aria-label="Piano di sezione"><option value="">nessuna</option><option value="x">N-S libera</option><option value="y">E-O libera</option></select>
+          <select id="clipAx" aria-label="Piano di sezione"><option value="">nessuna</option><option value="x">N-S libera</option><option value="y">E-O libera</option><option value="f" hidden>tracciata</option></select>
           <input type="range" id="clipPos" min="0" max="20" step="0.05" value="10" aria-label="Posizione del piano"><output id="clipO"></output>
-          <button class="hbtn" id="clipFlip" title="Inverti il lato conservato">⇄</button></div>
+          <button class="hbtn" id="clipFlip" title="Inverti il lato conservato">⇄</button><button class="hbtn" id="clipDraw" aria-pressed="false" title="Traccia in pianta una sezione libera: clic sul primo e sul secondo punto">✎ Traccia</button></div>
       </div>
       <div class="tools bottom">
         <div class="tool"><label for="colMode">Colore</label>
           <select id="colMode"><option value="mun">sedimento (Munsell)</option><option value="fase">fase</option><option value="cat">categoria</option><option value="aff">affidabilità</option></select></div>
+        <div class="tool" id="roomTool" hidden><label for="room">Stanza</label><select id="room"><option value="">tutte</option></select></div>
         <div class="tool"><label>Mostra</label>
           <div class="seg" role="group" aria-label="Sovrapposizioni">
             <button id="oLbl" aria-pressed="true" title="Numeri di US">N.</button><button id="oEdge" aria-pressed="true" title="Spigoli">Spigoli</button><button id="oQ" aria-pressed="false" title="Quote rilevate">Quote</button><button id="oP" aria-pressed="false" title="Profili rilevati in sezione">Profili</button><button id="oRS" aria-pressed="true" title="Reperti speciali e campioni">RS</button><button id="oCut" aria-pressed="true" title="Superfici di taglio">Tagli</button><button id="oM3D" aria-pressed="true" title="Modelli 3D rilevati (fotogrammetria, laser scanner)" hidden>Rilievo 3D</button>
@@ -317,7 +328,7 @@ const AFF_COL={misurata:"#2f7d5b",profondita:"#5f8f3f",impilata:"#c09a2c",schema
 const AFF_TXT={misurata:"misurata: quote o profili rilevati",profondita:"da superficie e profondità",impilata:"impilata nella sequenza, spessore in scheda",schematica:"schematica: valori tipici",nessuna:"non ricostruita"};
 const affOf=u=>(S[u]?._qualita?.strategia)||"misurata";
 // campi della scheda adatti a colorare: testo con pochi valori diversi, presenti in almeno un'unità su cinque
-const CAMPI_NO=new Set(["US","Fase","Categoria","Colore HEX","Colore Munsell","Descrizione","Interpretazione","Note"]);
+const CAMPI_NO=new Set(["US","Fase","Categoria","Colore HEX","Colore Munsell","Descrizione","Interpretazione","Note","Date rilievi","Sigla"]);
 const CAMPI_COL={};
 {const hsl=(h,sa,l)=>{const f=n=>{const k=(n+h/30)%12,a=sa*Math.min(l,1-l);return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,"0")};return "#"+f(0)+f(8)+f(4)};
  const rs=Object.values(S), conta={};
@@ -387,6 +398,7 @@ function colorFor(u){
   if(mode==="fase") return PH_COL[faseOf(u)]||"#888";
   if(mode==="cat") return CAT_COL[catOf(u)]||"#999";
   if(mode==="aff") return AFF_COL[affOf(u)]||"#999";
+  if(mode==="mur"){ if(S[u]?._tipo!=="USM") return "#ddd7cb"; const f=FM[u]; return f&&f.rapporti?colFM(f.fase):"#9c9890" }
   if(mode.startsWith("f:")){const k=mode.slice(2), v=campoOf(u,k); return v==null?"#b9b5ad":(CAMPI_COL[k]?.pal[v]||"#999")}
   const s=S[u]; if(s&&/^#[0-9a-f]{6}$/i.test(String(s["Colore HEX"]||""))) return s["Colore HEX"];
   if(s&&s._tipo==="USM") return "#c9c2b4";
@@ -518,9 +530,10 @@ function matSpigoli(st,cut,acc){
 }
 let EDGES_ON=true;
 // stato grafico di un'unità (colore, selezione, trasparenza, spigoli): unico punto in cui si assegnano i materiali
-function contesto(){ return {orto:$("colMode").value==="orto"&&HA_ORTO, acc:css("--accent")||"#c4321c"} }
+function contesto(){ return {orto:$("colMode").value==="orto"&&HA_ORTO, acc:css("--accent")||"#c4321c", mur:$("colMode").value==="mur"} }
 function applicaStato(U,u,c){
-  const on=u===selected, ghost=GHOST && selected!=null && !on && !clipOn, st=on?2:ghost?1:0;
+  // con i colori delle fasi murarie gli strati diventano trasparenti: i muri si vedono interi
+  const on=u===selected, ghost=(GHOST && selected!=null && !on && !clipOn) || (c.mur && S[u]?._tipo!=="USM" && !on), st=on?2:ghost?1:0;
   if(U.front) U.front.material=matFronte(U.col,U.cut,st,c.orto&&!U.cut&&U.inOrto,c.acc,U.tex);
   if(U.back){ U.back.material=matRetro(U.col); U.back.visible=!ghost }
   if(U.edges){ U.edges.material=matSpigoli(st,U.cut,c.acc); U.edges.visible=EDGES_ON }
@@ -640,7 +653,30 @@ const TOPD={}; (function(){
   Object.keys(S).forEach(u=>memo(+u));
 })();
 const EXCMAX=Math.max(...Object.keys(S).filter(u=>S[u]._tipo!=="USM").map(u=>TOPD[u]))+1;
-const removedAt=u=>S[u]._tipo!=="USM" && TOPD[u]<EXC;
+// ------------------------------------------------------------ architettura: stanze, fasi murarie, cronologia dello scavo
+// (esporta._architettura). Fasi murarie: ordine di costruzione dei muri dai rapporti tra murature (0 = più antichi).
+// Cronologia: i giorni dei rilievi (DEM e ortofoto con la data nel nome) e il giorno entro cui ogni unità è stata
+// asportata; lo scavo virtuale «per data» mostra lo stato a fine giornata.
+const AR=D.architettura||{}, FM=AR.fasi_murarie||{}, CR=AR.cronologia||null, CR_U=CR?CR.unita:{}, CR_D=CR?CR.date:[];
+const FM_MAX=Math.max(0,...Object.values(FM).map(v=>v.fase));
+const HA_FM=FM_MAX>=1 && Object.values(FM).filter(v=>v.rapporti>0).length>=2;
+// colori ordinati dalle fasi più antiche (rosso scuro) alle più recenti (blu), ben distinti tra loro
+const FM_PAL=["#8c2b1f","#c8642a","#d9a33a","#7f9a2f","#2e8c6e","#2f6c9f","#5a4c9c","#a04c8c"];
+const colFM=k=>{ if(FM_MAX<FM_PAL.length) return FM_PAL[Math.round(k*(FM_PAL.length-1)/Math.max(1,FM_MAX))];
+  const t=k/FM_MAX; return hsl(8+250*t,.5,.42) };
+let EXC_MODE=CR_D.length>=2?"data":"seq", OGGI=new Set(), ROOM=null;
+const excMax=()=>EXC_MODE==="data"?CR_D.length:EXCMAX;
+const removedAt=u=>{ if(S[u]?._tipo==="USM") return false;
+  if(EXC_MODE==="data"){const c=CR_U[u]; return !!c&&c.rimossa!=null&&c.rimossa<EXC}
+  return TOPD[u]<EXC };
+const excPerVedere=u=>EXC_MODE==="data"?(CR_U[u]?.rimossa??EXC):TOPD[u];     // passo in cui l'unità è ancora in posto
+const fmtData=iso=>{const [a,m,g]=String(iso).split("-").map(Number); if(!a||!m||!g) return String(iso);
+  return new Date(a,m-1,g).toLocaleDateString(LOC,{day:"numeric",month:"short",year:"numeric"})};
+const elencoEti=(l,n=14)=>l.slice(0,n).map(ETI).join(", ")+(l.length>n?"…":"");
+// stanze: tutte quelle indicate nella scheda («GR2, GR3»): i muri in comune appartengono a ciascuna
+const stanzeDi=u=>{ if(!CAMPO_GRUPPO) return []; const v=S[u]?.[CAMPO_GRUPPO];
+  return v==null?[]:[...new Set(String(v).split(/[,;]/).map(x=>x.trim()).filter(Boolean))] };
+const STANZE={};
 // esploso per fase: la posizione della fase tra quelle presenti (le fasi possono avere numeri radi)
 const FRANK={}; [...new Set(Object.values(S).map(r=>+r.Fase||0))].sort((a,b)=>a-b).forEach((f,i)=>FRANK[f]=i);
 {const nf=Object.keys(FRANK).length; if(nf>9){GAP=Math.round(0.3*9/nf*100)/100; $("expl").value=GAP; $("explO").textContent=Math.round(GAP*100)+" cm"}}
@@ -649,6 +685,8 @@ const FRANK={}; [...new Set(Object.values(S).map(r=>+r.Fase||0))].sort((a,b)=>a-
 if(N_FASI<=1){GAP=0; $("expl").value=0; $("explO").textContent="0 cm"}
 {const R=D.rilievo; if(R&&R.xy>0&&R.z/R.xy>0.06){VE=1; $("ve").value=1; $("veO").textContent="×1"}}
 if(N_ORTO_U>0) $("colMode").value="orto";
+if(HA_FM){ const o=document.createElement("option"); o.value="mur"; o.textContent="fasi murarie"; $("colMode").insertBefore(o,$("colMode").querySelector('option[value="cat"]')) }
+if(CR_D.length){ $("excMode").hidden=false; $("excMode").value=EXC_MODE; $("excPlay").hidden=EXC_MODE!=="data" }
 function explIndex(u){ if(EXPL_MODE==="fase") return (FRANK[faseOf(u)]??0)*2 + (S[u]?._tipo==="USM"? .5:0); return S[u]?._livello??0 }
 function applyLayout(){
   Object.entries(units).forEach(([u,U])=>{
@@ -663,15 +701,31 @@ function updateVisibility(){
     const exc=removedAt(+u);
     if(exc) removed.push(+u);
     let vis=!hidden.has(+u) && !exc;
+    if(ROOM!=null && !(STANZE[ROOM]&&STANZE[ROOM].has(+u))) vis=false;
     if(isolated && selected!=null) vis = (+u===selected);
     if(U.cut && !$("oCut").matches('[aria-pressed="true"]')) vis=vis && (+u===selected);
     U.grp.visible=vis; U.visible=vis;
   });
   sporca();
-  const lab=$("excO"); lab.textContent=EXC===0?"nessuno":EXC+"/"+EXCMAX;
-  const note=$("excNote");
-  if(EXC>0){ removed.sort((a,b)=>(TOPD[a]-TOPD[b])||a-b);
-    note.innerHTML="<b>Scavo virtuale, passo "+EXC+" di "+EXCMAX+"</b>: asportate "+removed.length+" US nell'ordine della sequenza ("+removed.slice(0,16).join(", ")+(removed.length>16?"…":"")+"). Le murature restano in posto.";
+  const lab=$("excO"), note=$("excNote");
+  OGGI=new Set();
+  if(EXC_MODE==="data"){
+    lab.textContent=EXC===0?"prima":fmtData(CR_D[EXC-1]);
+    if(EXC>0) Object.entries(CR_U).forEach(([u,c])=>{ if(c.rilievi.includes(EXC-1)&&units[u]) OGGI.add(+u) });
+  } else lab.textContent=EXC===0?"nessuno":EXC+"/"+EXCMAX;
+  const stanza=ROOM!=null?`<b>${esc(T("Stanza {0}",ROOM))}</b>`:"";
+  if(EXC>0 && EXC_MODE==="data"){
+    removed.sort((a,b)=>(CR_U[a].rimossa-CR_U[b].rimossa)||naturale(ETI(a),ETI(b)));
+    const stim=removed.filter(u=>CR_U[u].stimata).length, oggi=[...OGGI].sort((a,b)=>naturale(ETI(a),ETI(b)));
+    note.innerHTML=(stanza?stanza+" · ":"")+`<b>${esc(T("Scavo al {0}",fmtData(CR_D[EXC-1])))}</b>`+esc(T(", giorno {0} di {1}: ",EXC,CR_D.length))+
+      esc(removed.length?T("asportate {0} unità ({1}), {2} con data stimata dai rapporti.",removed.length,elencoEti(removed,10),stim):T("nessuna unità asportata."))+
+      (oggi.length?" "+esc(T("Rilevate quel giorno (in giallo): {0}.",elencoEti(oggi))):"")+" "+esc(T("Le murature restano in posto."));
+  } else if(EXC>0){ removed.sort((a,b)=>(TOPD[a]-TOPD[b])||a-b);
+    note.innerHTML=(stanza?stanza+" · ":"")+"<b>Scavo virtuale, passo "+EXC+" di "+EXCMAX+"</b>: asportate "+removed.length+" US nell'ordine della sequenza ("+removed.slice(0,16).join(", ")+(removed.length>16?"…":"")+"). Le murature restano in posto.";
+  } else if(ROOM!=null){ const M=[...(STANZE[ROOM]||[])], muri=M.filter(u=>S[u]?._tipo==="USM"), cond=muri.filter(u=>stanzeDi(u).length>1);
+    note.innerHTML=stanza+esc(T(": {0} unità, di cui {1} muri",M.length,muri.length))+
+      (cond.length?esc(T("; in comune con altre stanze: {0}",cond.slice(0,8).map(u=>ETI(u)+" ("+stanzeDi(u).filter(r=>r!==ROOM).join(", ")+")").join("; ")+(cond.length>8?"…":""))):"")+
+      ". "+esc(T("«Tutte» o Esc per tornare all'intero scavo."));
   } else note.innerHTML="<b>Clic</b> su un'unità per aprirne la scheda · trascina per ruotare · rotella per lo zoom · tasto destro per spostare";
   syncTree();
 }
@@ -710,18 +764,25 @@ const gruppoDi=u=>{ if(!CAMPO_GRUPPO) return String(faseOf(u)); const v=S[u]?.[C
 const naturale=(a,b)=>String(a).localeCompare(String(b),"it",{numeric:true});
 function buildTree(){
   const byF={};
-  Object.keys(S).map(Number).forEach(u=>{if(units[u]) (byF[gruppoDi(u)]??=[]).push(u)});
+  // per stanza: un muro in comune a più stanze compare in ciascuna
+  Object.keys(S).map(Number).forEach(u=>{if(!units[u]) return; const st=CAMPO_GRUPPO?stanzeDi(u):[];
+    (st.length?st:[gruppoDi(u)]).forEach(f=>(byF[f]??=[]).push(u))});
+  if(CAMPO_GRUPPO){ Object.entries(byF).forEach(([f,l])=>{ if(f!=="—") STANZE[f]=new Set(l) });
+    const ks=Object.keys(STANZE).sort(naturale);
+    if(ks.length>=2){ $("roomTool").hidden=false;
+      $("room").innerHTML=`<option value="">tutte</option>`+ks.map(k=>`<option value="${esc(k)}">${esc(k)} (${STANZE[k].size})</option>`).join("") } }
   const t=$("tree"); t.innerHTML="";
   const chiavi=CAMPO_GRUPPO?Object.keys(byF).sort(naturale):Object.keys(byF).map(Number).sort((a,b)=>b-a);
   chiavi.forEach(f=>{
     const list=byF[f].sort((a,b)=>naturale(ETI(a),ETI(b)));
     const d=document.createElement("div"); d.className="phase";
     let testa;
-    if(CAMPO_GRUPPO) testa=`<i class="sw" style="background:#b9b2a6"></i><b>${esc(f)}</b><small>${esc(CAMPO_GRUPPO)} · ${list.length}</small>`;
+    if(CAMPO_GRUPPO) testa=`<i class="sw" style="background:#b9b2a6"></i><b>${esc(f)}</b><small>${esc(CAMPO_GRUPPO)} · ${list.length}</small>`+
+      (STANZE[f]?`<button class="riso" data-room="${esc(f)}" aria-pressed="${ROOM===f}" title="Mostra solo questa stanza, con i suoi muri">Isola</button>`:"");
     else { const F=FASI[f]||{Titolo:"Fase "+f};
       testa=`<i class="sw" style="background:${PH_COL[f]}"></i><b>${f} · ${esc(F.Titolo)}</b><small>${F["Da (anno)"]!=null?esc(fmtY(F["Da (anno)"]))+"–"+esc(fmtY(F["A (anno)"])):""}</small>` }
     d.innerHTML=`<div class="phase-h"><input type="checkbox" checked aria-label="Mostra ${esc(f)}" data-f="${esc(f)}">${testa}</div>`+
-      list.map(u=>`<div class="unit" data-u="${u}"><input type="checkbox" checked aria-label="Mostra ${u}" data-u="${u}"><i class="c${S[u].Tipo==="negativa"?" neg":""}" data-c="${u}"></i><span class="n">${esc(ETI(u))}</span><span class="d">${esc(defOf(u))}</span></div>`).join("");
+      list.map(u=>`<div class="unit" data-u="${u}"${CAMPO_GRUPPO&&stanzeDi(u).length>1?` title="${esc(T("anche in: {0}",stanzeDi(u).filter(r=>r!==f).join(", ")))}"`:""}><input type="checkbox" checked aria-label="Mostra ${u}" data-u="${u}"><i class="c${S[u].Tipo==="negativa"?" neg":""}" data-c="${u}"></i><span class="n">${esc(ETI(u))}</span><span class="d">${esc(defOf(u))}</span></div>`).join("");
     t.appendChild(d);
   });
   t.addEventListener("change",e=>{
@@ -729,7 +790,8 @@ function buildTree(){
     else if(el.dataset.u){const u=+el.dataset.u; el.checked?hidden.delete(u):hidden.add(u)}
     isolated=false; updateVisibility(); renderScheda();
   });
-  t.addEventListener("click",e=>{const r=e.target.closest(".unit"); if(!r||e.target.tagName==="INPUT") return; select(+r.dataset.u,true)});
+  t.addEventListener("click",e=>{const b=e.target.closest(".riso"); if(b){isolaStanza(b.dataset.room);return}
+    const r=e.target.closest(".unit"); if(!r||e.target.tagName==="INPUT") return; select(+r.dataset.u,true)});
   syncTree(true);
 }
 function syncTree(colors){
@@ -742,12 +804,33 @@ $("q").addEventListener("input",()=>{const v=$("q").value.trim().toLowerCase();
   document.querySelectorAll(".unit").forEach(r=>{const u=r.dataset.u;r.hidden=v&&!(u.includes(v)||String(S[+u]?.Sigla||"").toLowerCase().includes(v)||defOf(+u).toLowerCase().includes(v)||catOf(+u).toLowerCase().includes(v))});
   document.querySelectorAll(".phase").forEach(p=>p.hidden=![...p.querySelectorAll(".unit")].some(r=>!r.hidden))});
 $("q").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=[...document.querySelectorAll(".unit")].find(r=>!r.hidden); if(r) select(+r.dataset.u,true)}});
-$("btnAll").onclick=()=>{hidden.clear();isolated=false;EXC=0;$("exc").value=0;updateVisibility();renderScheda()};
+$("btnAll").onclick=()=>{hidden.clear();isolated=false;EXC=0;$("exc").value=0;ferma();if(ROOM!=null) isolaStanza(null); else updateVisibility();renderScheda()};
+// una stanza (o ambiente, locus...) con tutte le sue unità e i muri, anche quelli in comune con le stanze vicine
+function isolaStanza(r){
+  ROOM=(r&&ROOM!==r&&STANZE[r])?r:null; isolated=false;
+  $("room").value=ROOM??"";
+  document.querySelectorAll(".riso").forEach(b=>b.setAttribute("aria-pressed",b.dataset.room===ROOM));
+  updateVisibility();
+  if(ROOM!=null) inquadra([...STANZE[ROOM]]); else home();
+}
+function inquadra(lista){
+  world.updateMatrixWorld(true); const box=new THREE.Box3();
+  lista.forEach(u=>{const U=units[u]; if(U&&!U.vuota&&U.grp.visible) box.union(boxUnita(U))});
+  if(box.isEmpty()) return;
+  const c=box.getCenter(new THREE.Vector3()), r=Math.max(2,box.getSize(new THREE.Vector3()).length());
+  const dir=camera.position.clone().sub(controls.target).normalize();
+  flyTo(c,c.clone().add(dir.multiplyScalar(r*1.5)));
+}
 
 function buildLegend(){
   const mode=$("colMode").value, L=$("legend");
   if(mode==="fase") L.innerHTML="<h4>Fasi</h4>"+D.fasi.slice().reverse().map(f=>`<div><i style="background:${PH_COL[f.Fase]}"></i>${f.Fase} · ${esc(f.Titolo)}</div>`).join("");
   else if(mode==="orto"&&HA_ORTO) L.innerHTML=`<h4>Ortofoto</h4><div class="muted" style="max-width:190px;display:block">${N_ORTO_U?`<span>${N_ORTO_U} unità con la propria fotografia, scattata quando erano esposte.</span> `:""}${ORTO?`<span>${esc(ORTO.nome)}, ${String(ORTO.passo_cm).replace(".",",")} cm per pixel, sulle altre unità.</span> `:""}<span>Proiettata dall'alto: sulle pareti ripide l'immagine appare stirata.</span></div>`;
+  else if(mode==="mur"){ const n={}, senza=Object.values(FM).filter(v=>!v.rapporti).length;
+    Object.values(FM).forEach(v=>{ if(v.rapporti) n[v.fase]=(n[v.fase]||0)+1 });
+    L.innerHTML=`<h4>Fasi costruttive dei muri</h4>`+Object.keys(n).map(Number).sort((a,b)=>b-a).map(k=>`<div><i style="background:${colFM(k)}"></i>${esc(T("fase {0}",k))} <small class="muted">${n[k]}</small></div>`).join("")+
+      (senza?`<div><i style="background:#9c9890"></i><span class="muted">senza rapporti con altri muri</span> <small class="muted">${senza}</small></div>`:"")+
+      `<div class="muted" style="max-width:190px;display:block;margin-top:3px">Ordine di costruzione dai rapporti tra i muri (si appoggia, copre, anche attraverso gli strati): 0 = più antichi. I muri legati tra loro sono un unico cantiere.</div>`}
   else if(mode==="aff"){const cs=Object.keys(AFF_COL).filter(k=>Object.keys(units).some(u=>affOf(+u)===k));
     L.innerHTML="<h4>Affidabilità della forma</h4>"+cs.map(c=>`<div><i style="background:${AFF_COL[c]}"></i>${esc(AFF_TXT[c])}</div>`).join("")}
   else if(mode.startsWith("f:")){const k=mode.slice(2), C=CAMPI_COL[k]; if(!C){L.innerHTML="";return}
@@ -884,6 +967,17 @@ function chiudiLB(){ $("lb").hidden=true; $("lbImg").removeAttribute("src") }
 $("lbX").onclick=chiudiLB; $("lbP").onclick=()=>apriLB(lbI-1); $("lbN").onclick=()=>apriLB(lbI+1);
 $("lb").onclick=e=>{ if(e.target.id==="lb") chiudiLB() };
 
+function chipArchitettura(u){
+  let h="";
+  stanzeDi(u).filter(r=>STANZE[r]).forEach(r=>{h+=`<button class="chip" data-room="${esc(r)}" title="${esc(T("Mostra solo la stanza {0}",r))}">${esc(r)}</button>`});
+  const f=FM[u];
+  if(f&&f.rapporti){ const leg=Object.keys(FM).map(Number).filter(x=>x!==u&&FM[x].cantiere===f.cantiere);
+    h+=`<span class="chip" title="Ordine di costruzione dei muri (0 = più antichi)"><i style="background:${colFM(f.fase)}"></i>${esc(T("fase muraria {0}",f.fase))}${leg.length?esc(T(", legato a {0}",elencoEti(leg,6))):""}</span>` }
+  const c=CR_U[u];
+  if(c&&c.rilievi.length) h+=`<span class="chip" title="Giorni dei rilievi dell'unità (modelli del terreno, ortofoto)">${esc(T("rilevata: {0}",c.rilievi.map(i=>fmtData(CR_D[i])).join(", ")))}</span>`;
+  if(c&&c.rimossa!=null) h+=`<span class="chip">${esc(T(c.stimata?"asportata entro il {0} (stima)":"asportata entro il {0}",fmtData(CR_D[c.rimossa])))}</span>`;
+  return h;
+}
 function renderScheda(){
   const P=$("pScheda");
   if(selected==null){
@@ -916,7 +1010,7 @@ function renderScheda(){
     "Settore documentato","Data scavo","Responsabile"]);
   const altri=Object.entries(s).filter(([k,v])=>!k.startsWith("_")&&!MOSTRATI.has(k)&&v!=null&&String(v).trim()!=="");
   P.innerHTML=`<div class="sh"><div class="num">${S[u]?.Sigla?esc(S[u].Sigla):(isM?"<small style='font-size:14px'>USM</small> ":"")+u}</div><div class="kind">${isM?"Unità muraria":("US "+esc(s.Tipo))} · ${esc(s.Categoria)}</div><h2>${esc(s.Definizione)}</h2></div>
-    <div class="chips"><span class="chip"><i style="background:${PH_COL[s.Fase]}"></i>Fase ${s.Fase} · ${esc(F?.Titolo)}</span>${F?.Periodo?`<span class="chip">${esc(F.Periodo)}</span>`:""}${dat&&!dat.startsWith("—")?`<span class="chip">${esc(dat)}</span>`:""}${!isM&&s["Colore Munsell"]?`<span class="chip"><i style="background:${esc(s["Colore HEX"])};border-radius:2px"></i>${esc(s["Colore Munsell"])}</span>`:""}</div>
+    <div class="chips">${N_FASI>1||+s.Fase?`<span class="chip"><i style="background:${PH_COL[s.Fase]}"></i>Fase ${s.Fase} · ${esc(F?.Titolo)}</span>`:""}${F?.Periodo?`<span class="chip">${esc(F.Periodo)}</span>`:""}${dat&&!dat.startsWith("—")?`<span class="chip">${esc(dat)}</span>`:""}${!isM&&s["Colore Munsell"]?`<span class="chip"><i style="background:${esc(s["Colore HEX"])};border-radius:2px"></i>${esc(s["Colore Munsell"])}</span>`:""}${chipArchitettura(u)}</div>
     <div class="acts"><button id="aFocus">Centra</button><button id="aGhost" aria-pressed="${GHOST}" title="Rende semitrasparenti le altre unità">Trasparenza</button><button id="aIso" aria-pressed="${isolated}">Isola</button><button id="aHide">Nascondi</button><button id="aClip">Sezione qui</button>${INAPP?`<button id="aEdit" title="Modifica la scheda e i rapporti">Modifica</button>`:""}<button id="aClose">Chiudi</button></div>
     <details class="sec" open><summary>Descrizione</summary><div class="sec-b">
       <p class="read">${esc(s.Descrizione)}</p>
@@ -932,9 +1026,10 @@ function renderScheda(){
     <details class="sec" ${docs.some(d=>d["Percorso file"])?"open":""}><summary>Documentazione <small>${docs.length}${docs.some(d=>d["Percorso file"])?" · "+docs.filter(d=>d["Percorso file"]).length+" file":""}</small></summary><div class="sec-b">${docHTML(u)}</div></details>`;
   $("aFocus").onclick=()=>focusUnit(u);
   $("aIso").onclick=()=>{isolated=!isolated;updateVisibility();renderScheda()};
+  P.querySelectorAll(".chips [data-room]").forEach(b=>b.onclick=()=>isolaStanza(b.dataset.room));
   $("aGhost").onclick=()=>{GHOST=!GHOST;highlight();renderScheda()};
   $("aHide").onclick=()=>{hidden.add(u);isolated=false;updateVisibility();select(null)};
-  $("aClip").onclick=()=>{const L=m.label; $("clipAx").value="x"; clipOn=true; clipSign=1; $("clipPos").value=L[0]; setClip(); };
+  $("aClip").onclick=()=>{const L=m.label; $("clipAx").value="x"; clipOn=true; clipSign=1; intervalloClip("x"); $("clipPos").value=L[0]; setClip(); };
   $("aClose").onclick=()=>select(null);
   if($("aEdit")) $("aEdit").onclick=()=>{editU=u; renderScheda()};
   P.querySelectorAll("[data-lb]").forEach(b=>b.onclick=()=>apriLB(+b.dataset.lb));
@@ -948,7 +1043,7 @@ function select(u,focus){
   selected=u;
   if(u!=null&&units[u]){ costruisci(units[u]); if(EDGES_ON) costruisciSpigoli(units[u]) }    // subito, senza attendere la coda
   highlight();
-  if(u!=null){ if(hidden.has(u)) hidden.delete(u); if(removedAt(u)){EXC=TOPD[u];$("exc").value=EXC} }
+  if(u!=null){ if(hidden.has(u)) hidden.delete(u); if(removedAt(u)){EXC=excPerVedere(u);$("exc").value=EXC} }
   if(isolated && u==null) isolated=false;
   updateVisibility(); renderScheda(); renderHarrisSel(); renderSezSel();
   if(u!=null){ showPanel(true); switchTab("tScheda"); if(focus) focusUnit(u); }
@@ -1003,7 +1098,7 @@ function pick(ev){
 }
 let down=null;
 canvas.addEventListener("pointerdown",e=>{down=[e.clientX,e.clientY]});
-canvas.addEventListener("pointerup",e=>{ if(!down) return; const d=Math.hypot(e.clientX-down[0],e.clientY-down[1]); down=null; if(d<5) select(pick(e),false) });
+canvas.addEventListener("pointerup",e=>{ if(!down) return; const d=Math.hypot(e.clientX-down[0],e.clientY-down[1]); down=null; if(d<5){ if(tracciando) puntoTraccia(e); else select(pick(e),false) } });
 const tip=$("tip");
 canvas.addEventListener("pointermove",e=>{ if(e.buttons) {tip.hidden=true;return}
   const id=pick(e); if(id==null){tip.hidden=true;canvas.style.cursor="";return}
@@ -1037,6 +1132,7 @@ function drawLabels(){
     if(!libero(px,py)){vis(el,false);return}
     vis(el,true); el.style.left=px+"px"; el.style.top=py+"px";
     const s=u===selected; if(el._s!==s){el._s=s; el.classList.toggle("sel",s)}
+    const o=OGGI.has(+u); if(el._o!==o){el._o=o; el.classList.toggle("oggi",o)}
   };
   if(selected!=null&&units[selected]) una(selected);
   LAB_ORD.forEach(u=>{ if(u!==selected) una(u) });
@@ -1051,14 +1147,121 @@ function setClip(){
   const pos=+$("clipPos").value;
   if(ax==="x"){ $("clipPos").min=Math.floor(EXT[0]); $("clipPos").max=Math.ceil(EXT[2]); clipPlane.normal.set(-clipSign,0,0); clipPlane.constant=clipSign*(pos-CX); $("clipO").textContent="x "+num(pos,2); }
   else if(ax==="y"){ $("clipPos").min=Math.floor(EXT[1]); $("clipPos").max=Math.ceil(EXT[3]); clipPlane.normal.set(0,0,clipSign); clipPlane.constant=-clipSign*(CY-pos); $("clipO").textContent="y "+num(pos,2); }
-  else $("clipO").textContent="";
+  else if(ax==="f"&&TRACCIA){
+    // piano verticale per i due punti tracciati, spostato di «pos» metri lungo la normale; resta il lato sinistro di A→B
+    const [n,m]=normaleTraccia(); clipPlane.normal.set(clipSign*n[0],0,-clipSign*n[1]);
+    const px=TRACCIA.a[0]+n[0]*pos-CX, pz=-(TRACCIA.a[1]+n[1]*pos-CY);
+    clipPlane.constant=-(clipPlane.normal.x*px+clipPlane.normal.z*pz);
+    $("clipO").textContent=(pos>0?"+":"")+num(pos,2)+" m"; }
+  else { clipOn=false; $("clipO").textContent="" }
   applyClip(); highlight();
+}
+function intervalloClip(ax){
+  const P=$("clipPos");
+  if(ax==="f"){ const h=Math.ceil(DIAG/2); P.min=-h; P.max=h; P.value=0 }
+  else if(ax==="y"){ P.min=Math.floor(EXT[1]); P.max=Math.ceil(EXT[3]); P.value=CY }
+  else { P.min=Math.floor(EXT[0]); P.max=Math.ceil(EXT[2]); P.value=CX }
+}
+
+// ------------------------------------------------------------ sezione tracciata in pianta (due clic)
+let TRACCIA=null, tracciando=false, PUNTO_A=null;
+const trG=new THREE.Group(); trG.renderOrder=10; scene.add(trG);
+const trMat=new THREE.LineBasicMaterial({color:0xc4321c,depthTest:false,transparent:true});
+const trPti=new THREE.PointsMaterial({color:0xc4321c,size:9,sizeAttenuation:false,depthTest:false,transparent:true});
+function normaleTraccia(){ const dx=TRACCIA.b[0]-TRACCIA.a[0], dy=TRACCIA.b[1]-TRACCIA.a[1], L=Math.hypot(dx,dy)||1;
+  return [[-dy/L,dx/L],[dx/L,dy/L],L] }      // normale (a sinistra di A→B), direzione, lunghezza
+function disegnaTraccia(){
+  trG.clear();
+  const pts=tracciando?(PUNTO_A?[V(PUNTO_A[0],PUNTO_A[1],0)]:[]):(TRACCIA?[V(TRACCIA.a[0],TRACCIA.a[1],0),V(TRACCIA.b[0],TRACCIA.b[1],0)]:[]);
+  if(!pts.length){ sporca(); return }
+  const g=new THREE.BufferGeometry().setFromPoints(pts);
+  const p=new THREE.Points(g,trPti); p.renderOrder=10; trG.add(p);
+  if(pts.length>1){ const l=new THREE.Line(g,trMat); l.renderOrder=10; trG.add(l) }
+  sporca();
+}
+function puntoInPianta(ev){
+  const r=canvas.getBoundingClientRect();
+  mouse.set(((ev.clientX-r.left)/r.width)*2-1,-((ev.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(mouse,camera);
+  const hit=ray.intersectObjects(Object.values(units).filter(U=>U.grp.visible&&U.front).map(U=>U.front),false)[0];
+  let p=hit?hit.point:null;
+  if(!p){ p=new THREE.Vector3(); if(!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),p)) return null }
+  return [Math.round((p.x+CX)*1000)/1000, Math.round((CY-p.z)*1000)/1000];
+}
+function iniziaTraccia(){
+  tracciando=true; PUNTO_A=null; $("clipDraw").setAttribute("aria-pressed","true"); $("stage").classList.add("traccia");
+  if($("vtop").getAttribute("aria-pressed")!=="true") $("vtop").onclick();
+  $("excNote").innerHTML=`<b>${esc(T("Sezione libera"))}</b>: `+esc(T("clic sul primo punto in pianta (Esc per annullare)."));
+}
+function fineTraccia(){ tracciando=false; PUNTO_A=null; $("clipDraw").setAttribute("aria-pressed","false"); $("stage").classList.remove("traccia"); disegnaTraccia(); updateVisibility() }
+function puntoTraccia(ev){
+  const p=puntoInPianta(ev); if(!p) return;
+  if(!PUNTO_A){ PUNTO_A=p; disegnaTraccia(); $("excNote").innerHTML=`<b>${esc(T("Sezione libera"))}</b>: `+esc(T("clic sul secondo punto."));
+    return }
+  if(Math.hypot(p[0]-PUNTO_A[0],p[1]-PUNTO_A[1])<0.2) return;
+  TRACCIA={a:PUNTO_A,b:p}; fineTraccia();
+  const o=$("clipAx").querySelector('option[value="f"]'); o.hidden=false;
+  $("clipAx").value="f"; clipSign=1; intervalloClip("f"); setClip();
+  vediTraccia();
+  $("pSez").dataset.cur="__traccia"; showPanel(true); switchTab("tSez");
+}
+function vediTraccia(){
+  const [n,d,L]=normaleTraccia(), mx=(TRACCIA.a[0]+TRACCIA.b[0])/2, my=(TRACCIA.a[1]+TRACCIA.b[1])/2;
+  // la quota media delle unità visibili lungo la traccia, la camera dal lato asportato
+  world.updateMatrixWorld(true); const box=new THREE.Box3(); Object.values(units).forEach(U=>{if(U.grp.visible&&!U.vuota) box.union(boxUnita(U))});
+  const cy=box.isEmpty()?1:(box.min.y+box.max.y)/2, t=V(mx,my,0); t.y=cy;
+  const dist=Math.max(4,L*1.1), p=V(mx-clipSign*n[0]*dist,my-clipSign*n[1]*dist,0); p.y=cy+dist*.25;
+  $("vtop").setAttribute("aria-pressed","false"); $("v3d").setAttribute("aria-pressed","true");
+  flyTo(t,p);
+}
+$("clipDraw").onclick=()=>{ if(tracciando) fineTraccia(); else iniziaTraccia() };
+// profilo della sezione tracciata: le unità visibili campionate lungo la traccia (tetto e base interpolati
+// sui triangoli della pianta), come poligoni distanza-quota
+function profiloTraccia(){
+  const [n,d,L]=normaleTraccia(), A=TRACCIA.a, B=TRACCIA.b, dx=B[0]-A[0], dy=B[1]-A[1];
+  const N=Math.min(1500,Math.max(200,Math.round(L/0.02))), Z0=ORIG.Z0||0, polys=[], linee=[];
+  const sx0=Math.min(A[0],B[0])-CX, sx1=Math.max(A[0],B[0])-CX, sz0=-(Math.max(A[1],B[1])-CY), sz1=-(Math.min(A[1],B[1])-CY);
+  Object.values(units).forEach(U=>{
+    if(U.vuota||!U.grp.visible) return;
+    const b=U.box; if(b.max.x<sx0||b.min.x>sx1||b.max.z<sz0||b.min.z>sz1) return;
+    const m=U.def, P=pianta(m.g), xy=P.xy, F=P.F, zt=zeta(m.zt), zb=U.cut?null:zeta(m.zb);
+    let top=null, bot=null;
+    for(let t=0;t<P.nf;t++){
+      const i0=F[3*t], i1=F[3*t+1], i2=F[3*t+2];
+      const x0=xy[2*i0]*QU, y0=xy[2*i0+1]*QU, x1=xy[2*i1]*QU, y1=xy[2*i1+1]*QU, x2=xy[2*i2]*QU, y2=xy[2*i2+1]*QU;
+      const ar=(x1-x0)*(y2-y0)-(x2-x0)*(y1-y0); if(Math.abs(ar)<1e-12) continue;
+      const sg=ar>0?1:-1; let t0=0, t1=1;
+      // il tratto della traccia dentro il triangolo: tre semipiani, ciascuno lineare in t
+      for(const [ax,ay,bx,by] of [[x0,y0,x1,y1],[x1,y1,x2,y2],[x2,y2,x0,y0]]){
+        const ex=bx-ax, ey=by-ay, f0=sg*(ex*(A[1]-ay)-ey*(A[0]-ax)), f1=sg*(ex*dy-ey*dx);
+        if(Math.abs(f1)<1e-15){ if(f0<0){t0=1;t1=0} continue }
+        const tt=-f0/f1; if(f1>0) t0=Math.max(t0,tt); else t1=Math.min(t1,tt);
+        if(t0>t1) break }
+      if(t0>t1) continue;
+      for(let i=Math.ceil(t0*N);i<=Math.floor(t1*N);i++){
+        const px=A[0]+dx*i/N, py=A[1]+dy*i/N;
+        const w1=((px-x0)*(y2-y0)-(x2-x0)*(py-y0))/ar, w2=((x1-x0)*(py-y0)-(px-x0)*(y1-y0))/ar, w0=1-w1-w2;
+        if(!top){ top=new Float32Array(N+1).fill(NaN); if(zb) bot=new Float32Array(N+1).fill(NaN) }
+        top[i]=(w0*zt[i0]+w1*zt[i1]+w2*zt[i2])*QU+Z0;
+        if(zb) bot[i]=(w0*zb[i0]+w1*zb[i1]+w2*zb[i2])*QU+Z0;
+      }
+    }
+    if(!top) return;
+    // tratti continui: tetto in avanti, base all'indietro
+    let i=0;
+    while(i<=N){ if(isNaN(top[i])){i++;continue} let j=i; while(j+1<=N&&!isNaN(top[j+1])) j++;
+      const c=[]; for(let k=i;k<=j;k++) c.push(L*k/N,top[k]);
+      if(zb){ for(let k=j;k>=i;k--) c.push(L*k/N,bot[k]); if(j>i) polys.push({us:m.id,c}) }
+      else if(j>i) linee.push({us:m.id,c});
+      i=j+1 }
+  });
+  return {polys,linee,L};
 }
 function sectionPreset(name){
   const s=D.sezioni.find(x=>x.nome===name); if(!s) return;
   GAP=0; $("expl").value=0; $("explO").textContent="0 cm"; applyLayout();
   const ns=Math.abs(s.a[0]-s.b[0])<Math.abs(s.a[1]-s.b[1]);
-  $("clipAx").value=ns?"x":"y"; clipSign=1; $("clipPos").value=ns?s.a[0]:s.a[1]; setClip();
+  $("clipAx").value=ns?"x":"y"; clipSign=1; intervalloClip(ns?"x":"y"); $("clipPos").value=ns?s.a[0]:s.a[1]; setClip();
   const cy=1.3*VE; const t=ns?V(s.a[0],(s.a[1]+s.b[1])/2,0):V((s.a[0]+s.b[0])/2,s.a[1],0); t.y=cy;
   const p=t.clone(); if(ns) p.x+=23; else p.z-=23; p.y+=3.5;
   flyTo(t,p);
@@ -1108,27 +1311,46 @@ function renderHarrisSel(){
 // ------------------------------------------------------------ Sezioni 2D (disegni del GIS)
 function renderSez(){
   const names=[...new Set(D.sez_draw.map(p=>p.s))];
-  const cur=$("pSez").dataset.cur||names[0];
-  const polys=D.sez_draw.filter(p=>p.s===cur);
-  let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9; polys.forEach(p=>{for(let i=0;i<p.c.length;i+=2){x0=Math.min(x0,p.c[i]);x1=Math.max(x1,p.c[i]);z0=Math.min(z0,p.c[i+1]);z1=Math.max(z1,p.c[i+1])}});
-  const k=34, ve=2, pl=40, pt=10, W=(x1-x0)*k+pl+10, Hh=(z1-z0)*k*ve+pt+26;
+  if(TRACCIA) names.unshift("__traccia");
+  let cur=$("pSez").dataset.cur; if(!names.includes(cur)) cur=names[0];
+  if(cur==null){ $("pSez").innerHTML=`<p class="note" style="margin-top:0">${esc(T("Nessun disegno di sezione. Con «✎ Traccia» (strumento Sezione) si disegna in pianta una sezione libera: il profilo delle unità compare qui."))}</p>`; return }
+  let polys, linee=[], nota, A=null;
+  if(cur==="__traccia"){ const pr=profiloTraccia(); polys=pr.polys; linee=pr.linee; A=pr.L;
+    nota=T("Profilo ricavato dal modello 3D lungo la traccia (da A a B, {0} m), con le sole unità visibili: segue lo scavo virtuale e la stanza scelta. Esagerazione verticale ×2.",num(pr.L,1)) }
+  else { polys=D.sez_draw.filter(p=>p.s===cur); nota=null }
+  let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9; polys.concat(linee).forEach(p=>{for(let i=0;i<p.c.length;i+=2){x0=Math.min(x0,p.c[i]);x1=Math.max(x1,p.c[i]);z0=Math.min(z0,p.c[i+1]);z1=Math.max(z1,p.c[i+1])}});
+  if(A!=null){x0=0;x1=Math.max(x1,A)}
+  if(x0>x1){x0=0;x1=1;z0=0;z1=1}
+  // scala: la sezione occupa la larghezza del pannello (tra 8 e 60 px per metro)
+  const pl=10+5.8*Math.max(String(z0.toFixed(2)).length,String(z1.toFixed(2)).length);
+  const k=Math.max(8,Math.min(60,(($("pSez").clientWidth||380)-pl-50)/Math.max(1e-6,x1-x0))), ve=2, pt=14, Hh=(z1-z0)*k*ve+pt+26;
+  const W=(x1-x0)*k+pl+14;
   const X=x=>pl+(x-x0)*k, Y=z=>pt+(z1-z)*k*ve;
-  let s=`<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Sezione ${esc(cur)}">`;
-  for(let z=Math.ceil(z0*4)/4;z<=z1;z+=.25){s+=`<line class="axis" x1="${pl}" x2="${W-10}" y1="${Y(z)}" y2="${Y(z)}"/><text class="axt" x="${pl-4}" y="${Y(z)+3}" text-anchor="end">${z.toFixed(2)}</text>`}
-  for(let x=Math.ceil(x0);x<=x1;x+=1){s+=`<text class="axt" x="${X(x)}" y="${Hh-8}" text-anchor="middle">${x}</text>`}
+  let s=`<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="${esc(T("Sezione {0}",cur==="__traccia"?"A–B":cur))}">`;
+  const pz=(z1-z0)*k*ve>220?.5:.25;
+  for(let z=Math.ceil(z0/pz)*pz;z<=z1;z+=pz){s+=`<line class="axis" x1="${pl}" x2="${W-10}" y1="${Y(z)}" y2="${Y(z)}"/><text class="axt" x="${pl-4}" y="${Y(z)+3}" text-anchor="end">${z.toFixed(2)}</text>`}
+  const px=k<14?5:k<24?2:1;
+  for(let x=Math.ceil(x0/px)*px;x<=x1;x+=px){s+=`<text class="axt" x="${X(x)}" y="${Hh-8}" text-anchor="middle">${x}</text>`}
   polys.forEach(p=>{let d="";for(let i=0;i<p.c.length;i+=2)d+=(i?"L":"M")+X(p.c[i]).toFixed(1)+","+Y(p.c[i+1]).toFixed(1);
     const isM=S[p.us]?._tipo==="USM";
     s+=`<path class="spoly" data-s="${p.us}" d="${d}Z" fill="${colorFor(p.us)}" ${isM?'fill-opacity=".85"':""}><title>${S[p.us]?.Sigla?esc(S[p.us].Sigla):(isM?"USM ":"US ")+p.us} · ${esc(defOf(p.us))}</title></path>`});
-  const done=new Set();
+  linee.forEach(p=>{let d="";for(let i=0;i<p.c.length;i+=2)d+=(i?"L":"M")+X(p.c[i]).toFixed(1)+","+Y(p.c[i+1]).toFixed(1);
+    s+=`<path class="sline spoly" data-s="${p.us}" d="${d}" stroke="${css("--ink")||"#222"}"><title>${esc(ETI(p.us))} · ${esc(defOf(p.us))}</title></path>`});
+  const done=new Set(), posti=[];
   polys.forEach(p=>{ if(done.has(p.us)) return; let best=null,ba=0;
     polys.filter(q=>q.us===p.us).forEach(q=>{let a=0;for(let i=0;i<q.c.length-2;i+=2)a+=q.c[i]*q.c[i+3]-q.c[i+2]*q.c[i+1];a=Math.abs(a/2);if(a>ba){ba=a;best=q}});
     if(ba<.02) return; done.add(p.us); let sx=0,sz=0,n=0; for(let i=0;i<best.c.length;i+=2){sx+=best.c[i];sz+=best.c[i+1];n++}
-    s+=`<text class="slbl" x="${X(sx/n)}" y="${Y(sz/n)+3}" text-anchor="middle">${p.us}</text>`});
+    const lx=X(sx/n), ly=Y(sz/n)+3, lw=6*ETI(p.us).length+4;
+    if(posti.some(([a,b,w])=>Math.abs(a-lx)<(w+lw)/2&&Math.abs(b-ly)<11)) return;       // etichette sovrapposte: si salta
+    posti.push([lx,ly,lw]);
+    s+=`<text class="slbl" x="${lx}" y="${ly}" text-anchor="middle">${esc(ETI(p.us))}</text>`});
+  if(A!=null) s+=`<text class="sezA" x="${X(0)}" y="${pt-3}" text-anchor="middle">A</text><text class="sezA" x="${X(A)}" y="${pt-3}" text-anchor="middle">B</text>`;
   s+="</svg>";
-  $("pSez").innerHTML=`<div class="row"><label for="sezSel">Sezione</label><select id="sezSel">${names.map(n=>`<option ${n===cur?"selected":""}>${esc(n)}</option>`).join("")}</select><button class="hbtn" id="sez3d">Mostra nel 3D</button></div>
-    <p class="note" style="margin-top:0">Disegno di sezione dal layer <i>sezioni_disegno</i> del GIS, esagerazione verticale ×2. Clic su un'unità per aprirne la scheda.</p><div class="hwrap">${s}</div>`;
+  const nome=n=>n==="__traccia"?T("Sezione tracciata (A–B)"):n;
+  $("pSez").innerHTML=`<div class="row"><label for="sezSel">Sezione</label><select id="sezSel">${names.map(n=>`<option value="${esc(n)}" ${n===cur?"selected":""}>${esc(nome(n))}</option>`).join("")}</select><button class="hbtn" id="sez3d">Mostra nel 3D</button></div>
+    <p class="note" style="margin-top:0">${nota!=null?esc(nota):"Disegno di sezione dal layer <i>sezioni_disegno</i> del GIS, esagerazione verticale ×2. Clic su un'unità per aprirne la scheda."}</p><div class="hwrap">${s}</div>`;
   $("sezSel").onchange=e=>{$("pSez").dataset.cur=e.target.value;renderSez()};
-  $("sez3d").onclick=()=>sectionPreset(cur);
+  $("sez3d").onclick=()=>{ if(cur==="__traccia"){ $("clipAx").value="f"; intervalloClip("f"); setClip(); vediTraccia() } else sectionPreset(cur) };
   $("pSez").querySelectorAll("[data-s]").forEach(p=>p.onclick=()=>select(+p.dataset.s,false));
   renderSezSel();
 }
@@ -1143,10 +1365,20 @@ $("btnList").onclick=()=>$("list").classList.toggle("open");
 $("btnTools").onclick=()=>{const o=$("stage").classList.toggle("tools-open");$("btnTools").setAttribute("aria-pressed",o)};
 $("expl").oninput=e=>{GAP=+e.target.value;$("explO").textContent=Math.round(GAP*100)+" cm";applyLayout()};
 $("explMode").onchange=e=>{EXPL_MODE=e.target.value;applyLayout()};
-$("exc").max=EXCMAX; $("exc").value=0;
-$("exc").oninput=e=>{EXC=+e.target.value; if(selected!=null && removedAt(selected)) {selected=null;highlight();renderScheda()} updateVisibility()};
+$("exc").max=excMax(); $("exc").value=0;
+function vaiA(k){ EXC=k; $("exc").value=k; if(selected!=null && removedAt(selected)) {selected=null;highlight();renderScheda()} updateVisibility(); if(!$("pSez").hidden&&$("pSez").dataset.cur==="__traccia") renderSez() }
+$("exc").oninput=e=>{ferma(); vaiA(+e.target.value)};
+$("excMode").onchange=e=>{ferma(); EXC_MODE=e.target.value; $("exc").max=excMax(); $("excPlay").hidden=EXC_MODE!=="data"; vaiA(0)};
+// riproduzione giorno per giorno
+let PLAY=null;
+function ferma(){ if(PLAY){clearInterval(PLAY);PLAY=null} $("excPlay").setAttribute("aria-pressed","false"); $("excPlay").textContent="▶" }
+$("excPlay").onclick=()=>{ if(PLAY){ferma();return}
+  if(EXC>=excMax()) vaiA(0);
+  $("excPlay").setAttribute("aria-pressed","true"); $("excPlay").textContent="❚❚";
+  PLAY=setInterval(()=>{ if(EXC>=excMax()){ferma();return} vaiA(EXC+1) },1100) };
+$("room").onchange=e=>isolaStanza(e.target.value||null);
 $("ve").oninput=e=>{VE=+e.target.value;$("veO").textContent="×"+VE;applyLayout()};
-$("clipAx").onchange=()=>{$("clipPos").value=$("clipAx").value==="y"?CY:CX;setClip()};
+$("clipAx").onchange=()=>{intervalloClip($("clipAx").value);setClip()};
 $("clipPos").oninput=setClip;
 $("clipFlip").onclick=()=>{clipSign*=-1;setClip()};
 $("colMode").onchange=()=>{applyColors(); renderHarris(); if(!$("pSez").hidden) renderSez()};
@@ -1164,7 +1396,7 @@ $("v3d").onclick=()=>{$("v3d").setAttribute("aria-pressed","true");$("vtop").set
 $("vtop").onclick=()=>{$("vtop").setAttribute("aria-pressed","true");$("v3d").setAttribute("aria-pressed","false");home()};
 addEventListener("keydown",e=>{
   if(!$("lb").hidden){ if(e.key==="Escape") chiudiLB(); else if(e.key==="ArrowLeft") apriLB(lbI-1); else if(e.key==="ArrowRight") apriLB(lbI+1); return }
-  if(e.key!=="Escape") return; if(editU!=null){editU=null;renderScheda()} else select(null)});
+  if(e.key!=="Escape") return; if(tracciando){fineTraccia();return} if(editU!=null){editU=null;renderScheda()} else if(selected==null&&ROOM!=null) isolaStanza(null); else select(null)});
 
 function resize(){ const w=stage.clientWidth,h=stage.clientHeight; if(!w||!h) return; $("legend").style.visibility=w<720?"hidden":""; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); sporca() }
 new ResizeObserver(resize).observe(stage);

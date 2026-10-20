@@ -5,8 +5,8 @@ authors:
   - family-names: Trabucchi
     given-names: Sebastiano
 type: software
-version: 0.13.0
-date-released: 2026-10-19
+version: 0.14.0
+date-released: 2026-10-20
 license: GPL-3.0-or-later
 repository-code: "https://github.com/MoJoDoD/3Dstratigraphy-app-development"
 keywords:
