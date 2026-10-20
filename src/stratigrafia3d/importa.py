@@ -463,8 +463,12 @@ def _ordine_generali(er, f, zona):
     il passo più fine; senza zona, il più esteso."""
     e = er[f].get("estensione") or [0, 0, 0, 0]
     if zona is None:
-        return (0.0, -(e[2] - e[0]) * (e[3] - e[1]))
-    return (-round(_copertura(e, zona), 1), float(er[f].get("passo") or 1.0))
+        return (0.0, 0, -(e[2] - e[0]) * (e[3] - e[1]))
+    # a parità di copertura, prima i file che si dichiarano ortofoto o modelli del terreno (non una pianta o
+    # una figura georiferita in una cartella di rapporti), poi il passo più fine
+    nome = os.path.basename(f).lower()
+    dichiarato = 0 if re.search(r"orth|orto|geotiff|dem|dtm|dsm|mdt", nome) else 1
+    return (-round(_copertura(e, zona), 1), dichiarato, float(er[f].get("passo") or 1.0))
 
 
 def esamina_raster(files):
