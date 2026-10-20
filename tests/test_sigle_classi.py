@@ -359,9 +359,12 @@ def test_documenti_collegati_per_sigla():
     from stratigrafia3d import documenti_auto as da
     c = sg.Codifica({"A": 1000, "B": 2000}, 1000)
     voci = [{"relativo": r, "percorso": "/x/" + r, "categoria": "documento"} for r in
-            ("BIB/2001_1.pdf", "BIB/Gebel_Hermansen_2001.pdf", "REPORT/G2_A16_sezione.pdf", "B1/rilievo.pdf")]
+            ("BIB/2001_1.pdf", "BIB/Gebel_Hermansen_2001.pdf", "REPORT/G2_A16_sezione.pdf", "B1/rilievo.pdf",
+             "MATRIX/harris_A4_print_compact.png", "MATRIX/stampa A3.pdf")]
+    voci.append({"relativo": "MATRIX/run_1/A16.png", "percorso": "/x/MATRIX/run_1/A16.png",
+                 "motivo": "risultato di un programma (cartella di elaborazione): si usano i dati d'origine"})
     with sg.usa(c):
-        r = da.documenti_per_unita(voci, unita_note=[1016, 2001])
+        r = da.documenti_per_unita(voci, unita_note=[1003, 1004, 1016, 2001])
     coll = {u: sorted(e["percorso"] for e in v) for u, v in r["collegamenti"].items()}
     assert coll == {1016: ["/x/REPORT/G2_A16_sezione.pdf"], 2001: ["/x/B1/rilievo.pdf"]}
     # senza classi i numeri nudi delle unità note valgono ancora
