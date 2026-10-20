@@ -399,6 +399,11 @@ def unita_dal_percorso(relativo, unita_note=None, livelli=3, testo_libero=False)
     return scelta, motivo, scartati
 
 
+_PAROLE_STAMPA = r"(?:print|printed|stampa|paper|carta|format|formato|landscape|portrait|orizzontale|verticale|poster|page|pagina)"
+_RX_FORMATO = re.compile(r"(?i)(?<![A-Za-z0-9])[AB][0-6](?=[_\-\s.]*" + _PAROLE_STAMPA + r"(?![a-z]))|"
+                         r"(?<![a-z])" + _PAROLE_STAMPA + r"[_\-\s.]*[AB][0-6](?![0-9])")
+
+
 def unita_dalle_sigle(relativo, codifica, unita_note=None, livelli=3):
     """Come ``unita_dal_percorso`` per gli scavi con unità numerate per classe (A1, B1…): contano solo le
     sigle con la lettera della classe, nel nome del file e poi nelle cartelle più vicine. I numeri nudi
@@ -410,6 +415,7 @@ def unita_dalle_sigle(relativo, codifica, unita_note=None, livelli=3):
         return [], "", []
     parti[-1] = os.path.splitext(parti[-1])[0]
     for i, parte in enumerate(reversed(parti[-(livelli + 1):])):
+        parte = _RX_FORMATO.sub(" ", parte)          # «harris_A4_print»: un formato di stampa, non l'unità A4
         uu = sg.unita_nel_nome(parte, codifica, unita_note, solo_classe=True)
         if uu:
             dove = "nel nome del file" if i == 0 else "nel nome della cartella"
@@ -461,6 +467,9 @@ def documenti_per_unita(voci, unita_note=None):
         ext = _ext(v)
         imm = _immagine(v)
         if not imm and ext != ".pdf":
+            continue
+        # risultati di programmi (cartelle «run_…») e copie fatte a mano: l'inventario li ha già scartati
+        if re.match(r"(risultato di un programma|copia di)", str(v.get("motivo") or "")):
             continue
         if imm:
             n_imm += 1
@@ -659,6 +668,9 @@ def collega_da_registro(registro_df, voci, unita_note=None):
         ext = _ext(v)
         imm = _immagine(v)
         if not imm and ext != ".pdf":
+            continue
+        # risultati di programmi (cartelle «run_…») e copie fatte a mano: l'inventario li ha già scartati
+        if re.match(r"(risultato di un programma|copia di)", str(v.get("motivo") or "")):
             continue
         n_imm += imm
         rel = str(v.get("relativo") or v.get("percorso") or "")
